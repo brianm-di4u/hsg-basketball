@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 // Plays N full AI-vs-AI games with the real rules engine in Node and reports score and stat sanity.
 // Fails (exit 1) if any game does not finish, a team is held scoreless, or totals are implausible.
-//   node games/basketball/tools/balance.mjs [games=50] [qLenSeconds=120]
+//   node tools/balance.mjs [games=50] [qLenSeconds=120]
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const game = path.resolve(here, '..');
-globalThis.SCHOOLS = JSON.parse(fs.readFileSync(path.join(game, '../../shared/data/schools.json'), 'utf8'));
+globalThis.SCHOOLS = JSON.parse(fs.readFileSync(path.join(game, 'shared/data/schools.json'), 'utf8'));
 globalThis.FACTS = JSON.parse(fs.readFileSync(path.join(game, 'data/facts.json'), 'utf8'));
 const imp = (f) => import(pathToFileURL(path.join(game, 'src/js', f)).href);
 const { COUNTY, kitFor } = await imp('data.js');

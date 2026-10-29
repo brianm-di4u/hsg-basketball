@@ -1,0 +1,12 @@
+{
+  "name": "hsg-basketball",
+  "private": true,
+  "type": "module",
+  "description": "Spa City Hoops: High school basketball",
+  "license": "MIT",
+  "scripts": {
+    "setup": "cd shared/test-harness && npm install && npx playwright install chromium",
+    "build": "node shared/tools/inline.mjs .",
+    "test": "node shared/test-harness/run.mjs ."
+  }
+}

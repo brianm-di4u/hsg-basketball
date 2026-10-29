@@ -2,14 +2,14 @@
 // Screenshots of the 3D renderer on the machine's real GPU (the test harness renders WebGL in software),
 // for visual review. Loads index.html from file://, so it also proves the offline path.
 //
-//   node games/basketball/tools/gpu-shots.mjs [milestone]   → screenshots/<milestone>/gpu/{desktop,mobile}/*.png
+//   node tools/gpu-shots.mjs [milestone]   → screenshots/<milestone>/gpu/{desktop,mobile}/*.png
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const game = path.join(here, '..');
-const { chromium } = await import(pathToFileURL(path.join(game, '..', '..', 'shared/test-harness/node_modules/playwright/index.mjs')).href);
+const { chromium } = await import(pathToFileURL(path.join(game, 'shared/test-harness/node_modules/playwright/index.mjs')).href);
 const milestone = process.argv[2] || 'gpu';
 const url = pathToFileURL(path.join(game, 'index.html')).href;
 const VPS = {

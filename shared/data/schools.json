@@ -1,0 +1,259 @@
+{
+  "about": "Shared school data for the three sports games (football, basketball, baseball). Built from research/schools-and-athletics.md; see that file for every source. Real school names, cities, classifications and title years are setting only. NO real players, students or coaches: generate fictional players. NO logos: mascotConcept describes original geometric art to draw in code. Hex colors are stand-ins, not official values. Where colorsConfirmed is false, even the color NAMES are game choices (label them 'game colors' in credits). Venue names with venueConfirmed false are invented or unverified: use the generic venue text instead of presenting them as real.",
+  "version": 1,
+  "eras": ["ancient", "frontier", "gilded-spa", "roaring", "midcentury", "revival", "modern"],
+  "schools": [
+    {
+      "id": "hot-springs",
+      "name": "Hot Springs High School",
+      "officialName": "Hot Springs World Class High School",
+      "short": "Hot Springs",
+      "abbr": "HSHS",
+      "city": "Hot Springs",
+      "mascot": "Trojans",
+      "mascotConcept": "crested helmet in profile: a half-dome with a tall arched crest of stacked chevrons",
+      "colorNames": ["black", "gold"],
+      "colorsConfirmed": true,
+      "colors": { "primary": "#111111", "secondary": "#D4A017", "accent": "#F4EFE6" },
+      "classification": { "football": "5A", "basketball": "5A", "baseball": "5A" },
+      "conference": { "football": "5A South (2024-26)" },
+      "venues": {
+        "football": { "name": "Tommy J. Holt Memorial Field at Joe C. Reese Stadium", "venueConfirmed": true, "confidence": "confirmed", "surface": "artificial turf", "track": true, "capacity": 6588, "capacityConfidence": "likely (one stadium database)", "note": "Sources usually write \"Joe Reese Stadium\". The field honors longtime principal Tommy J. Holt; the stadium honors Joe C. Reese (Trojans coach 1970-1998). The school site calls it \"Trojan Football Stadium\". 701 Emory St.", "source": "Sentinel-Record 2022 column; SI/SBLive 2025; Hot Springs Trojans facilities page (games/football/research/stadiums.md)", "sourceUrl": "https://www.hotsr.com/news/2022/aug/19/all-in-a-name-check-local-playing-fields/" },
+        "basketball": { "name": "Trojan Arena", "venueConfirmed": true, "confidence": "confirmed", "capacity": 2200, "note": "Junior Academy on the district supercampus; first season fall 2020; four-sided video board and LED scorer's table.", "source": "Sentinel-Record 2020-05-15 (games/basketball/research/venues.md)", "sourceUrl": "https://www.hotsr.com/news/2020/may/15/new-arena-nearing-completion-for-hot-sp/" },
+        "baseball": { "name": "Trojan field", "venueConfirmed": false }
+      },
+      "founded": 1887,
+      "enrollment": { "value": 767, "year": "2023-24" },
+      "coords": [34.4758, -93.07],
+      "tier": "big",
+      "titles": {
+        "football": [1934, 1970, 1972],
+        "basketballBoys": [1932, 1996, 1998],
+        "basketballGirls": [1990, 1997, 1998, 2015, 2018],
+        "baseball": []
+      },
+      "notes": [
+        "1934 football title shared with Blytheville and De Queen.",
+        "A 1942 football title appears only on the school's page, not the AAA list: do not claim it.",
+        "1998: both boys and girls basketball titles.",
+        "Colors trace to 1912, when Honus Wagner bought the team black-and-gold basketball uniforms.",
+        "Bill Clinton graduated in 1964 (adult alumnus, public figure)."
+      ]
+    },
+    {
+      "id": "lakeside",
+      "name": "Lakeside High School",
+      "short": "Lakeside",
+      "abbr": "LHS",
+      "city": "Hot Springs (Lake Hamilton area)",
+      "mascot": "Rams",
+      "mascotConcept": "ram head front-on: a shield-shaped face with two thick spiral horns built from concentric arcs",
+      "colorNames": ["blue", "gold"],
+      "colorsConfirmed": true,
+      "colors": { "primary": "#1F4E9C", "secondary": "#E6B422", "accent": "#FFFFFF" },
+      "classification": { "football": "5A", "basketball": "5A", "baseball": "5A" },
+      "conference": { "football": "5A South (2024-26)" },
+      "venues": {
+        "football": { "name": "Chick Austin Stadium", "venueConfirmed": false, "confidence": "unconfirmed (name form); namesake confirmed", "aka": ["Chick Austin Field", "Austin Field", "Lakeside Stadium"], "surface": "artificial turf", "track": true, "capacity": 3060, "capacityConfidence": "likely (one stadium database)", "note": "The stadium honors J. W. \"Chick\" Austin, Lakeside head football coach for 19 years (Hendrix College Hall of Honor; Sentinel-Record). The current official name is unconfirmed: a 2022 column says the district now calls it Lakeside Stadium. The earlier 16,000-seat claim was wrong. 2871 Malvern Ave.", "source": "Hendrix College Hall of Honor; Sentinel-Record 2022 column; StadiumConnection (games/football/research/stadiums.md)", "sourceUrl": "https://hendrixwarriors.com/honors/hall-of-honor/j-w-chick-austin/21/kiosk" },
+        "basketball": { "name": "Lakeside Athletic Complex", "venueConfirmed": false, "confidence": "unconfirmed (official name)", "note": "The Sentinel-Record reports varsity games at the \"Lakeside Athletic Complex\"; camps use the \"Lakeside Field House\" and a 2026 camp the \"Lakeside Sports Complex\". Whether these are one building, and the official name, are unconfirmed.", "source": "Sentinel-Record 2025-01-10 (games/basketball/research/venues.md)", "sourceUrl": "https://www.hotsr.com/news/2025/jan/10/watch-lakeside-rams-win-by-20-over-defending/" },
+        "baseball": { "name": "Lakeside field", "venueConfirmed": false, "note": "Lakeside co-hosted the 2026 AAA baseball/softball/soccer state finals with Majestic Park." }
+      },
+      "founded": 1928,
+      "enrollment": { "value": 1114, "year": "2023-24" },
+      "coords": [34.4742, -92.9972],
+      "tier": "big",
+      "titles": {
+        "football": [],
+        "basketballUnspecified": [1945, 2000],
+        "baseball": []
+      },
+      "notes": [
+        "Lost the 1975 state football final to Stuttgart.",
+        "5A South football conference title 2019.",
+        "Basketball titles 1945 and 2000: boys or girls not stated."
+      ]
+    },
+    {
+      "id": "lake-hamilton",
+      "name": "Lake Hamilton High School",
+      "short": "Lake Hamilton",
+      "abbr": "LHHS",
+      "city": "Pearcy",
+      "mascot": "Wolves",
+      "mascotConcept": "wolf head in three-quarter view from wedge shapes: two tall ear triangles, a long muzzle wedge, a notch eye",
+      "colorNames": ["maroon", "gold"],
+      "colorsConfirmed": true,
+      "colors": { "primary": "#6D1A2B", "secondary": "#D9A520", "accent": "#FFFFFF" },
+      "classification": { "football": "6A", "basketball": "6A", "baseball": "6A" },
+      "conference": { "football": "6A West" },
+      "venues": {
+        "football": { "name": "Wolf Stadium", "venueConfirmed": true, "confidence": "confirmed", "surface": "artificial turf", "track": true, "capacity": 2926, "capacityConfidence": "likely (one stadium database)", "note": "Wolf St., Pearcy. A database lists \"Summit Bank Field at Wolf Stadium\" (sponsor name; do not use). 2020 district caps of 831 home and 300 visitor show a much larger home side.", "source": "Lake Hamilton School District 2020 and 2023 pages (games/football/research/stadiums.md)", "sourceUrl": "https://lhwolves.net/article/1207626" },
+        "basketball": { "name": "Lake Hamilton Wolf Arena", "venueConfirmed": true, "confidence": "confirmed", "capacity": 2280, "note": "Soft opening Nov. 2015, grand opening Jan. 10, 2016; maroon and gold; scoreboards on the north and south ends; video cube; removable band seating on the north end. The center-court wolf head is a school logo: do not draw it.", "source": "Sentinel-Record 2015-10-29; Lake Hamilton SD (games/basketball/research/venues.md)", "sourceUrl": "https://www.hotsr.com/news/2015/oct/29/lhsd-to-open-16m-arena-20151029/" },
+        "baseball": { "name": "Wolves field", "venueConfirmed": false }
+      },
+      "founded": null,
+      "enrollment": { "value": 901, "year": "2023-24" },
+      "coords": [34.4408, -93.2142],
+      "tier": "big",
+      "titles": {
+        "football": [1992, 2008],
+        "baseball": []
+      },
+      "notes": [
+        "6A with fewer students than 5A Lakeside: classification is not simply enrollment."
+      ]
+    },
+    {
+      "id": "fountain-lake",
+      "name": "Fountain Lake High School",
+      "short": "Fountain Lake",
+      "abbr": "FL",
+      "city": "Garland County (Hot Springs mailing address)",
+      "mascot": "Cobras",
+      "mascotConcept": "cobra head raised with hood spread: a teardrop hood, a diamond head, a forked tongue line",
+      "colorNames": ["green", "white"],
+      "colorsConfirmed": false,
+      "colors": { "primary": "#1E6B45", "secondary": "#F4EFE6", "accent": "#C9A227" },
+      "classification": { "football": "4A", "basketball": "4A", "baseball": "4A" },
+      "conference": { "football": "4A-7 (2026)" },
+      "venues": {
+        "football": { "name": "Larry Beckham Memorial Field", "venueConfirmed": false, "confidence": "likely (one stadium database)", "surface": "artificial", "track": true, "capacity": 1332, "capacityConfidence": "likely (one stadium database)", "note": "4207 Park Ave; named for a former principal. Name from a stadium database, echoed by a 2022 Sentinel-Record column; not confirmed by the district.", "source": "StadiumConnection 4253; Sentinel-Record 2022 column (games/football/research/stadiums.md)", "sourceUrl": "https://stadiumconnection.com/ar/stadium.php?id=4253" },
+        "basketball": { "name": "Irvin J. Bass Gymnasium", "venueConfirmed": true, "confidence": "confirmed", "note": "Also written \"Irvin J. Bass Gym\" (once \"Irving\"); still in use in 2026.", "source": "Sentinel-Record 2025-06-29 and 2026-06-16 (games/basketball/research/venues.md)", "sourceUrl": "https://www.hotsr.com/news/2025/jun/29/fountain-lake-cobras-recap-home-team-camp/" },
+        "baseball": { "name": "Cobra field", "venueConfirmed": false }
+      },
+      "founded": null,
+      "enrollment": null,
+      "coords": null,
+      "tier": "mid",
+      "titles": { "football": [2009], "baseball": [] },
+      "notes": []
+    },
+    {
+      "id": "cutter-morning-star",
+      "name": "Cutter-Morning Star High School",
+      "short": "Cutter-Morning Star",
+      "abbr": "CMS",
+      "city": "Hot Springs area",
+      "mascot": "Eagles",
+      "mascotConcept": "eagle head in profile: a hooked beak triangle, a swept crest of three feather blades, a round eye",
+      "colorNames": ["navy", "silver"],
+      "colorsConfirmed": false,
+      "colors": { "primary": "#1B2A4A", "secondary": "#B8C2CC", "accent": "#E6B422" },
+      "classification": { "football": "3A", "basketball": "2A", "baseball": "2A" },
+      "conference": { "football": "3A-4", "basketball": "2A-7" },
+      "venues": {
+        "football": { "name": "Eagle Field", "venueConfirmed": false, "confidence": "likely (one stadium database)", "surface": "artificial", "track": false, "capacity": 846, "capacityConfidence": "likely (one stadium database)", "note": "2801 Spring St. Name from a stadium database; not confirmed by the district.", "source": "StadiumConnection 4255 (games/football/research/stadiums.md)", "sourceUrl": "https://stadiumconnection.com/ar/stadium.php?id=4255" },
+        "basketball": { "name": "Eagle Arena", "venueConfirmed": true, "confidence": "confirmed (name); opening about 2020 likely", "capacity": 1500, "capacityConfidence": "likely (2019 design figure, \"at least 1,500\")", "note": "Built with the new high school (about $15M project after a 2018 millage vote); multi-use.", "source": "Sentinel-Record 2026-01-18 and 2019-05-14 (games/basketball/research/venues.md)", "sourceUrl": "https://www.hotsr.com/news/2026/jan/18/cutter-morning-star-to-host-basketball-homecoming/" },
+        "baseball": { "name": "Eagle field", "venueConfirmed": false }
+      },
+      "founded": null,
+      "enrollment": null,
+      "coords": null,
+      "tier": "small",
+      "titles": { "football": [], "baseball": [] },
+      "notes": [
+        "Returned to 11-man football in a 3A-4 league; first win of the 2024 season came in October."
+      ]
+    },
+    {
+      "id": "jessieville",
+      "name": "Jessieville High School",
+      "short": "Jessieville",
+      "abbr": "JHS",
+      "city": "Jessieville",
+      "mascot": "Lions",
+      "mascotConcept": "lion head front-on: a hexagon face inside a ring of twelve flame-shaped mane points",
+      "colorNames": ["purple", "gold"],
+      "colorsConfirmed": false,
+      "colors": { "primary": "#4B2A7B", "secondary": "#E6B422", "accent": "#FFFFFF" },
+      "classification": { "football": "3A", "basketball": "3A", "baseball": "3A" },
+      "conference": { "football": "3A-4 (2026)" },
+      "venues": {
+        "football": { "name": "Don Phillips Field", "venueConfirmed": false, "confidence": "likely (one stadium database)", "surface": "grass", "track": true, "capacity": 1308, "capacityConfidence": "likely (one stadium database)", "note": "7900 N Hwy 7. Name from a stadium database, echoed by a 2022 Sentinel-Record column; not confirmed by the district.", "source": "StadiumConnection 4254; Sentinel-Record 2022 column (games/football/research/stadiums.md)", "sourceUrl": "https://stadiumconnection.com/ar/stadium.php?id=4254" },
+        "basketball": { "name": "Jessieville Sports Arena", "venueConfirmed": true, "confidence": "confirmed", "note": "Current game gym. Glazener Gym is the historic gymnasium, no longer used for games.", "source": "Sentinel-Record 2026-02-27 and 2026-07-28 (games/basketball/research/venues.md)", "sourceUrl": "https://www.hotsr.com/news/2026/feb/27/watch-jessieville-comes-up-short-in-regional/" },
+        "baseball": { "name": "Lion field", "venueConfirmed": false }
+      },
+      "founded": null,
+      "enrollment": null,
+      "coords": [34.70111, -93.06167],
+      "coordsNote": "town of Jessieville, not the school",
+      "tier": "small",
+      "titles": { "football": [2006], "baseball": [] },
+      "notes": [
+        "Classification conflict: 3A-4 football (Fearless Friday 2026) vs 2A (Hooten's). Use 3A.",
+        "Gateway to the Ouachita National Forest north of Hot Springs."
+      ]
+    },
+    {
+      "id": "mountain-pine",
+      "name": "Mountain Pine High School",
+      "short": "Mountain Pine",
+      "abbr": "MP",
+      "city": "Mountain Pine",
+      "mascot": "Red Devils",
+      "mascotConcept": "a stylized imp mark kept friendly: a pointed-ear shield shape with two short horn wedges and a pitchfork-tail swash, no face details",
+      "colorNames": ["red", "black"],
+      "colorsConfirmed": false,
+      "colors": { "primary": "#A61E22", "secondary": "#111111", "accent": "#FFFFFF" },
+      "classification": { "football": "2A", "basketball": "2A", "baseball": "2A" },
+      "conference": { "football": "2A-1", "basketball": "2A-7" },
+      "venues": {
+        "football": { "name": "Stanley May Field", "venueConfirmed": false, "confidence": "likely (one stadium database)", "surface": "grass", "track": true, "capacity": 794, "capacityConfidence": "likely (one stadium database)", "note": "726 Blakely Dam Rd. Name from a stadium database, echoed by a 2022 Sentinel-Record column; not confirmed by the district.", "source": "StadiumConnection 4256; Sentinel-Record 2022 column (games/football/research/stadiums.md)", "sourceUrl": "https://stadiumconnection.com/ar/stadium.php?id=4256" },
+        "basketball": { "name": "Red Devil Fieldhouse", "venueConfirmed": true, "confidence": "confirmed", "note": "Also written \"Red Devil Field House\".", "source": "Sentinel-Record 2021-12-12 and 2025-01-27 (games/basketball/research/venues.md)", "sourceUrl": "https://www.hotsr.com/news/2021/dec/12/off-court-antics-leave-gym-empty-as-eagles-rout/" },
+        "baseball": { "name": "Red Devil field", "venueConfirmed": false }
+      },
+      "founded": null,
+      "enrollment": null,
+      "coords": [34.56944, -93.1725],
+      "coordsNote": "town of Mountain Pine, below Blakely Mountain Dam",
+      "tier": "small",
+      "titles": { "football": [1978, 1979], "baseball": [] },
+      "notes": ["1978 and 1979 football titles were likely Class B."]
+    }
+  ],
+  "rivalries": [
+    {
+      "teams": ["lakeside", "lake-hamilton"],
+      "label": "Garland County rivalry",
+      "facts": [
+        "The schools are about 15 miles apart.",
+        "Played every year from 1968 except two years in the 1970s.",
+        "Paused after 1999 over rowdy behavior by students from both schools; the series was renewed in 2018 (announced June 2017) after a 19-year break.",
+        "2023: Lakeside 49, Lake Hamilton 42 at Wolf Stadium, Pearcy."
+      ],
+      "note": "No trophy or official game name exists; any name is invented and should read as invented."
+    },
+    { "teams": ["hot-springs", "lakeside"], "label": "5A South rivals", "facts": ["Both 5A South for 2024-26; Lakeside lists the Trojans as a rival."] },
+    { "teams": ["cutter-morning-star", "jessieville"], "label": "3A-4 football league mates", "facts": [] },
+    { "teams": ["cutter-morning-star", "mountain-pine"], "label": "2A-7 basketball league mates", "facts": [] }
+  ],
+  "venues": {
+    "basketballFinals": {
+      "name": "Bank OZK Arena",
+      "address": "134 Convention Boulevard, Hot Springs",
+      "facts": [
+        "Hosted the AAA basketball state championships, classes 6A-1A, March 12-14, 2026.",
+        "Opened Dec. 6, 2003 as Summit Arena; renamed Bank of the Ozarks Arena in March 2014 and Bank OZK Arena in 2018.",
+        "6,300 seats (about 6,000 for basketball) in two tiers: lower sections 201-217 and upper sections 300-315; one end has only a small lower block.",
+        "Hot Springs has hosted the finals every year except 2013 (Barton Coliseum, Little Rock), under a contract that now runs through 2032.",
+        "Fans may not bring signs, flags or banners to the finals; crowd color comes from clothing."
+      ],
+      "formerNames": [{ "name": "Summit Arena", "years": "2003-2014" }, { "name": "Bank of the Ozarks Arena", "years": "2014-2018" }],
+      "capacity": 6300,
+      "confidence": "confirmed",
+      "note": "The arena name is a bank brand: draw a generic arena and never the wall sign. The sponsor title of the championships is not shown in games.",
+      "source": "Sentinel-Record 2018; Visit Hot Springs; KATV 2026-06-02 (research/schools-and-athletics.md; games/basketball/research/venues.md)",
+      "sourceUrl": "https://www.hotsr.com/news/2018/dec/02/arena-celebrates-15-years-20181202/"
+    },
+    "baseballFinals": { "name": "Majestic Park", "facts": ["Rebuilt in 2021: five fields, 1,500 capacity.", "Co-hosted the 2026 AAA baseball, softball and soccer state finals with Lakeside High School."] },
+    "footballFinals": { "name": "a neutral-site state final", "note": "War Memorial Stadium in Little Rock is commonly cited but unconfirmed: keep the venue generic." }
+  },
+  "rulesContext": [
+    "Arkansas senior high basketball adopted a 35-second shot clock, effective 2022-23 (AAA vote 183-69, August 2020).",
+    "Football classifications and conferences are set in two-year cycles (2024-26, 2026-28).",
+    "Unconfirmed NFHS defaults: 11-player football with 12-minute quarters, 8-minute basketball quarters, 7-inning baseball. Present these as game rules, not as cited facts.",
+    "NFHS football field markings (sourced; NFHS Rule 1-2): 360 x 160 ft field with 10-yd end zones; hash marks 53 ft 4 in from each sideline (not the college 60 ft); 4-in white lines; 9-yd marks or number tops 9 yd from the sideline; a restraining line at least 2 yd outside the field; team boxes between the 25-yard lines; goal posts 23 ft 4 in wide with a 10-ft crossbar (likely). See research/schools-and-athletics.md."
+  ],
+  "seasons": { "football": "Aug-Nov (rivalry games late August)", "basketball": "Nov-Mar (finals mid-March)", "baseball": "Feb-May", "note": "inferred from game dates, not an official calendar" },
+  "opponentsNote": "Only these seven Garland County schools are real. If a schedule needs more teams, invent clearly fictional out-of-county opponents (fictional town names), never other real schools."
+}

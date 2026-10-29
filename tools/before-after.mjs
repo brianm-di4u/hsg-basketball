@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Before/after review sheets: pairs a baseline screenshot with the matching final one, side by side.
 //
-//   node games/basketball/tools/before-after.mjs
+//   node tools/before-after.mjs
 //
 // Pairs come from screenshots/visual-before (the 2D original) and screenshots/visual-final (harness, menus and flow)
 // or screenshots/visual-final/gpu (the 3D view on a real GPU, from tools/gpu-shots.mjs visual-final).
@@ -12,7 +12,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const shots = path.join(here, '..', 'screenshots');
-const { chromium } = await import(pathToFileURL(path.join(here, '..', '..', '..', 'shared/test-harness/node_modules/playwright/index.mjs')).href);
+const { chromium } = await import(pathToFileURL(path.join(here, '..', 'shared/test-harness/node_modules/playwright/index.mjs')).href);
 const PAIRS = [
   ['01-title', 'gpu/g01-title', 'Title'],
   ['10-tipoff', 'gpu/g02-live', 'Live play'],

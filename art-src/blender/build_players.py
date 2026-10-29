@@ -1,6 +1,6 @@
 # Builds the two player bodies (M and F builds) for Spa City Hoops and exports art-src/players.glb.
 #
-#   "C:\Program Files\Blender Foundation\Blender 5.2\blender.exe" -b --factory-startup --python games/basketball/art-src/blender/build_players.py
+#   "C:\Program Files\Blender Foundation\Blender 5.2\blender.exe" -b --factory-startup --python art-src/blender/build_players.py
 #
 # Each body is a skin-modifier mannequin (deterministic radii, clean quads) with a named armature and automatic
 # weights. Faces are split into kit zones by material (skin, jersey, trim, shorts, socks, shoes); the game recolors

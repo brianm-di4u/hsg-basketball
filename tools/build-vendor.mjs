@@ -2,7 +2,7 @@
 // Turns the vendored three.js ES modules into one classic script (`vendor/three.bundle.js`) that sets
 // `globalThis.THREE`. A classic <script src> loads under file:// where ES-module imports of local files fail.
 //
-//   node games/basketball/tools/build-vendor.mjs
+//   node tools/build-vendor.mjs
 //
 // Inputs (copied unmodified from the npm package three@0.160.1, MIT, see vendor/three-0.160.1/LICENSE):
 //   three.module.min.js, GLTFLoader.js (examples/jsm/loaders), BufferGeometryUtils.js and SkeletonUtils.js

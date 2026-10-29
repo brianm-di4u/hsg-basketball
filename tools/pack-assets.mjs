@@ -5,7 +5,7 @@
 //   assets/tex.js      ← art-src/floor-maple.png, wall-block.png (seamless tiles, WebP)
 //                        art-src/crowd-*.png, band.png, cheer.png (Codex sprite sheets → one WebP atlas)
 //
-//   node games/basketball/tools/pack-assets.mjs
+//   node tools/pack-assets.mjs
 //
 // Sprite sheets are rows of figures on flat white. The packer keys the white out, splits figures at empty
 // columns, trims each one and bottom-aligns it in a 128×192 atlas cell. Uses the test harness's Chromium.
@@ -15,7 +15,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const game = path.join(here, '..');
-const root = path.join(game, '..', '..');
+const root = path.join(game);
 const src = path.join(game, 'art-src');
 const out = path.join(game, 'assets');
 fs.mkdirSync(out, { recursive: true });

@@ -2,7 +2,7 @@
 // Measures the 3D renderer on the machine's real GPU and checks the file:// path, outside the test harness
 // (the harness renders WebGL in software and blocks file:// URLs).
 //
-//   node games/basketball/tools/perf3d.mjs [--throttle 4]
+//   node tools/perf3d.mjs [--throttle 4]
 //
 // For each viewport it opens index.html from file://, waits for the 3D gym, then measures frames per second in
 // the title demo, a live 10-player match and the state finals arena, plus load time and JS heap.
@@ -11,7 +11,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const root = path.join(here, '..', '..', '..');
+const root = path.join(here, '..');
 const { chromium } = await import(pathToFileURL(path.join(root, 'shared/test-harness/node_modules/playwright/index.mjs')).href);
 const args = process.argv.slice(2);
 const throttle = args.includes('--throttle') ? +args[args.indexOf('--throttle') + 1] : 1;

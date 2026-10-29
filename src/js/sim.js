@@ -308,6 +308,7 @@ function gainBall(m, i, how) {
   if (p.act === 'shoot' || p.act === 'layup') { p.act = 'idle'; p.meter = 0; }
   if (how === 'reb') { R(m, i).st.reb++; say(m, 'reb', { i }); }
   if (m.poss !== p.t) setPoss(m, p.t);
+  if (m.user.team === p.t) m.user.ctrl = i; // control moves with the catch, not a tick later
   if (how === 'catch' && m.phase === 'inbound') { m.phase = 'live'; m.phaseT = 0; m.clock.running = m.clock.t > 0; m.inb = null; }
   if (how !== 'catch' && m.phase === 'live' && prev !== p.t) m.run.lastChange = m.time;
 }

@@ -19,7 +19,8 @@ export const tests = [
       await t.game('act', 'place', 0, 0, 40, 25);
       for (let s = 0; s < 5; s++) await t.game('act', 'place', 1, s, 15, 5 + s * 10);
       let s = await t.state();
-      const x0 = s.match.players[0].x;
+      // portrait phones turn input to the camera, so measure where the player goes on screen
+      const p0 = { ...s.match.players[0] };
       // hold the stick to the right while the sim steps
       // hold the stick right with raw CDP touch points while the sim steps (t.touchDrag lifts at the end)
       const [cx, cy] = center(L.stick);
@@ -32,7 +33,11 @@ export const tests = [
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
       await cdp.detach();
       s = await t.state();
-      t.expect(s.match.players[0].x > x0 + 4, `stick moves the player (${x0.toFixed(1)} → ${s.match.players[0].x.toFixed(1)})`);
+      const p1 = s.match.players[0];
+      // both ends through the same (final) camera, which follows the ball
+      const x0 = (await t.game('act', 'project', p0.x, p0.z)).x, x1 = (await t.game('act', 'project', p1.x, p1.z)).x;
+      t.expect(x1 > x0 + 20, `stick moves the player right on screen (${x0} → ${x1} px)`);
+      t.log(`stick: ${x0} → ${x1} px`);
       await t.tap(center(L.pass));
       await t.game('step', 4);
       s = await t.state();

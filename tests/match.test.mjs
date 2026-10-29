@@ -26,12 +26,17 @@ export const tests = [
       await t.game('act', 'place', 0, 0, 50, 25);
       let s = await t.state();
       t.equal(s.match.user.ctrl, 0, 'user controls the ball handler');
-      const x0 = s.match.players[0].x;
+      // portrait phones turn input to the camera, so measure where the player goes on screen
+      const p0 = { ...s.match.players[0] };
       await t.page.keyboard.down('ArrowRight');
       await t.game('step', 40);
       await t.page.keyboard.up('ArrowRight');
       s = await t.state();
-      t.expect(s.match.players[0].x > x0 + 6, `moved right (${x0.toFixed(1)} → ${s.match.players[0].x.toFixed(1)})`);
+      const p1 = s.match.players[0];
+      // both ends through the same (final) camera, which follows the ball
+      const x0 = (await t.game('act', 'project', p0.x, p0.z)).x, x1 = (await t.game('act', 'project', p1.x, p1.z)).x;
+      t.expect(x1 > x0 + 20, `moved right on screen (${x0} → ${x1} px)`);
+      t.log(`ArrowRight: ${x0} → ${x1} px`);
       await t.shot('11-dribble');
       await t.page.keyboard.press('x');
       await t.game('step', 6);

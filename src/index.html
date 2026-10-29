@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Spa City Hoops</title>
+<meta name="description" content="An original arcade high-school basketball game set in Garland County, Arkansas, with fictional players. Part of the open-source Hot Springs Games collection (MIT).">
+<link rel="stylesheet" href="styles/main.css">
+</head>
+<body class="theme-dark">
+<div id="app">
+  <header id="sb" aria-label="Scoreboard" hidden></header>
+  <div id="stage">
+    <canvas id="cv" role="img" aria-label="Basketball court. Scores and game events are announced in text."></canvas>
+    <button id="b-pause" class="iconbtn" aria-label="Pause (P)" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg></button>
+  </div>
+  <div id="pad" hidden>
+    <div id="stick" aria-label="Movement stick" role="application"><div id="knob"></div></div>
+    <div class="pbtns">
+      <button id="b-switch" class="pb small" aria-label="Switch defender">SWITCH</button>
+      <button id="b-pass" class="pb" aria-label="Pass or steal">PASS<small>STEAL</small></button>
+      <button id="b-shoot" class="pb big" aria-label="Shoot, jump or block (hold and release)">SHOOT<small>JUMP</small></button>
+    </div>
+  </div>
+</div>
+<main id="screen" aria-live="off"></main>
+<div id="live" class="sr-only" aria-live="polite"></div>
+<!-- @inline ../../../shared/data/schools.json as SCHOOLS -->
+<!-- @inline ../data/facts.json as FACTS -->
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "about": "Player-facing fact cards for Spa City Hoops. Each restates one audited, confirmed question from games/trivia/data/questions.json (id). tools/check-facts.mjs verifies ids, confidence and sources.",
+  "facts": [
+    { "id": "hs-0185", "tag": "1912", "text": "In 1912, baseball star Honus Wagner bought and donated basketball uniforms to Hot Springs High School, in the black and gold the school still wears.", "source": "Wikipedia: Hot Springs, Arkansas" },
+    { "id": "hs-0225", "tag": "Lakeside", "text": "Lakeside High School in Hot Springs was founded in 1928.", "source": "Wikipedia: Lakeside High School" },
+    { "id": "hs-0226", "tag": "Banners", "text": "Lakeside High School won basketball state titles in 1945 and 2000.", "source": "Wikipedia: Lakeside High School" },
+    { "id": "hs-0238", "tag": "Banners", "text": "Hot Springs High's girls won back-to-back state titles in 1997 and 1998. The boys also won a state title in 1998.", "source": "Wikipedia: Hot Springs High School" },
+    { "id": "hs-0256", "tag": "Shot clock", "text": "Arkansas high school basketball uses a 35-second shot clock, mandatory for all schools by 2022-23.", "source": "Delta Plex News: AAA shot clock resolution" },
+    { "id": "hs-0261", "tag": "Shot clock", "text": "The Arkansas Activities Association adopted the shot clock in 2020 by a vote of 183-69.", "source": "Delta Plex News: AAA shot clock resolution" },
+    { "id": "hs-0257", "tag": "Finals", "text": "The 2026 Arkansas high school basketball state finals were played at Bank OZK Arena in Hot Springs on March 12, 13 and 14.", "source": "KAIT: 2026 State Basketball Finals Weekend continues in Hot Springs" },
+    { "id": "hs-0259", "tag": "Alumni", "text": "Shameka Christon, Hot Springs High class of 2000, went on to play in the WNBA.", "source": "Wikipedia: Hot Springs High School" },
+    { "id": "hs-0258", "tag": "Alumni", "text": "Lakeside High lists NFL player Landon Trusty and NBA player Keljin Blevins among its notable alumni.", "source": "Wikipedia: Lakeside High School" },
+    { "id": "hs-0272", "tag": "Lakeside", "text": "Lakeside High School's mascot is the Rams. Its listed rivals include the Hot Springs Trojans and Lake Hamilton Wolves.", "source": "Wikipedia: Lakeside High School" },
+    { "id": "hs-0273", "tag": "Colors", "text": "Lakeside High School's colors are blue and gold.", "source": "Wikipedia: Lakeside High School" },
+    { "id": "hs-0274", "tag": "Colors", "text": "Lake Hamilton High School's colors are maroon and gold. The Wolves play in Class 6A.", "source": "Wikipedia: Lake Hamilton High School" },
+    { "id": "hs-0275", "tag": "Lake Hamilton", "text": "Lake Hamilton High School is in Pearcy, near Lake Hamilton and Lake Catherine.", "source": "Wikipedia: Lake Hamilton High School" },
+    { "id": "hs-0278", "tag": "Colors", "text": "The Hot Springs High School Trojans wear black and gold.", "source": "Wikipedia: Hot Springs High School" }
+  ]
+}

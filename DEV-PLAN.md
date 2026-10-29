@@ -110,3 +110,43 @@ Tests in `tests/*.test.mjs` run at both viewports unless marked. Screenshots are
 | 15 | M3 visual | Far-sideline players' heads clipped at the top of the canvas | view leaves 7.2 ft of headroom above the far sideline | fixed |
 | 16 | M3 visual | Champion pennant clipped "CHAMPS"; Trophy Room records list broke into columns; roster table wider than a phone | swallowtail banner; block list; optional columns hidden under 600 px | fixed |
 | 17 | M3 visual | Forced-quality test shots showed the wrong meter label; label collided with the "YOU" chevron | label follows the forced quality; label drawn beside the meter | fixed |
+
+## Visual overhaul (2026-10): 3D renderer
+
+Plan and rationale: `VISUAL-PLAN.md`. Results: `VISUAL-REPORT.md`.
+
+New source and tools:
+```
+src/js/gl/scene3d.js     loader (classic <script> tags, file://-safe), WebGL probe and tiers, broadcast/portrait/override
+                         cameras, image-based light, per-frame update, adaptive quality, HUD projector (G3.P)
+src/js/gl/players3d.js   Blender rig → per-player clones, kit shader (skin, jersey, trim, shorts, socks, shoes, painted
+                         hair, face, headband, official's stripes), procedural poses from the sim's actions
+src/js/gl/venue3d.js     home gym and finals arena, floor markings canvas + maple tile + planar reflection, hoops with
+                         net/rim/shot clock, instanced painted crowd, scoreboards, pennants, static batching
+src/js/render.js         unchanged 2D renderer (fallback) + the shared HUD layer, now drawn through a projector
+src/styles/font.css      Bebas Neue (OFL) as base64
+vendor/                  three.js r160.1 sources + generated three.bundle.js; Bebas Neue woff2; licenses
+assets/players.js        players.glb as base64 (tools/pack-assets.mjs)
+assets/tex.js            maple and block tiles, crowd atlas (WebP data URIs)
+art-src/blender/build_players.py   the player bodies (Blender 5.2, run headless)
+tools/build-vendor.mjs   three.js ES modules → one classic script
+tools/pack-assets.mjs    Codex PNGs and the GLB → assets/*.js (keys white, splits sprite rows, builds the atlas)
+tools/perf3d.mjs         real-GPU fps, heap and load time from file:// (optionally CPU-throttled)
+tools/gpu-shots.mjs      real-GPU review screenshots → screenshots/<milestone>/gpu/
+```
+
+Rebuild order after changing art: Blender script → `tools/pack-assets.mjs` → `shared/tools/inline.mjs games/basketball`.
+
+### Visual defect log
+| # | Found in | Defect | Fix |
+|---|---|---|---|
+| V1 | first boot | `GLTFLoader` renames the second rig's bones (`hand_L_1`), so the F build had no bones | names normalized on load |
+| V2 | close-up | hair attached while a pooled rig still held its last pose, so it floated beside the head | rigs reset to rest before attaching |
+| V3 | harness run | headless Chromium renders WebGL in SwiftShader at 3–5 fps; fps, contrast and reduced-motion tests failed | Auto graphics keeps the 2D court on software GL; visual tests force 3D; real-GPU rates via `tools/perf3d.mjs` |
+| V4 | review m1 | the rim left the frame at the shot (desktop and phone) | the camera keeps the attacked rim in frame in the frontcourt and during shots; test projects the rim |
+| V5 | review m1 | portrait phones were a cropped landscape view | portrait camera looks down the court toward the attacked basket; stick input rotated to match |
+| V6 | review m1 | replay camera lost the shooter | over-the-shoulder camera from the release spot, letterbox |
+| V7 | GPU shots | hair caps read as berets | hair painted on the scalp in the kit shader; volume only for buns, puffs, ponytails, braids and high-tops |
+| V8 | GPU shots | a hot specular streak washed out the floor | image-based light from a generated gym surround; key light moved behind the court |
+| V9 | GPU shots | the champion screen showed the last match in the home gym | champion scene sweeps the finals arena |
+| V10 | profiling | the shadow map rendered twice per frame and ~120 venue meshes inflated CPU cost (13.6 fps at 4× CPU throttle on the phone tier) | shadow map updated once per frame; static meshes merged per material; phone tier uses blob shadows; adaptive tier drop |

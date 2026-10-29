@@ -1,12 +1,13 @@
 // Boot, fixed-step loop, scenes, season and challenge flow, saves, and the window.__game test hooks.
 import { COUNTY, team, kitFor, banners, FACTS_LIST, FINALS } from './data.js';
 import { makeRoster, fullName } from './roster.js';
-import { COURT, rimFor } from './court.js';
+import { COURT, rimFor, sx, sy } from './court.js';
 import { DT, createMatch, tick, startNextPeriod, summary, forceShot, give, commitFoul, topPerformer, startAt } from './sim.js';
 import { createSeason, teamFor, nextGame, recordResult, simCurrent } from './season.js';
 import { createShootout, shootoutTick, forceShootoutShot, SPOTS } from './shootout.js';
 import { challenge } from './challenges.js';
-import { R, initRender, resize, draw, pop, burst, shake, netHit, rimHit, confetti } from './render.js';
+import { R, initRender, resize, draw, pop, burst, shake, netHit, rimHit, confetti, is3d } from './render.js';
+import { G3, load3d, pickTier, info3d, glProbe, resize3d, setTier } from './gl/scene3d.js';
 import { CREST_KEYS, crestURL } from './art.js';
 import { I, initInput, initTouch, setEnabled, drain } from './input.js';
 import { AU, unlock, play, setVolume, setOn } from './audio.js';
@@ -15,7 +16,7 @@ import { loadSave, writeSave, store, fmtClock, hash } from './util.js';
 import * as UI from './ui.js';
 
 const $ = (s) => document.querySelector(s);
-const DEFAULTS = { sound: true, vol: 0.5, motion: 'auto', text: 100, theme: 'auto', difficulty: 1, qLen: 120, shotClock: 35, assist: false, touch: 'auto' };
+const DEFAULTS = { sound: true, vol: 0.5, motion: 'auto', text: 100, theme: 'auto', difficulty: 1, qLen: 120, shotClock: 35, assist: false, touch: 'auto', graphics: 'auto', replays: true };
 const state = {
   scene: 'title', stack: [], settings: { ...DEFAULTS }, season: null,
   save: { trophies: [], unlocks: { throwback: false }, best: { shootout: 0 }, challenges: {} },
@@ -54,7 +55,25 @@ function applySettings() {
   document.body.classList.toggle('theme-light', !dark);
   document.body.classList.toggle('reduced', reducedMotion());
   R.reduced = reducedMotion();
+  R.use3d = s.graphics !== '2d' && !NO_GL;
   setOn(s.sound); setVolume(s.vol);
+}
+const NO_GL = /[?&]gl=0\b/.test(location.search);
+
+// The 3D view loads after the first paint: menus work at once on the classic court, then the gym fades in.
+function start3d() {
+  if (!R.use3d || G3.state !== 'off') return;
+  const probe = glProbe();
+  state.gl = { renderer: probe.renderer, software: probe.software };
+  if (probe.software && state.settings.graphics !== '3d') return; // Auto: keep the classic court on software GL
+  const st = $('#stage').getBoundingClientRect();
+  state.busy3d = true;
+  G3.onLost = () => { document.body.classList.remove('gl'); R.snap = true; R.key = ''; layout(); drawFrame(0); };
+  load3d($('#stage'), pickTier(st.width, st.height)).then(() => {
+    state.busy3d = false;
+    if (G3.state === 'ready') { document.body.classList.toggle('gl', is3d()); layout(); if (R.v) resize3d(R.v.W, R.v.H, window.devicePixelRatio || 1); R.snap = true; }
+    wantLoop(); drawFrame(0);
+  });
 }
 
 // ---------------------------------------------------------------- match setup
@@ -251,6 +270,7 @@ function render() {
   $('#pad').classList.toggle('so', sc === 'shootout');
   setEnabled(IN_PLAY.has(sc));
   if (sc === 'title') ensureDemo();
+  document.body.classList.toggle('gl', is3d());
   layout();
   if (sc === 'champion' && !state.confettiShown) { state.confettiShown = true; play('win'); confetti(['#D4A017', '#F4F1EA', team(state.season.school).colors.primary, team(state.season.school).colors.secondary]); }
   if (sc !== 'champion') state.confettiShown = false;
@@ -273,11 +293,21 @@ function wantLoop() {
 function frame(ts) {
   raf = 0;
   const dt = Math.min(0.25, Math.max(0, (ts - last) / 1000)); last = ts;
-  if (!state.paused) { acc += dt; let n = 0; while (acc >= DT && n < 30) { stepOnce(); acc -= DT; n++; } if (n >= 30) acc = 0; }
+  if (state.replay) stepReplay(dt);
+  else if (!state.paused) {
+    acc += dt; let n = 0; while (acc >= DT && n < 30 && !state.replay) { stepOnce(); acc -= DT; n++; } if (n >= 30) acc = 0;
+    if (state.replayPending && state.match && state.match.time - state.replayPending.at > 0.7 && state.scene === 'game') startReplay();
+  }
   drawFrame(dt);
   if (loopNeeded()) raf = requestAnimationFrame(frame);
 }
 
+// Portrait phones in 3D look down the court toward the basket the user's team attacks (it flips at halftime).
+function verticalDir(m) {
+  if (!m || !is3d() || !R.v || !R.v.portrait || state.scene === 'title') return 0;
+  const t = m.user && m.user.team >= 0 ? m.user.team : 0;
+  return m.dir[t] || 1;
+}
 function activeMatch() { return state.scene === 'title' ? state.demo : state.match; }
 
 function stepOnce() {
@@ -298,7 +328,10 @@ function stepOnce() {
   const m = state.match;
   if (!m || sc !== 'game') return;
   drain(m.input);
+  const vd = verticalDir(m);
+  if (vd) { const { mx, mz } = m.input; m.input.mx = -mz * vd; m.input.mz = mx * vd; } // screen up = toward the attacked basket
   tick(m);
+  record(m);
   matchEvents(m);
   if (m.phase === 'qend' && m.breakReady && !m.autoBreak) { state.paused = true; go('break', false); }
   else if (m.phase === 'final' && m.phaseT > 1.4 && !state.finalShown) onFinal();
@@ -325,6 +358,75 @@ function endShootout() {
   go('shootoutEnd', false);
 }
 
+
+// ---------------------------------------------------------------- replays
+// The last 4 s of play are kept as light snapshots. After a three, a dunk or a buzzer-beater the sim waits
+// while a half-speed replay plays from a low baseline camera. Any button skips it. Replays never start from
+// the test hook step(n), only from the real-time loop.
+const REC = { buf: [], max: 240 };
+function record(m) {
+  REC.buf.push({
+    b: [m.ball.x, m.ball.y, m.ball.z, m.ball.state, m.ball.holder],
+    p: m.p.map((q) => [q.x, q.z, q.y, q.vx, q.vz, q.act, q.meter, q.face, q.run]),
+    poss: m.poss, phase: m.phase,
+  });
+  if (REC.buf.length > REC.max) REC.buf.shift();
+}
+function queueReplay(m, kind, side) {
+  if (!state.settings.replays || state.mode === 'demo' || reducedMotion()) return;
+  if (state.lastReplayAt != null && m.time - state.lastReplayAt < 25) return;
+  state.replayPending = { at: m.time, kind, side };
+}
+function startReplay(speed = 0.5) {
+  const m = state.match, pend = state.replayPending || { kind: 'REPLAY', side: rimSide(m.ball.x) };
+  state.replayPending = null;
+  if (REC.buf.length < 60) return false;
+  state.lastReplayAt = m.time;
+  document.body.classList.add('replay');
+  state.replay = { frames: REC.buf.slice(-130), f: 0, speed, kind: pend.kind, side: pend.side }; // about 4 s at half speed
+  R.snap = true;
+  announce(`Replay: ${pend.kind.toLowerCase()}.`);
+  return true;
+}
+function stepReplay(dt) {
+  const rp = state.replay;
+  if (I.shootP || I.passP || I.switchP) { I.shootP = I.passP = I.switchP = false; I.shootR = false; return endReplay(); }
+  if (!R.frozen) rp.f += dt * 60 * rp.speed;
+  if (rp.f >= rp.frames.length - 1) endReplay();
+}
+function endReplay() {
+  state.replay = null;
+  document.body.classList.remove('replay');
+  G3.camOverride = null; R.snap = true; acc = 0;
+}
+function replayScene(m) {
+  const rp = state.replay;
+  const fr = rp.frames[Math.min(rp.frames.length - 1, Math.floor(rp.f))];
+  const ball = { x: fr.b[0], y: fr.b[1], z: fr.b[2], state: fr.b[3], holder: fr.b[4] };
+  const players = m.p.map((q, i) => {
+    const d = fr.p[i];
+    const pl = { idx: q.idx, t: q.t, x: d[0], z: d[1], y: d[2], vx: d[3], vz: d[4], act: d[5], meter: d[6], face: d[7], run: d[8] };
+    pl.hasBall = ball.holder === q.idx; pl.defending = fr.poss !== q.t && fr.phase === 'live';
+    const T = m.teams[q.t];
+    return { pl, r: T.roster[q.r], kit: T.kit, home: q.t === 0, user: false };
+  });
+  // over the shooter's shoulder, then riding the ball to the rim
+  const rx = COURT.rimX[rp.side];
+  if (!rp.shooter) {
+    let k = rp.frames.length - 1;
+    while (k > 0 && rp.frames[k].b[3] !== 'held') k--;
+    const h = rp.frames[k].b[4], sp = h >= 0 ? rp.frames[k].p[h] : [ball.x, ball.z];
+    rp.shooter = { x: sp[0], z: sp[1] };
+  }
+  const sx0 = rp.shooter.x, sz0 = rp.shooter.z;
+  const ux = sx0 - rx, uz = sz0 - 25, ul = Math.hypot(ux, uz) || 1;
+  const back = 13, side = 4;
+  const px = sx0 + ux / ul * back - uz / ul * side, pz = sz0 + uz / ul * back + ux / ul * side;
+  const tx = ball.x * 0.3 + rx * 0.5 + sx0 * 0.2, ty = Math.max(5.5, ball.y * 0.35 + 4.5), tz = ball.z * 0.3 + 25 * 0.5 + sz0 * 0.2;
+  G3.camOverride = { p: [px, 6, pz], t: [tx, ty, tz], fov: R.v && R.v.portrait ? 56 : 40 };
+  return { players, ball, camX: ball.x };
+}
+
 // ---------------------------------------------------------------- events → sound, effects, announcements
 function rimSide(x) { return x > COURT.L / 2 ? 1 : 0; }
 const WHY = { shotclock: 'SHOT CLOCK', oob: 'OUT OF BOUNDS', reach: 'FOUL', shoot: 'SHOOTING FOUL', '5sec': '5 SECONDS' };
@@ -336,17 +438,19 @@ function matchEvents(m) {
         pop(`+${e.pts}`, COURT.rimX[side], 11.5, 25, '#FFF6E0', e.pts === 3);
         if (e.pts === 3) burst('steam', COURT.rimX[side], 10, 25, 10, ['#fff']);
         play('cheer', { big: e.pts === 3 || m.teams[e.t].isUser });
+        state.cheer = e.pts === 3 ? 1 : 0.75;
+        { const lm = state.lastMake || {}; if (e.pts === 3 || lm.dunk || lm.buzzer) { state.slam = { m, text: lm.buzzer ? 'BUZZER BEATER' : lm.dunk ? 'SLAM DUNK' : '3 POINTS', color: m.teams[e.t].colors.primary, sub: m.teams[e.t].short.toUpperCase(), at: m.time }; } if (e.pts === 3 || lm.dunk || lm.buzzer) queueReplay(m, lm.dunk ? 'DUNK' : lm.buzzer ? 'BUZZER BEATER' : 'THREE', lm.side ?? rimSide(m.ball.x)); state.lastMake = null; }
         announce(`${m.teams[e.t].short} scores ${e.pts}. ${m.teams[0].short} ${m.teams[0].score}, ${m.teams[1].short} ${m.teams[1].score}.`);
         break;
       }
-      case 'swish': netHit(rimSide(m.ball.x)); play('swish'); if (e.type === 'dunk') shake(0.6); break;
+      case 'swish': netHit(rimSide(m.ball.x)); play('swish'); if (e.type === 'dunk') shake(0.6); state.lastMake = { dunk: e.type === 'dunk', buzzer: !!(m.ball.shot && m.ball.shot.buzzer), side: rimSide(m.ball.x) }; break;
       case 'rim': rimHit(rimSide(m.ball.x)); play('rim', e); break;
       case 'bounce': play('bounce'); break;
       case 'floor': play('floor'); break;
       case 'whistle': play('whistle'); if (WHY[e.why]) pop(WHY[e.why], m.ball.x, 8, m.ball.z, '#FFB4A8'); if (e.why === 'shotclock') announce('Shot-clock violation.'); break;
       case 'buzzer': play('buzzer'); break;
       case 'steal': pop('STEAL!', m.p[e.i].x, 7, m.p[e.i].z, '#FFD84D'); play('steal'); break;
-      case 'block': pop('BLOCKED!', m.p[e.i].x, 9, m.p[e.i].z, '#FFD84D'); play('block'); shake(0.4); break;
+      case 'block': pop('BLOCKED!', m.p[e.i].x, 9, m.p[e.i].z, '#FFD84D'); play('block'); shake(0.4); state.cheer = 0.6; break;
       case 'andone': pop('AND ONE!', m.p[e.i].x, 8, m.p[e.i].z, '#5FD38A', true); break;
       case 'fouledout': pop('FOULED OUT', m.ball.x, 8, m.ball.z, '#FFB4A8'); announce('A player has fouled out.'); break;
       case 'tip': play('squeak'); break;
@@ -376,12 +480,18 @@ function drawFrame(dt) {
   const sc = state.scene;
   if (state.so && (sc === 'shootout' || sc === 'shootoutEnd')) return drawShootout(dt);
   const m = activeMatch();
-  if (m && (OVER_GAME.has(sc) || sc === 'title')) return drawMatch(m, dt);
+  if (m && (OVER_GAME.has(sc) || sc === 'title') && sc !== 'champion') return drawMatch(m, dt);
   // menus: a quiet court of the relevant school behind the panel
-  const key = state.season && (sc === 'hub' || sc === 'bracket' || sc === 'roster') ? state.season.school : state.pick.home || 'hot-springs';
+  const key = state.season && (sc === 'hub' || sc === 'bracket' || sc === 'roster' || sc === 'champion') ? state.season.school : state.pick.home || 'hot-springs';
   const t = team(key);
-  const venue = { kind: sc === 'bracket' ? 'arena' : 'home', home: t, away: team(state.pick.away === key ? 'lakeside' : state.pick.away), pennants: banners(key, (state.season && state.season.program) || state.pick.program) };
-  draw({ venue, dt, camX: 47, players: [] });
+  const finals = sc === 'bracket' || sc === 'champion';
+  const venue = { kind: finals ? 'arena' : 'home', home: t, away: team(state.pick.away === key ? 'lakeside' : state.pick.away), pennants: banners(key, (state.season && state.season.program) || state.pick.program) };
+  if (sc === 'champion' && !R.reduced) {
+    // the title moment: a slow sweep of the finals arena with the crowd on its feet
+    const tt = performance.now() / 1000, ang = Math.sin(tt * 0.08) * 0.7, port = R.v && R.v.portrait;
+    G3.camOverride = { attract: true, p: [47 + Math.sin(ang) * (port ? 48 : 60), port ? 22 : 14, 25 + Math.cos(ang) * (port ? 48 : 60)], t: [47, port ? 4 : 9, 12], fov: port ? 62 : 40 };
+  } else if (G3.camOverride && G3.camOverride.attract) { G3.camOverride = null; R.snap = true; }
+  draw({ venue, dt, camX: 47, camZ: 25, players: [], cheer: sc === 'champion' ? 1 : 0 });
   updateScoreboard();
 }
 
@@ -393,8 +503,15 @@ function drawMatch(m, dt) {
     pl.hasBall = m.ball.holder === pl.idx; pl.defending = m.poss !== pl.t && m.phase === 'live';
     return { pl, r, kit: T.kit, home: pl.t === 0, user: ut >= 0 && !m.user.auto && m.user.ctrl === pl.idx && state.scene !== 'title' };
   });
-  let camX = m.ball.x + (m.phase === 'live' ? m.dir[m.poss] * 5 : 0);
+  // lead toward the basket being attacked; portrait phones lead further so that basket stays in frame
+  let camX = m.ball.x + (m.phase === 'live' ? m.dir[m.poss] * (R.v && R.v.portrait ? 11 : 8) : 0);
   if (m.ball.state === 'shot' && m.ball.shot) { const d = m.dir[m.ball.shot.team]; camX = (m.ball.x + rimFor(d) - d * 6) / 2; }
+  // in the frontcourt (and while a shot flies), keep the basket being attacked inside the frame
+  if (!verticalDir(m) && (m.phase === 'live' || m.ball.state === 'shot') && m.poss >= 0) {
+    const d = m.ball.state === 'shot' && m.ball.shot ? m.dir[m.ball.shot.team] : m.dir[m.poss], rim = rimFor(d);
+    const reach = is3d() ? (R.v && R.v.portrait ? 9 : 14) : (R.v && R.v.portrait ? 9 : 20);
+    if ((m.ball.x - COURT.L / 2) * d > 0 || m.ball.state === 'shot') camX = d > 0 ? Math.max(camX, rim - reach) : Math.min(camX, rim + reach);
+  }
   if (m.phase === 'ft' && m.ft) camX = rimFor(m.dir[m.ft.team]) - m.dir[m.ft.team] * 10;
   if (m.phase === 'tipoff') camX = 47;
   let meter = null, ftMeter = null, offscreen = null;
@@ -412,18 +529,35 @@ function drawMatch(m, dt) {
       ftMeter = { x: s.x, z: s.z, y: 9, mv: m.ft.mv, scale: m.assist ? 1.5 : 1, label: m.ft.label, n: m.ft.total - m.ft.left + 1, total: m.ft.total, user: m.ft.team === ut };
     }
   }
-  draw({ m, venue: venueOf(m), dt, camX, players, ball: m.ball, meter, ftMeter, offscreen });
+  const cheer = state.cheer || 0; state.cheer = 0;
+  if (state.replay && state.scene === 'game') {
+    const rs = replayScene(m);
+    draw({ m, venue: venueOf(m), dt, camX: rs.camX, camZ: rs.ball.z, players: rs.players, ball: rs.ball, cheer: 0.6, letterbox: true, banner: { text: `REPLAY · ${state.replay.kind}`, sub: touchOn() ? 'Tap a button to skip' : 'Press Space to skip' } });
+    updateScoreboard();
+    return;
+  }
+  const perfect = m.ball.state === 'shot' && m.ball.shot && m.ball.shot.label === 'PERFECT';
+  const slamT = state.slam && state.slam.m === m ? (m.time - state.slam.at) / 1.4 : -1;
+  const slam = slamT >= 0 && slamT < 1 && state.scene !== 'title' && m.ball.state !== 'shot' ? { ...state.slam, t: slamT } : null;
+  // title attract mode: a slow sweep around the gym (the 3D view only; reduced motion keeps the game camera)
+  if (state.scene === 'title' && !R.reduced) {
+    const tt = performance.now() / 1000, ang = Math.sin(tt * 0.05) * 0.85;
+    G3.camOverride = { attract: true, p: [47 + Math.sin(ang) * 66, 19 + Math.sin(tt * 0.07) * 3, 25 + Math.cos(ang) * 66], t: [m.ball.x * 0.5 + 23.5, 5, 22], fov: 34 };
+  } else if (G3.camOverride && G3.camOverride.attract) { G3.camOverride = null; R.snap = true; }
+  draw({ m, venue: venueOf(m), dt, camX, camZ: m.ball.z, players, ball: m.ball, meter, ftMeter, offscreen, cheer, perfect, slam, vertical: verticalDir(m) });
   updateScoreboard();
 }
 
 function drawShootout(dt) {
   const so = state.so;
+  if (G3.camOverride && G3.camOverride.attract) { G3.camOverride = null; R.snap = true; }
   const players = [{ pl: so.sh, r: so.r, kit: so.kit, home: true, user: true }];
   const scale = (DIFF[so.difficulty] || DIFF[1]).win * (so.assist ? 1.5 : 1);
   const meter = so.sh.act === 'shoot' && so.ball.state === 'held' ? { x: so.sh.x, z: so.sh.z, y: so.sh.y, h: so.r.height / 12, v: so.sh.meter, win: 0.05 * scale, label: null }
     : so.labelT > 0 ? { x: so.sh.x, z: so.sh.z, y: so.sh.y, h: so.r.height / 12, v: 0, win: 0.05 * scale, label: so.label } : null;
   const venue = { kind: 'home', home: so.team, away: so.team, pennants: banners(so.team.key, so.r.id.includes('girls') ? 'girls' : 'boys') };
-  draw({ venue, dt, camX: R.v && R.v.portrait ? (so.sh.x + COURT.rimX[1]) / 2 - 2 : COURT.rimX[1] - 14, players, ball: so.ball, meter });
+  const vert = is3d() ? 1 : 0; // the 3D Hot Streak camera stands behind the shooter, looking at the basket
+  draw({ venue, dt, camX: vert ? (so.sh.x + COURT.rimX[1]) / 2 - 4 : R.v && R.v.portrait ? (so.sh.x + COURT.rimX[1]) / 2 - 2 : COURT.rimX[1] - 14, camZ: (so.sh.z + 25) / 2, players, ball: so.ball, meter, vertical: vert });
   updateScoreboard();
 }
 
@@ -439,7 +573,7 @@ function updateScoreboard(force) {
     const gauge = Math.min(6, so.streak);
     html = `<div class="sb-team"><span class="sb-name">${UI.esc(so.team.abbr)}</span><span class="sb-score" aria-label="Score">${so.score}</span></div>
       <div class="sb-mid"><span class="sb-q">HOT STREAK</span><span class="sb-clock">${so.phase === 'ready' ? 'READY' : so.t.toFixed(1)}</span><span class="sb-shot">x${so.mult}</span></div>
-      <div class="sb-team"><span class="sb-name">STEAM</span><span class="gauge" role="img" aria-label="Streak ${so.streak}">${Array.from({ length: 6 }, (_, k) => `<i class="${k < gauge ? 'on' : ''}"></i>`).join('')}</span></div>`;
+      <div class="sb-team"><span class="sb-name sb-steam">STREAK</span><span class="gauge" role="img" aria-label="Streak ${so.streak}">${Array.from({ length: 6 }, (_, k) => `<i class="${k < gauge ? 'on' : ''}"></i>`).join('')}</span></div>`;
   } else {
     const m = state.match;
     if (!m) return;
@@ -448,14 +582,16 @@ function updateScoreboard(force) {
     const bonus = (t) => m.teams[1 - t].tf[qi] >= m.rules.bonusAt;
     const side = (t) => {
       const T = m.teams[t];
-      return `<div class="sb-team${m.poss === t && m.phase !== 'final' ? ' poss' : ''}"><img class="crest" src="${crestSrc(T)}" width="28" height="28" alt=""><span class="sb-name">${UI.esc(T.abbr)}</span><span class="sb-score">${T.score}</span>
-        <span class="sb-fouls">F ${T.tf[qi]}${bonus(t) ? ' <b>BONUS</b>' : ''}</span></div>`;
+      const n = T.tf[qi];
+      const lamps = Array.from({ length: 5 }, (_, k) => `<i class="${k < n ? 'on' : ''}"></i>`).join('');
+      return `<div class="sb-team${m.poss === t && m.phase !== 'final' ? ' poss' : ''}"><img class="crest" src="${crestSrc(T)}" width="28" height="28" alt=""><span class="sb-name">${UI.esc(T.abbr)}</span><span class="sb-arrow" aria-hidden="true"></span><span class="sb-score">${T.score}</span>
+        <span class="sb-fouls" aria-label="Team fouls ${n}"><span class="fl">FOULS</span> <span class="lamps" aria-hidden="true">${lamps}</span>${bonus(t) ? ' <b>BONUS</b>' : ''}</span></div>`;
     };
     const shotTxt = !m.rules.shotClock ? '' : m.clock.shotOff ? '--' : Math.ceil(Math.max(0, m.clock.shot - 0.001));
     const crowd = m.crowdTeam >= 0 ? `<span class="sb-crowd" role="img" aria-label="Home crowd ${Math.round(m.crowd * 100)} percent"><i style="width:${Math.round(m.crowd * 100)}%"></i></span>` : '';
     html = `${side(0)}<div class="sb-mid"><span class="sb-q">${q}</span><span class="sb-clock">${fmtClock(m.clock.t)}</span>${m.rules.shotClock ? `<span class="sb-shot" title="Shot clock">${shotTxt}</span>` : '<span class="sb-shot off">CLASSIC</span>'}${crowd}</div>${side(1)}`;
   }
-  if (html !== sbCache || force) { sbCache = html; sb.innerHTML = html; }
+  if (html !== sbCache || force) { sbCache = html; sb.innerHTML = html; sb.classList.toggle('so', !!(state.so && (sc === 'shootout' || sc === 'shootoutEnd'))); }
 }
 const crestSrc = (T) => crestURL(T, 56);
 
@@ -510,6 +646,8 @@ const ACT = {
   setTheme: (a) => setSetting('theme', a),
   setAssist: (a) => setSetting('assist', a === '1'),
   setTouch: (a) => setSetting('touch', a),
+  setReplays: (a) => setSetting('replays', a === '1'),
+  setGraphics: (a) => { setSetting('graphics', a); if (a !== '2d') start3d(); R.snap = true; drawFrame(0); },
   startExhibition: () => { if (state.pick.home !== state.pick.away) newExhibition(); },
   rematch: () => { state.match = startMatch({ ...state.lastOpts, seed: undefined }); enterGame(); },
   startSeason: () => startSeason(),
@@ -534,6 +672,7 @@ function addSimTrophy() {
 }
 function setSetting(k, v) { state.settings[k] = v; applySettings(); persist(); render(); }
 function pauseGame() {
+  if (state.replay) endReplay();
   if (state.scene === 'game') { state.paused = true; go('pause', false); }
   else if (state.scene === 'shootout') { state.paused = !state.paused; wantLoop(); }
 }
@@ -550,6 +689,7 @@ function onClick(e) {
 function onKey(e) {
   unlock();
   const sc = state.scene;
+  if (state.replay && !e.repeat && e.code !== 'KeyM') { endReplay(); I.shootP = I.passP = I.switchP = false; return true; }
   if (e.code === 'KeyM' && !e.repeat) { setSetting('sound', !state.settings.sound); return true; }
   if ((e.code === 'KeyP' || e.code === 'Escape') && !e.repeat) {
     if (sc === 'game' || sc === 'shootout') { pauseGame(); return true; }
@@ -576,6 +716,7 @@ function boot() {
   }
   render();
   window.__game = HOOKS;
+  requestAnimationFrame(() => start3d());
 }
 
 // ---------------------------------------------------------------- test hooks
@@ -589,14 +730,18 @@ function sumState() {
     shootout: state.so ? { t: +state.so.t.toFixed(2), score: state.so.score, streak: state.so.streak, mult: state.so.mult, made: state.so.made, att: state.so.att, spot: state.so.spot, phase: state.so.phase, ball: state.so.ball.state, shooter: fullName(state.so.r) } : null,
     challenge: state.chal, chalResult: state.chalResult ? { ok: state.chalResult.ok, more: state.chalResult.more, note: state.chalResult.note } : null,
     trophies: state.save.trophies, unlocks: state.save.unlocks, best: state.save.best, challenges: state.save.challenges,
+    replay: state.replay ? { kind: state.replay.kind, f: Math.floor(state.replay.f), n: state.replay.frames.length } : null,
     pick: { ...state.pick }, audio: { ctx: !!AU.ctx, on: AU.on }, reduced: R.reduced, touch: touchOn(), fx: R.fx.parts.length, loop: !!raf,
     view: R.v ? { W: R.v.W, H: R.v.H, s: +R.v.s.toFixed(2), camX: +R.v.camX.toFixed(2) } : null,
+    gfx: { mode: is3d() ? '3d' : '2d', gl: state.gl || null, ...info3d() },
     ui: { focus: document.activeElement ? (document.activeElement.dataset.act || document.activeElement.id || document.activeElement.tagName) : null },
   };
 }
 
 function stepN(n) {
+  if (state.replay) endReplay();
   for (let i = 0; i < n; i++) stepOnce();
+  state.replayPending = null;
   drawFrame(n * DT);
   return state.match ? state.match.phase : state.so ? state.so.phase : null;
 }
@@ -623,7 +768,11 @@ const HOOKS = {
     render();
     return true;
   },
-  isIdle() { return performance.now() > state.busy; },
+  isIdle() {
+    // also wait for any finite CSS animation (panel entries can lag behind the timer on slow devices)
+    const anim = document.getAnimations ? document.getAnimations().some((a) => a.playState === 'running' && a.effect && a.effect.getTiming().iterations !== Infinity) : false;
+    return performance.now() > state.busy && !state.busy3d && !anim;
+  },
   step(n = 1) { return stepN(n); },
   pause() { state.paused = true; return true; },
   resume() { state.paused = false; wantLoop(); return true; },
@@ -683,6 +832,15 @@ const HOOKS = {
         return { stick: rect('#stick'), shoot: rect('#b-shoot'), pass: rect('#b-pass'), sw: rect('#b-switch'), pause: rect('#b-pause'), stage: rect('#stage'), sb: rect('#sb') };
       }
       case 'freeze': R.frozen = !!a[0]; return true;
+      case 'project': { // court feet → stage pixels in the current view (camera-framing tests)
+        const [x, z, y = 0] = a;
+        if (is3d()) { const q = G3.P(x, z, y); return { x: +q.X.toFixed(1), y: +q.Y.toFixed(1), W: R.v.W, H: R.v.H }; }
+        return { x: +sx(R.v, x).toFixed(1), y: +sy(R.v, z, y).toFixed(1), W: R.v.W, H: R.v.H };
+      }
+      case 'gfx': Object.assign(G3.flags, a[0] || {}); if (a[1]) setTier(a[1]); drawFrame(0); return { ...G3.flags, tier: G3.tier };
+      case 'cam': G3.camOverride = a[0] || null; R.snap = true; drawFrame(0); return true;
+      case 'replay': { if (!m) return false; state.replayPending = { kind: a[0] || 'THREE', side: a[1] ?? rimSide(m.ball.x) }; const ok = startReplay(); if (ok && a[2] != null) state.replay.f = a[2] * (state.replay.frames.length - 1); drawFrame(0); return ok; }
+      case 'endReplay': if (state.replay) endReplay(); drawFrame(0); return true;
       case 'roster': return makeRoster(a[0], a[1], a[2] || team(a[0]).cls, a[3] || 1);
       case 'storage': return store.ok;
       case 'seasonResult': if (!state.season) return false; recordResult(state.season, a[0], a[1]); if (state.season.champion) addSimTrophy(); persist(); render(); return sumState().season;

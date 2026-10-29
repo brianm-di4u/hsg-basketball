@@ -302,10 +302,12 @@ export function helpScreen(st, tab = 'controls') {
     <li>School names, cities, mascots, colors, classes and title years: <code>shared/data/schools.json</code>, compiled from Wikipedia school pages and AAA news coverage (see <code>research/schools-and-athletics.md</code>).</li>
     <li>Colors are stand-in values. Fountain Lake (green and white), Cutter-Morning Star (navy and silver), Jessieville (purple and gold) and Mountain Pine (red and black) are <b>game colors</b>: their real colors were not confirmed.</li>
     <li>Mascot crests are original geometric drawings, not school logos. Gym names are not shown because none was confirmed.</li>
-    <li>The state final venue: ${esc(FINALS.name)}, ${esc(FINALS.address)}, hosted the 2026 AAA basketball state championships. The arena art is generic.</li>
+    <li>The state final venue: ${esc(FINALS.name)}, ${esc(FINALS.address)}, hosted the 2026 AAA basketball state championships. The 3D arena follows its published seating chart (two tiers of royal-blue seats, one end with only a small lower section); everything else in the arena art is generic.</li>
+    <li>Gyms are generic game art in each school's colors. Title-year pennants hang only for real state titles.</li>
     <li>Out-of-county opponents (Cinderbrook, Quartz Hollow and others) are fictional towns.</li></ul>
     <h3>Fact cards</h3><ul class="plain facts">${FACTS_LIST.map((f) => `<li>${esc(f.text)} <span class="src">(${esc(f.source)})</span></li>`).join('')}</ul>
-    <h3>Credits</h3><p>Spa City Hoops is part of the open-source Hot Springs Games collection (MIT license). All art is drawn in code and all sound is synthesized in the browser. No network connection is used.</p>`;
+    <h3>Credits</h3><p>Spa City Hoops is part of the open-source Hot Springs Games collection (MIT license). Player bodies were modeled in Blender; the crowd, band, cheer squad, maple floor and block-wall images were painted for this game with AI image generation; everything else is drawn in code, and all sound is synthesized in the browser. No network connection is used.</p>
+    <p class="fine">Includes three.js r160.1 (MIT license, © 2010–2023 three.js authors) and the Bebas Neue typeface by Dharma Type (SIL Open Font License 1.1). Classic 2D court available in Settings → Graphics.</p>`;
   return `<div class="panel wide">
     <h2>How to play</h2>
     <div class="tabs" role="tablist">${tabs.map(([k, l]) => `<button class="tab" role="tab" aria-selected="${k === tab}" data-act="helpTab" data-arg="${k}">${l}</button>`).join('')}</div>
@@ -328,6 +330,8 @@ export function settingsScreen(st, storageOk) {
     ${seg('setClock', [[35, '35-second clock'], [0, 'Classic (off)']], s.shotClock, 'Shot clock')}
     ${seg('setAssist', [[1, 'On (wider window)'], [0, 'Off']], s.assist ? 1 : 0, 'Meter assist')}
     ${seg('setTouch', [['auto', 'Auto'], ['on', 'Always'], ['off', 'Never']], s.touch, 'Touch controls')}
+    ${seg('setGraphics', [['auto', 'Auto'], ['3d', '3D gym'], ['2d', 'Classic 2D']], s.graphics || 'auto', 'Graphics')}
+    ${seg('setReplays', [[1, 'On'], [0, 'Off']], s.replays === false ? 0 : 1, 'Highlight replays')}
     ${storageOk ? '' : '<p class="warn" role="status">Saving is unavailable in this browser, so progress lasts only until you close the page.</p>'}
     <div class="row end">${btn('back', 'Done', { cls: 'primary' })}</div>
   </div>`;

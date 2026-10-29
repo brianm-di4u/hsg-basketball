@@ -1,5 +1,24 @@
 # REPORT: Spa City Hoops (`games/basketball`)
 
+## Visual overhaul (2026-10)
+
+The game now plays in a **3D gym** (three.js r160.1).
+- **Players:** rigged Blender players in school kits.
+- **Venues:** painted crowds, the pep band and cheer squad; a lit state-finals arena that follows Bank OZK Arena's
+  published seating chart.
+- **Camera:** a broadcast camera; a portrait down-court camera on phones.
+- **Payoff:** highlight replays and a big-play callout.
+- **Fallback:** the 2D court described below remains for software WebGL, `?gl=0` and Settings → Graphics.
+- **Unchanged:** rules, AI, the shot meter, the season and the bracket.
+- **Review score:** the independent review went from 4.1 to 6.1 out of 10, against about 9 for the benchmarks, so the
+  goal of matching top-tier games is not yet met.
+- **Details:** `VISUAL-REPORT.md` covers changes, scores, tests, performance and known gaps. The plan is in
+  `VISUAL-PLAN.md`.
+
+The original build is described below. These items changed:
+- **Size:** the game is now `index.html` (351 KB) plus `vendor/three.bundle.js` and `assets/*.js`, 1.86 MB in total.
+- **Tests:** 77 runs; `tests/visual.test.mjs` is new.
+
 ## What was built
 
 An original arcade high-school basketball game set in Garland County, Arkansas. It ships as one

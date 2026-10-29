@@ -6,6 +6,7 @@ async function sweep(t, label) {
   for (const sc of screens) {
     await t.game('scene', sc);
     await t.page.waitForTimeout(260);
+    await t.waitForStable(); // the panel's fade-in can lag the timer on a busy machine
     const r = await contrastReport(t.page);
     fails = fails.concat(r.fails.map((f) => ({ ...f, sc })));
   }

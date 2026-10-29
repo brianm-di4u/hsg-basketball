@@ -76,3 +76,18 @@ Read `src/entities/Team.js` (it ports the "Simple Soccer" design from Buckland's
 | Steals and blocks | Dunkman | hand-reach tests on timing windows, not body contact |
 | Input | MDN | held-key flags plus just-pressed edges, read only inside the fixed step |
 | Shooting | (none found that fit) | original: hold-and-release meter, outcome rolled at release, trajectory solved to hit or miss the rim |
+
+## Vendored libraries and assets (visual overhaul)
+
+Third-party code and fonts shipped with the game, each pinned and with its license beside it in `vendor/`.
+
+| Item | Version | Source | License | Where | Notes |
+|---|---|---|---|---|---|
+| three.js core (`build/three.module.min.js`) | 0.160.1 | npm `three@0.160.1` | MIT (`vendor/three-0.160.1/LICENSE`) | `vendor/three-0.160.1/` | unmodified copy |
+| three.js `GLTFLoader.js`, `BufferGeometryUtils.js`, `SkeletonUtils.js` (examples/jsm) | 0.160.1 | same package | MIT | same folder | unmodified copies |
+| `vendor/three.bundle.js` | generated | `tools/build-vendor.mjs` | MIT | `vendor/` | the files above rewritten as one classic script that sets `globalThis.THREE`, so it loads under file:// |
+| Bebas Neue (latin, 400) | 5.2.5 | npm `@fontsource/bebas-neue@5.2.5` | SIL OFL 1.1 (`vendor/bebas-neue-5.2.5/LICENSE`) | `vendor/bebas-neue-5.2.5/`, embedded as base64 in `src/styles/font.css` | display face for headings, scoreboard and callouts |
+
+Original assets made for this game (not third-party): the player bodies (`art-src/blender/build_players.py`,
+Blender 5.2), the painted crowd, band, cheer, maple and block-wall images (OpenAI image generation through
+Codex, prompts in `VISUAL-REPORT.md`), packed by `tools/pack-assets.mjs`.

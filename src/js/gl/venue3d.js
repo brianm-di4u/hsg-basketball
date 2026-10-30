@@ -524,7 +524,7 @@ export function buildVenue(v, opts) {
   const home = v.home, away = v.away;
   const g = new THREE.Group();
   // the HQ home-gym shell (venue-hq.js) replaces the procedural architecture: A() adds a piece only without it
-  const shell = !arena && opts.shell ? opts.shell : null;
+  const shell = opts.shell || null;
   const A = (o) => { if (!shell) g.add(o); return o; };
   const rng = rngOf(hashStr(v.kind + home.key + away.key));
   // the room the probe sees, for box-projected reflections (walls, roof; the camera side is open, so far away)
@@ -640,16 +640,16 @@ export function buildVenue(v, opts) {
     const sideRows = (zSign, tierY, tierZ, rows) => {
       for (let r = 0; r < rows; r++) {
         const y = tierY + r * 1.5, d = tierZ + r * 2.6;
-        const step = new THREE.Mesh(new THREE.BoxGeometry(SIDE, 1.5, 2.6), stepM); step.position.set(0, y + 0.75, zSign * d); g.add(step);
-        const chairs = new THREE.Mesh(new THREE.BoxGeometry(SIDE, 1.1, 0.7), seatM); chairs.position.set(0, y + 2.0, zSign * (d + 0.6)); g.add(chairs);
+        const step = new THREE.Mesh(new THREE.BoxGeometry(SIDE, 1.5, 2.6), stepM); step.position.set(0, y + 0.75, zSign * d); A(step);
+        const chairs = new THREE.Mesh(new THREE.BoxGeometry(SIDE, 1.1, 0.7), seatM); chairs.position.set(0, y + 2.0, zSign * (d + 0.6)); A(chairs);
         for (let x = -SIDE / 2 + 2; x < SIDE / 2 - 2; x += 1.8 + rng() * 0.3) if (rng() < 0.82) seats.push({ x, y: y + 1.5, z: zSign * (d - 0.2), g: rng() < 0.12 ? 'stand' : 'seat', row: r });
       }
     };
     const endRows = (xSign, tierY, tierX, rows, width) => {
       for (let r = 0; r < rows; r++) {
         const y = tierY + r * 1.5, d = tierX + r * 2.6;
-        const step = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.5, width), stepM); step.position.set(xSign * d, y + 0.75, 0); g.add(step);
-        const chairs = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.1, width), seatM); chairs.position.set(xSign * (d + 0.6), y + 2.0, 0); g.add(chairs);
+        const step = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.5, width), stepM); step.position.set(xSign * d, y + 0.75, 0); A(step);
+        const chairs = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.1, width), seatM); chairs.position.set(xSign * (d + 0.6), y + 2.0, 0); A(chairs);
         for (let z = -width / 2 + 1; z < width / 2 - 1; z += 1.8 + rng() * 0.3) if (rng() < 0.8) seats.push({ x: xSign * (d - 0.2), y: y + 1.5, z, g: 'seat', row: r });
       }
     };
@@ -679,11 +679,11 @@ export function buildVenue(v, opts) {
     const sbBox = new THREE.Mesh(new THREE.BoxGeometry(0.8, 12, 24), [new THREE.MeshBasicMaterial({ map: sbTex, toneMapped: false, color: glow(0.5) }), stepM, stepM, stepM, stepM, stepM]);
     sbBox.position.set(-(HL + 14 + 14 * 2.6 + 8 + 10 * 2.6 + 2), 58, 0); g.add(sbBox);
     // dark roof with a lighting truss over the court
-    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(400, 300), new THREE.MeshStandardMaterial({ color: C('#262B3E'), roughness: 1 })); ceil.rotation.x = Math.PI / 2; ceil.position.y = 82; g.add(ceil);
+    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(400, 300), new THREE.MeshStandardMaterial({ color: C('#262B3E'), roughness: 1 })); ceil.rotation.x = Math.PI / 2; ceil.position.y = 82; A(ceil);
     const lampM = new THREE.MeshBasicMaterial({ color: C('#FFFFFF').multiplyScalar(GLOW * 1.4) });
-    for (let x = -36; x <= 36; x += 12) for (const z of [-16, 0, 16]) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, 0.5, 12), lampM); l.position.set(x, 70, z); g.add(l); }
+    for (let x = -36; x <= 36; x += 12) for (const z of [-16, 0, 16]) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, 0.5, 12), lampM); l.position.set(x, 70, z); A(l); }
     const trussM = new THREE.MeshStandardMaterial({ color: C('#1C1E26'), roughness: 0.6, metalness: 0.4 });
-    for (const z of [-16, 0, 16]) { const t = new THREE.Mesh(new THREE.BoxGeometry(84, 1.2, 1.2), trussM); t.position.set(0, 71, z); g.add(t); }
+    for (const z of [-16, 0, 16]) { const t = new THREE.Mesh(new THREE.BoxGeometry(84, 1.2, 1.2), trussM); t.position.set(0, 71, z); A(t); }
     // courtside: a long table on the far side, team chairs either side
     g.add(reflect(scorerTable(40, home, away, true)));
     for (const s of [-1, 1]) g.add(chairRow(s < 0 ? home : away, s, 9));

@@ -252,19 +252,20 @@ function project(x, z, y = 0) {
 
 // ---------------------------------------------------------------- venue and players
 function venueKey(v, hq) { return `${v.kind}|${v.home.key}|${v.away.key}|${(v.pennants || []).map((p) => p.year + p.label).join(',')}|${hq ? 'hq' : 'lite'}`; }
-// the HQ home-gym shell once its package has streamed in (hq.js): the GLB scene, both lightmaps, their scales
-function gymShell() {
-  const pkg = HQ.packages['venue-gym'];
-  if (!pkg || !pkg['gym.glb']) return null;
-  if (G3.shell) return G3.shell;
-  const lm = (tag) => pkg[`gym-lm-${tag}-h.webp`] || pkg[`gym-lm-${tag}-m.webp`];
+// an HQ venue shell once its package has streamed in (hq.js): the GLB scene, both lightmaps, their scales
+G3.shells = {};
+function venueShell(kind) {
+  const pkg = HQ.packages[`venue-${kind}`];
+  if (!pkg || !pkg[`${kind}.glb`]) return null;
+  if (G3.shells[kind]) return G3.shells[kind];
+  const lm = (tag) => pkg[`${kind}-lm-${tag}-h.webp`] || pkg[`${kind}-lm-${tag}-m.webp`];
   if (!lm('floor') || !lm('shell')) return null;
-  G3.shell = { scene: pkg['gym.glb'].scene, lm: { floor: lm('floor'), shell: lm('shell') }, lmScale: HQ.manifest.packages['venue-gym'].lmScale };
-  for (const t of Object.values(G3.shell.lm)) t.userData.keep = true; // shared across venue rebuilds
-  return G3.shell;
+  const sh = G3.shells[kind] = { kind, scene: pkg[`${kind}.glb`].scene, lm: { floor: lm('floor'), shell: lm('shell') }, lmScale: HQ.manifest.packages[`venue-${kind}`].lmScale };
+  for (const t of Object.values(sh.lm)) t.userData.keep = true; // shared across venue rebuilds
+  return sh;
 }
 function ensureVenue(v, canSwap) {
-  const shell = v.kind !== 'arena' ? gymShell() : null;
+  const shell = venueShell(v.kind === 'arena' ? 'arena' : 'gym');
   const k = venueKey(v, !!shell);
   if (k === G3.venueKey) return;
   // the lite gym turning into the HQ one waits for a dead ball, so nothing pops mid-play
@@ -509,6 +510,6 @@ export function info3d() {
   if (G3.state !== 'ready') return { state: G3.state, err: G3.err };
   const i = G3.renderer.info;
   return { state: G3.state, tier: G3.tier, prof: G3.prof ? { ...G3.prof } : null, calls: i.render.calls, tris: i.render.triangles, geos: i.memory.geometries, texs: i.memory.textures, venue: G3.venueKey, frames: G3.frames,
-    shellTex: G3.shell ? Object.fromEntries(Object.entries(G3.shell.lm).map(([k, t]) => [k, { format: t.format, type: t.type, compressed: !!t.isCompressedTexture, cs: t.colorSpace, mips: t.mipmaps ? t.mipmaps.length : 0 }])) : null,
+    hqVenue: !!(G3.venue && G3.venue.hq),
     cam: { x: +G3.camera.position.x.toFixed(1), y: +G3.camera.position.y.toFixed(1), z: +G3.camera.position.z.toFixed(1), fov: G3.camera.fov } };
 }

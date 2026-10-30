@@ -24,6 +24,8 @@ function slotColor(name, home, C) {
     case 'ceiling': return C('#3A3A40');
     case 'steel': return C('#4A4E58');
     case 'surround': return C('#9A7E62');
+    case 'seat': return C('#1F4FB8');   // the arena's royal-blue chairs
+    case 'step': return C('#3A3E4C');
     default: return C('#CCCCCC');
   }
 }

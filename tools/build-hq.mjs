@@ -7,7 +7,8 @@
 // Every file is content-hashed (served immutable by the site); files no package lists are deleted.
 //
 // Packages:
-//   venue-gym   the shared home-gym shell (GLB) and its two lightmaps, WebP 2048 for high, 1024 for medium
+//   venue-gym     the shared home-gym shell (GLB) and its two lightmaps, WebP 2048 for high, 1024 for medium
+//   venue-arena   the state-finals bowl, the same way
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -31,9 +32,9 @@ fs.mkdirSync(HQ, { recursive: true });
 
 if (args.includes('--bake')) {
   const samples = args.includes('--samples') ? args[args.indexOf('--samples') + 1] : '1024';
-  for (const script of ['venue/build_gym.py']) {
-    console.log(`blender: ${script}`);
-    execFileSync(BLENDER, ['-b', '--factory-startup', '--python', path.join(ART, 'blender', script), '--', '--samples', samples], { stdio: 'inherit' });
+  for (const kind of ['gym', 'arena']) {
+    console.log(`blender: venue ${kind}`);
+    execFileSync(BLENDER, ['-b', '--factory-startup', '--python', path.join(ART, 'blender', 'venue', 'build_gym.py'), '--', '--kind', kind, '--samples', samples], { stdio: 'inherit' });
   }
 }
 
@@ -55,21 +56,21 @@ function halve(rgba, size) {
 }
 
 const packages = {};
-// ---- venue-gym
-{
+// ---- venue-gym, venue-arena
+for (const kind of ['gym', 'arena']) {
   const dir = path.join(ART, 'venue');
-  const lm = JSON.parse(fs.readFileSync(path.join(dir, 'gym-lm.json'), 'utf8'));
-  const glb = put('gym', '.glb', fs.readFileSync(path.join(dir, 'gym.glb')));
+  const lm = JSON.parse(fs.readFileSync(path.join(dir, `${kind}-lm.json`), 'utf8'));
+  const glb = put(kind, '.glb', fs.readFileSync(path.join(dir, `${kind}.glb`)));
   const high = [glb], medium = [glb], scales = {};
   for (const tag of ['floor', 'shell']) {
     const { size, scale } = lm[tag];
-    const rgba = new Uint8Array(fs.readFileSync(path.join(dir, `gym-lm-${tag}.rgba`)));
-    console.log(`webp: gym-lm-${tag} ${size}² + ${size / 2}²`);
-    high.push(put(`gym-lm-${tag}-h`, '.webp', await webp(rgba, size, 0.9)));
-    medium.push(put(`gym-lm-${tag}-m`, '.webp', await webp(halve(rgba, size), size / 2, 0.88)));
+    const rgba = new Uint8Array(fs.readFileSync(path.join(dir, `${kind}-lm-${tag}.rgba`)));
+    console.log(`webp: ${kind}-lm-${tag} ${size}² + ${size / 2}²`);
+    high.push(put(`${kind}-lm-${tag}-h`, '.webp', await webp(rgba, size, 0.9)));
+    medium.push(put(`${kind}-lm-${tag}-m`, '.webp', await webp(halve(rgba, size), size / 2, 0.88)));
     scales[tag] = scale;
   }
-  packages['venue-gym'] = { prio: 1, tiers: { high, medium }, lmScale: scales };
+  packages[`venue-${kind}`] = { prio: kind === 'gym' ? 1 : 2, tiers: { high, medium }, lmScale: scales };
 }
 
 await browser.close();

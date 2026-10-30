@@ -423,12 +423,10 @@ function replayScene(m) {
     rp.shooter = { x: sp[0], z: sp[1] };
   }
   const sx0 = rp.shooter.x, sz0 = rp.shooter.z;
-  // the camera stays on the near side of the shooter-to-rim line, so it looks toward the far-side crowd and
-  // never into the open camera side of the gym
-  const ux = sx0 - rx, uz = Math.max(4, Math.abs(sz0 - 25)), ul = Math.hypot(ux, uz) || 1;
+  const ux = sx0 - rx, uz = sz0 - 25, ul = Math.hypot(ux, uz) || 1;
   const back = 13, side = 4;
   const px = sx0 + ux / ul * back - uz / ul * side, pz = sz0 + uz / ul * back + ux / ul * side;
-  const tx = ball.x * 0.3 + rx * 0.5 + sx0 * 0.2, ty = Math.max(5.5, ball.y * 0.35 + 4.5), tz = ball.z * 0.3 + 25 * 0.5 + sz0 * 0.2;
+  const tx = ball.x * 0.3 + rx * 0.5 + sx0 * 0.2, ty = Math.max(5.5, ball.y * 0.5 + 3.5), tz = ball.z * 0.3 + 25 * 0.5 + sz0 * 0.2;
   G3.camOverride = { p: [px, 6, pz], t: [tx, ty, tz], fov: R.v && R.v.portrait ? 56 : 40 };
   return { players, ball, camX: ball.x };
 }
@@ -510,7 +508,7 @@ function drawMatch(m, dt) {
     return { pl, r, kit: T.kit, home: pl.t === 0, user: ut >= 0 && !m.user.auto && m.user.ctrl === pl.idx && state.scene !== 'title' };
   });
   // lead toward the basket being attacked; portrait phones lead further so that basket stays in frame
-  let camX = m.ball.x + (m.phase === 'live' ? m.dir[m.poss] * (R.v && R.v.portrait ? 7 : is3d() ? 5 : 8) : 0); // the 3D frame sits closer to the play, so a smaller lead
+  let camX = m.ball.x + (m.phase === 'live' ? m.dir[m.poss] * (R.v && R.v.portrait ? 4 : is3d() ? 5 : 8) : 0); // the 3D frame sits closer to the play, so a smaller lead
   if (m.ball.state === 'shot' && m.ball.shot) { const d = m.dir[m.ball.shot.team]; camX = (m.ball.x + rimFor(d) - d * 6) / 2; }
   // in the frontcourt (and while a shot flies), keep the basket being attacked inside the frame
   if (!verticalDir(m) && (m.phase === 'live' || m.ball.state === 'shot') && m.poss >= 0) {
@@ -547,7 +545,7 @@ function drawMatch(m, dt) {
   }
   const perfect = m.ball.state === 'shot' && m.ball.shot && m.ball.shot.label === 'PERFECT';
   const slamT = state.slam && state.slam.m === m ? (m.time - state.slam.at) / SLAM_S : -1;
-  const slam = slamT >= 0 && slamT < 1 && state.scene !== 'title' && m.ball.state !== 'shot' ? { ...state.slam, t: slamT } : null;
+  const slam = slamT >= 0 && slamT < 1 && state.scene !== 'title' && m.ball.state !== 'shot' ? { ...state.slam, t: slamT, ref: state.slam } : null;
   // title attract mode: a slow sweep around the gym (the 3D view only; reduced motion keeps the game camera)
   if (state.scene === 'title' && !R.reduced) {
     const tt = performance.now() / 1000, ang = Math.sin(tt * 0.05) * 0.85;
@@ -749,7 +747,7 @@ function sumState() {
 }
 
 // how long the big-play card stays up (s): gone before play resumes at the other end
-const SLAM_S = 1.15;
+const SLAM_S = 1.0;
 // on-screen callouts, for the capture and review tests (same visibility rule as drawMatch)
 function hudState() {
   const m = state.match, sl = state.slam;
@@ -762,7 +760,7 @@ function stepN(n) {
   if (state.replay) endReplay();
   for (let i = 0; i < n; i++) stepOnce();
   state.replayPending = null;
-  drawFrame(n * DT);
+  G3.hooked = true; drawFrame(n * DT); G3.hooked = false;
   return state.match ? state.match.phase : state.so ? state.so.phase : null;
 }
 

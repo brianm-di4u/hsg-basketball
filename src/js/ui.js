@@ -49,8 +49,8 @@ export function selectScreen(st) {
   return `<div class="panel wide">
     <h2>Exhibition</h2>
     ${seg('pickProgram', [['boys', 'Boys'], ['girls', 'Girls']], x.program, 'Program')}
-    <h3 id="h-home">Home team</h3>${grid('pickHome', x.home, 'Home team')}
-    <h3 id="h-away">Away team</h3>${grid('pickAway', x.away, 'Away team')}
+    <div class="pickers"><div><h3 id="h-home">Home team</h3>${grid('pickHome', x.home, 'Home team')}</div>
+    <div><h3 id="h-away">Away team</h3>${grid('pickAway', x.away, 'Away team')}</div></div>
     ${x.home === x.away ? '<p class="warn" role="alert">Pick two different schools.</p>' : ''}
     ${seg('pickSide', [['home', 'Home'], ['away', 'Away']], x.side, 'You play')}
     ${seg('setQ', [[120, '2 min'], [240, '4 min'], [480, '8 min (full)']], st.settings.qLen, 'Quarters')}

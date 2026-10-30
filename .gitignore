@@ -21,3 +21,4 @@ art-src/**/renders/
 /art-src/geo/raw/
 art-src/venue/*.exr
 art-src/blender/venue/*.blend1
+tools/dev/ktx/

@@ -33,6 +33,10 @@ const GATES = {
     for (const s of NATURAL) { const v = S('desktop', s).emptyFgPct; if (v != null) check(`desktop empty foreground ${s} ≤ 15%`, v, v <= 15); }
     { const v = B('desktop', 'open-play').emptyFgMean; check('desktop empty foreground (open-play mean) ≤ 15%', v, v != null && v <= 15); }
     { const v = B('desktop', 'open-play').handlerInBandPct; check('desktop handler in [0.18, 0.82] (open-play) ≥ 95%', v, v >= 95); }
+    { const v = B('desktop', 'drive').handlerInBandPct; check('desktop handler in [0.18, 0.82] (drive) ≥ 90%', v, v >= 90); }
+    // (the drive setup pulls all five defenders 40 ft behind the play, so in portrait they fall below the frame)
+    { const v = B('mobile', 'drive').emptyFgMean; check('mobile empty foreground (drive mean) ≤ 30%', v, v != null && v <= 30); }
+    { const v = B('mobile', 'open-play').emptyFgMean; check('mobile empty foreground (open-play mean) ≤ 20%', v, v != null && v <= 20); }
     for (const s of NATURAL) { const v = S('desktop', s).handlerX; if (v != null) check(`desktop handler x ${s} in [0.18, 0.82]`, v, v >= 0.18 && v <= 0.82); }
     const pp = ['c02-live', 'c10-jessieville', 'c19-handler'].map((s) => S('mobile', s).playerPx).filter((v) => v != null);
     const med = pp.sort((a, b) => a - b)[pp.length >> 1];

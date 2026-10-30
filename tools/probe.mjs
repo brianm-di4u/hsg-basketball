@@ -47,7 +47,8 @@ function measure([b64, meta, annotate]) {
           let dark = 0, m = 0;
           for (let y = ty; y < ty + T; y += 4) for (let x = tx; x < tx + T; x += 4) { const i = (y * c.width + x) * 4; m++; if (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2] < 16) dark++; }
           const sb = meta.sb, inSb = sb && tx / k < sb.x + sb.w && (tx + T) / k > sb.x && ty / k < sb.y + sb.h && (ty + T) / k > sb.y;
-          if (inSb) continue; // the score bug is a dark panel by design, not an empty part of the scene
+          const sl = meta.hud && meta.hud.slamBox, inSlam = sl && tx / k < sl.x + sl.w && (tx + T) / k > sl.x && ty / k < sl.y + sl.h && (ty + T) / k > sl.y;
+          if (inSb || inSlam) continue; // the score bug and the slam card are dark panels by design, not empty parts of the scene
           tiles++; if (dark / m > 0.92) voids++;
         }
         out.voidPct = +(100 * voids / tiles).toFixed(1); }

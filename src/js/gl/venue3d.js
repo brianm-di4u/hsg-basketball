@@ -16,6 +16,9 @@ const glow = (k = 1) => new THREE.Color(GLOW * k, GLOW * k, GLOW * k);
 const TAU = Math.PI * 2;
 const HL = COURT.L / 2, HW = COURT.W / 2;
 const C = (hex) => new THREE.Color(hex).convertSRGBToLinear();
+// crowd and bench shirt tints: a single sRGB-to-linear conversion (new Color does it), so school colors read true
+// (C converts twice; the venue's surfaces were tuned with it and keep it)
+const CL = (hex) => new THREE.Color(hex);
 export const LAYER_REFLECT = 1;
 
 function canvas(w, h) { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; return cv; }
@@ -221,7 +224,7 @@ function makeHoop(side, padColor, capColor) {
   reflect(g);
   // materials that fade when this hoop stands between the portrait camera and the play
   const fade = [];
-  g.traverse((o) => { if (o.material && !Array.isArray(o.material) && !fade.includes(o.material)) fade.push(o.material); });
+  g.traverse((o) => { for (const m of [].concat(o.material || [])) if (!fade.includes(m)) fade.push(m); });
   for (const m of fade) { m.transparent = true; m.userData.baseOpacity = m.opacity; }
   return { g, rim, net, netSim, rimX, dg, rimBaseY: COURT.rimY, fade, faded: false, flash: 0, shake: 0, lastNet: 0, lastRim: 0 };
 }
@@ -248,6 +251,7 @@ varying vec2 vUv; varying vec3 vTint; varying float vShade;
 void main() {
   vec4 c = texture2D(tAtlas, vUv);
   if (c.a < 0.5) discard;
+  c.rgb *= smoothstep(0.5, 0.95, c.a) * 0.6 + 0.4; // a soft dark edge where the white key left a fringe
   float mag = smoothstep(0.03, 0.12, min(c.r, c.b) - c.g);
   float lum = max(c.r, c.b);
   vec3 shirt = vTint * (0.45 + lum * 0.75);
@@ -327,8 +331,9 @@ export function drawScoreboard(cv, sb, homeName, awayName) {
     c.font = `700 ${size}px "Courier New", ui-monospace, monospace`; c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillStyle = color; c.shadowColor = color; c.shadowBlur = 12; c.fillText(txt, x, y); c.shadowBlur = 0;
   };
-  c.font = '800 26px system-ui, sans-serif'; c.textAlign = 'center'; c.fillStyle = '#F4F1EA';
-  c.fillText(homeName.slice(0, 10), 110, 34); c.fillText(awayName.slice(0, 10), 402, 34);
+  c.textAlign = 'center'; c.fillStyle = '#F4F1EA';
+  // whole school names, shrunk to fit their half (no cut-off words)
+  for (const [name, x] of [[homeName, 110], [awayName, 402]]) { let px = 26; do { c.font = `800 ${px}px system-ui, sans-serif`; px--; } while (c.measureText(name).width > 196 && px > 12); c.fillText(name, x, 34); }
   lamp(String(sb.h).padStart(2, ' '), 110, 106, 92, '#FFC83D'); lamp(String(sb.a).padStart(2, ' '), 402, 106, 92, '#FFC83D');
   lamp(sb.clock, 256, 74, 58, '#FF4A3A');
   c.font = '800 20px system-ui, sans-serif'; c.fillStyle = '#F4F1EA'; c.fillText('PERIOD', 256, 136);
@@ -337,8 +342,9 @@ export function drawScoreboard(cv, sb, homeName, awayName) {
   lamp(String(sb.fh), 110, 222, 34, '#FF4A3A'); lamp(String(sb.fa), 402, 222, 34, '#FF4A3A');
   c.font = '800 16px system-ui, sans-serif'; c.fillStyle = '#F4F1EA';
   c.fillText('HOME', 34, 150); c.fillText('GUEST', 474, 150);
-  for (const [on, x] of [[sb.bh, 188], [sb.ba, 324]]) { c.fillStyle = on ? '#FFC83D' : '#2A2533'; c.beginPath(); c.arc(x, 222, 9, 0, TAU); c.fill(); }
-  c.fillStyle = '#F4F1EA'; c.font = '700 13px system-ui, sans-serif'; c.fillText('BONUS', 188, 196); c.fillText('BONUS', 324, 196);
+  // the bonus lamps sit under the clock, labelled below, clear of the FOULS captions
+  for (const [on, x] of [[sb.bh, 214], [sb.ba, 298]]) { c.fillStyle = on ? '#FFC83D' : '#2A2533'; c.beginPath(); c.arc(x, 214, 9, 0, TAU); c.fill(); }
+  c.fillStyle = '#F4F1EA'; c.font = '700 14px system-ui, sans-serif'; c.fillText('BONUS', 256, 240);
 }
 
 // ---------------------------------------------------------------- wall signage (generic game art)
@@ -470,6 +476,27 @@ function mergeStatic(root) {
   }
 }
 
+// ---------------------------------------------------------------- the camera side (reverse angles only)
+function nearSide(arena, home, away, atlas, palette, rng) {
+  const g = new THREE.Group(), seats = [];
+  const stepM = new THREE.MeshStandardMaterial({ color: arena ? C('#23252F') : C('#8E6640'), roughness: 0.6 });
+  const riserM = new THREE.MeshStandardMaterial({ color: arena ? C('#1F4FB8') : C('#6B4A2E'), roughness: 0.8 });
+  const rows = arena ? 16 : 12, rd = arena ? 2.6 : 2.3, rh = arena ? 1.5 : 1.3, z0 = HW + (arena ? 12 : 9.5), len = arena ? 132 : 126;
+  for (let r = 0; r < rows; r++) {
+    const z = z0 + r * rd, y = r * rh;
+    const step = new THREE.Mesh(new THREE.BoxGeometry(len, 0.35, rd), stepM); step.position.set(0, y + rh - 0.17, z + rd / 2 - 0.05); g.add(step);
+    const riser = new THREE.Mesh(new THREE.BoxGeometry(len, rh, 0.2), riserM); riser.position.set(0, y + rh / 2, z); g.add(riser);
+    for (let x = -len / 2 + 1.2; x < len / 2 - 1; x += 1.75 + rng() * 0.5) if (rng() > 0.18) seats.push({ x, y: y + rh * 0.55 - 1.0, z: z + 0.9, g: rng() < 0.15 ? 'stand' : 'seat', row: r, team: arena ? 0 : x > len / 2 - 26 ? 1 : 0, tint: !arena && x > len / 2 - 26 ? CL(away.colors.primary) : null });
+  }
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(160, 90), new THREE.MeshStandardMaterial({ color: arena ? C('#1A1E2C') : C('#CFC8B8'), roughness: 0.8 }));
+  wall.position.set(0, 45, z0 + rows * rd + 1); wall.rotation.y = Math.PI; g.add(wall);
+  mergeStatic(g);
+  const crowd = makeCrowd(seats, atlas, palette, rng);
+  crowd.material.uniforms.uLight.value = arena ? 0.36 : 0.54;
+  g.add(crowd);
+  return { g, crowd };
+}
+
 // ---------------------------------------------------------------- textures from the painted pack
 export function loadImages(tex) {
   const out = {};
@@ -502,7 +529,7 @@ export function buildVenue(v, opts) {
   const sbCanvas = scoreboardCanvas();
   const sbTex = texOf(sbCanvas);
   let ribbon = null;
-  const pal = (hexes) => hexes.map(C);
+  const pal = (hexes) => hexes.map(CL);
   if (!arena) {
     // ---- home gym
     const woodMat = new THREE.MeshStandardMaterial({ color: C('#8E6640'), roughness: 0.55 });
@@ -519,7 +546,7 @@ export function buildVenue(v, opts) {
         // the visitors' section sits at the far right end; everyone else wears home colors or plain clothes
         const visitors = x > LEN / 2 - 26;
         seats.push({ x: x + (rng() - 0.5) * 0.3, y: y + RH * 0.55 - 1.0, z: z - 0.9, g: band ? 'band' : (r > 8 && rng() < 0.35 ? 'stand' : 'seat'), row: r,
-          tint: band ? C(home.colors.primary) : visitors ? C(rng() < 0.6 ? away.colors.primary : rng() < 0.5 ? away.colors.secondary : '#3A3F4A') : null, team: visitors ? 1 : 0 });
+          tint: band ? CL(home.colors.primary) : visitors ? CL(rng() < 0.6 ? away.colors.primary : rng() < 0.5 ? away.colors.secondary : '#3A3F4A') : null, team: visitors ? 1 : 0 });
       }
     }
     const backZ = Z0 - ROWS * RD - 1;
@@ -583,9 +610,9 @@ export function buildVenue(v, opts) {
     const riserEnd = new THREE.MeshStandardMaterial({ color: C('#3A2C22'), roughness: 0.85 });
     for (const s of [-1, 1]) for (let r = 1; r < 3; r++) { const st = new THREE.Mesh(new THREE.BoxGeometry(1.6, r * 0.9, HW * 2 - 2), riserEnd); st.position.set(s * (HL + 9.5 + r * 1.6), r * 0.45, 0); g.add(st); }
     // team benches: substitutes in team colors
-    for (const [s, tm] of [[-1, home], [1, away]]) for (let k = 1; k < 8; k++) if (rng() < 0.8) seats.push({ x: s * (15 + k * 2.0), y: 0.0, z: -(HW + 4.75), g: 'seat', tint: C(tm.colors.primary), team: s < 0 ? 0 : 1 }); // drawn just in front of the chair, so the figure covers it as a seated player would
+    for (const [s, tm] of [[-1, home], [1, away]]) for (let k = 1; k < 8; k++) if (rng() < 0.8) seats.push({ x: s * (15 + k * 2.0), y: 0.0, z: -(HW + 4.75), g: 'seat', tint: CL(tm.colors.primary), team: s < 0 ? 0 : 1 }); // drawn just in front of the chair, so the figure covers it as a seated player would
     // cheer squad on the baseline corners (standing sprites)
-    for (const s of [-1, 1]) for (let k = 0; k < 3; k++) seats.push({ x: s * (HL - 9 + k * 2.4), y: 0, z: -(HW + 2.6) - (k % 2) * 0.6, g: 'cheer', tint: C(home.colors.primary) });
+    for (const s of [-1, 1]) for (let k = 0; k < 3; k++) seats.push({ x: s * (HL - 9 + k * 2.4), y: 0, z: -(HW + 2.6) - (k % 2) * 0.6, g: 'cheer', tint: CL(home.colors.primary) });
     // ceiling: dark deck, steel trusses and round high-bay lamps
     const ceil = new THREE.Mesh(new THREE.PlaneGeometry(160, 140), new THREE.MeshStandardMaterial({ color: C('#2B2A2E'), roughness: 0.95 })); ceil.rotation.x = Math.PI / 2; ceil.position.y = 82; g.add(ceil);
     const trussM = new THREE.MeshStandardMaterial({ color: C('#3C3F47'), roughness: 0.5, metalness: 0.5 });
@@ -621,16 +648,17 @@ export function buildVenue(v, opts) {
     endRows(1, 0, HL + 14, 6, 34); // the short end: a small lower block, no upper deck
     // LED ribbon on the upper-tier fascia (far side)
     const rc = canvas(2048, 64), rcx = rc.getContext('2d');
-    rcx.fillStyle = '#05060C'; rcx.fillRect(0, 0, 2048, 64);
-    rcx.font = '900 40px "Arial Black", Impact, sans-serif'; rcx.textBaseline = 'middle';
-    for (let k = 0; k < 4; k++) { rcx.fillStyle = k % 2 ? '#D4AF37' : '#4FC3FF'; rcx.fillText('STATE FINALS  ·  HOT SPRINGS, ARKANSAS  ·', k * 512 + 8, 34); }
+    rcx.fillStyle = '#0C1838'; rcx.fillRect(0, 0, 2048, 64); // a lit navy LED panel, not a black strip
+    rcx.font = '900 40px "Arial Black", Impact, sans-serif'; rcx.textBaseline = 'middle'; rcx.textAlign = 'center';
+    // two phrases per tile, each in its own 1024 px half, so the text never overlaps itself as it scrolls
+    for (let k = 0; k < 2; k++) { rcx.fillStyle = k ? '#D4AF37' : '#4FC3FF'; rcx.fillText(k ? 'HOT SPRINGS, ARKANSAS' : 'STATE FINALS', k * 1024 + 512, 34); }
     const rt = texOf(rc, { repeat: true }); rt.repeat.set(2, 1);
     ribbon = new THREE.Mesh(new THREE.PlaneGeometry(120, 3.2), new THREE.MeshBasicMaterial({ map: rt, toneMapped: false, color: glow(0.6) }));
     ribbon.position.set(0, 28, -(HW + 12 + 16 * 2.6 + 6)); ribbon.userData.dyn = true; g.add(ribbon);
     // a second ribbon on the lower-bowl fascia, in the game camera's view
     const rt2 = rt.clone(); rt2.needsUpdate = true; rt2.repeat.set(3, 1);
-    const ribbon2 = new THREE.Mesh(new THREE.PlaneGeometry(SIDE, 1.8), new THREE.MeshBasicMaterial({ map: rt2, toneMapped: false, color: glow(0.6) }));
-    ribbon2.position.set(0, 0.95, -(HW + 11.6)); ribbon2.userData.dyn = true; g.add(ribbon2);
+    const ribbon2 = new THREE.Mesh(new THREE.PlaneGeometry(SIDE, 2.6), new THREE.MeshBasicMaterial({ map: rt2, toneMapped: false, color: glow(0.6) }));
+    ribbon2.position.set(0, 2.2, -(HW + 11.6)); ribbon2.userData.dyn = true; g.add(ribbon2);
     ribbon.userData.twin = ribbon2;
     // house lights down, court lit: a pool of light over the floor
     const spot = new THREE.SpotLight(0xfff4e2, 900, 160, 0.62, 0.55, 1.6);
@@ -658,5 +686,9 @@ export function buildVenue(v, opts) {
   crowd.material.uniforms.uLight.value = arena ? 0.36 : 0.54; // the house sits darker than the floor
   g.add(crowd);
   mergeStatic(g);
-  return { g, floor, hoops, crowd, sbCanvas, sbTex, ribbon, arena, room, sbLast: '' };
+  // the camera side: stands, crowd and a back wall that only reverse angles see (replays, close-ups, the title
+  // sweep). The broadcast camera sits where these stands would be, so they are shown only for those cameras.
+  const near = nearSide(arena, home, away, atlas, palette, rng);
+  near.g.visible = false; g.add(near.g);
+  return { g, floor, hoops, crowd, near, sbCanvas, sbTex, ribbon, arena, room, sbLast: '' };
 }

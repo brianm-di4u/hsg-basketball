@@ -184,8 +184,9 @@ function drawHud(c, v, P, scene) {
 // A loose ball in 3D gets a soft dark halo, so it reads against the crowd and the floor alike (the ball itself
 // stays clear: the halo starts outside its edge).
 function ballHalo(c, P, b) {
-  if (!b || b.state === 'held' || b.state === 'dead' || b.y < 1.2) return;
+  if (!b || b.state === 'held' || b.state === 'dead' || b.y < 7) return; // a high ball only: near the floor a dark disc reads as a smudge
   const q = P(b.x, b.z, b.y), r = Math.max(4, q.s * 0.45);
+  if (r > 12) return; // a close camera shows the ball large enough on its own
   const g = c.createRadialGradient(q.X, q.Y, r * 1.12, q.X, q.Y, r * 5);
   g.addColorStop(0, 'rgba(8,6,12,0.72)'); g.addColorStop(0.4, 'rgba(8,6,12,0.45)'); g.addColorStop(1, 'rgba(8,6,12,0)');
   c.fillStyle = g; c.beginPath(); c.arc(q.X, q.Y, r * 5, 0, TAU); c.arc(q.X, q.Y, r * 1.12, 0, TAU, true); c.fill();
@@ -196,20 +197,36 @@ function slamCallout(c, v, P, scene) {
   const s = scene.slam;
   const t = s.t, inT = Math.min(1, t / 0.14), out = t > 0.75 ? 1 - (t - 0.75) / 0.25 : 1;
   const size = Math.round(clamp(v.W * 0.085, 40, 92));
-  // keep clear of the rim it went through and of the ball: try a few bands, take the first one free of both
-  const keep = [];
-  if (s.side != null) { const r = P(COURT.rimX[s.side], COURT.rimZ, COURT.rimY); keep.push({ x: r.X - 3 * r.s, y: r.Y - 4.5 * r.s, w: 6 * r.s, h: 9 * r.s }); }
-  if (scene.ball) { const b = P(scene.ball.x, scene.ball.z, Math.max(0.4, scene.ball.y)); keep.push({ x: b.X - 2 * b.s - 10, y: b.Y - 2 * b.s - 10, w: 4 * b.s + 20, h: 4 * b.s + 20 }); }
-  const hPx = size * 1.15 + 12 + size * 0.5, wPx = Math.min(v.W, size * 5.4);
-  const bands = v.portrait ? [0.62, 0.8, 0.4] : [0.72, 0.5, 0.86];
-  const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
-  let y = v.H * bands[0];
-  for (const f of bands) { const box = { x: v.W / 2 - wPx / 2, y: v.H * f - hPx / 2, w: wPx, h: hPx }; if (!keep.some((k) => hit(box, k))) { y = v.H * f; break; } }
-  R.slamBox = { x: Math.round(v.W / 2 - wPx / 2), y: Math.round(y - hPx / 2), w: Math.round(wPx), h: Math.round(hPx) };
+  const hPx = size * 1.15 + 12 + size * 0.5, wPx = Math.min(v.W - 16, size * 5.4);
+  // the slot is chosen once, when the card appears, and kept: clear of the rim it went through, the ball and
+  // every player (plus a margin), scored over a grid of candidate places; the card never jumps
+  const ref = s.ref || s;
+  if (!ref.slot) {
+    const pad = 24, keep = [];
+    if (s.side != null) { const r = P(COURT.rimX[s.side], COURT.rimZ, COURT.rimY); keep.push({ x: r.X - 3.5 * r.s, y: r.Y - 5 * r.s, w: 7 * r.s, h: 11 * r.s, wt: 4 }); }
+    if (scene.ball) { const b = P(scene.ball.x, scene.ball.z, Math.max(0.4, scene.ball.y)); keep.push({ x: b.X - 2 * b.s - pad, y: b.Y - 2 * b.s - pad, w: 4 * b.s + 2 * pad, h: 4 * b.s + 2 * pad, wt: 4 }); }
+    for (const it of scene.players || []) {
+      const f = P(it.pl.x, it.pl.z, it.pl.y || 0), hd = P(it.pl.x, it.pl.z, (it.pl.y || 0) + it.r.height / 12);
+      const ph = Math.abs(f.Y - hd.Y), pw = ph * 0.5;
+      keep.push({ x: f.X - pw / 2 - pad, y: hd.Y - pad, w: pw + 2 * pad, h: ph + 2 * pad, wt: it.user ? 3 : 1 });
+    }
+    const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    // first choice: the band over the crowd, under the score bug, where play rarely goes after a make
+    const ys = v.portrait ? [0.27, 0.62, 0.8, 0.42] : [0.27, 0.74, 0.84, 0.56], xs = [0.5, 0.3, 0.7];
+    let best = null;
+    for (const fy of ys) for (const fx of xs) {
+      const cx = clamp(v.W * fx, wPx / 2 + 8, v.W - wPx / 2 - 8), box = { x: cx - wPx / 2, y: v.H * fy - hPx / 2, w: wPx, h: hPx };
+      const cost = keep.reduce((n, k) => n + (hit(box, k) ? k.wt : 0), 0) + (fx !== 0.5 ? 0.3 : 0) + ys.indexOf(fy) * 0.1;
+      if (!best || cost < best.cost) best = { cost, x: cx, y: v.H * fy };
+    }
+    ref.slot = best;
+  }
+  const y = ref.slot.y, cx = ref.slot.x;
+  R.slamBox = { x: Math.round(cx - wPx / 2), y: Math.round(y - hPx / 2), w: Math.round(wPx), h: Math.round(hPx) };
   const slide = R.reduced ? 0 : (1 - inT) * v.W * 0.4;
   c.save();
   c.globalAlpha = Math.max(0, out);
-  c.translate(v.W / 2 + slide, y);
+  c.translate(cx + slide, y);
   c.font = `400 ${size}px "Bebas Neue", "Arial Black", Impact, sans-serif`;
   const w = c.measureText(s.text).width + size * 1.2, h = size * 1.15;
   c.transform(1, 0, -0.18, 1, 0, 0);

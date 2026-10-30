@@ -192,14 +192,16 @@ function placeCamera(dt, scene) {
     return;
   }
   const vert = scene.vertical || 0;
-  let goal = vert ? Math.max(20, Math.min(COURT.L - 20, scene.camX ?? HL)) : clampCam3(scene.camX ?? HL);
+  let goal = vert ? Math.max(24, Math.min(COURT.L - 24, scene.camX ?? HL)) : clampCam3(scene.camX ?? HL);
   // a horizontal dead zone: small moves of the play leave the camera still, so the frame stops swimming
   if (!vert && !G3.snap) { const dz = f.span * 0.06, c = G3.camGoal ?? goal; goal = goal > c + dz ? goal - dz : goal < c - dz ? goal + dz : c; }
   G3.camGoal = goal;
   const zGoal = (scene.camZ ?? HW) - HW;
   if (G3.snap || scene.reduced) { G3.camX = goal; G3.camZ = zGoal; G3.nearZ = scene.nearZ; G3.snap = false; }
   else {
-    const k = Math.min(1, dt * (scene.fast ? 5.5 : 3.2)); G3.camX += (goal - G3.camX) * k; G3.camZ += (zGoal - G3.camZ) * k;
+    // if the ball is near either edge of the frame, catch up quickly instead of easing
+    const bq = scene.ballX != null ? project(scene.ballX, scene.ballZ, 0) : null, edge = bq && (bq.X < G3.W * 0.24 || bq.X > G3.W * 0.76);
+    const k = Math.min(1, dt * (edge ? 9 : scene.fast ? 5.5 : 3.2)); G3.camX += (goal - G3.camX) * k; G3.camZ += (zGoal - G3.camZ) * k;
     if (scene.nearZ != null) G3.nearZ = G3.nearZ == null ? scene.nearZ : G3.nearZ + (scene.nearZ - G3.nearZ) * Math.min(1, dt * 3);
   }
   if (vert) {
@@ -209,7 +211,7 @@ function placeCamera(dt, scene) {
     if (cam.fov !== fov) { cam.fov = fov; cam.updateProjectionMatrix(); }
     const pitch = (portrait ? 32 : 26) * Math.PI / 180, hf = 2 * Math.atan(Math.tan((fov * Math.PI / 180) / 2) * (G3.W / G3.H));
     const D = (portrait ? 14.5 : 22) / Math.tan(hf / 2);
-    const tx = G3.camX - HL + vert * (portrait ? 6 : 4), tz = G3.camZ * (portrait ? 0.85 : 0.5);
+    const tx = G3.camX - HL + vert * (portrait ? 3 : 4), tz = G3.camZ * (portrait ? 0.85 : 0.5);
     const sh = scene.shake ? (Math.random() - 0.5) * scene.shake * 0.5 : 0;
     cam.position.set(tx - vert * Math.cos(pitch) * D + sh, 3 + Math.sin(pitch) * D, tz + sh);
     cam.up.set(0, 1, 0);
@@ -297,7 +299,7 @@ export function draw3d(scene, fx) {
   // (only players inside the frame horizontally count, judged from the last frame's camera)
   let nearZ = -Infinity;
   for (const it of scene.players || []) { const q = project(it.pl.x, it.pl.z, 0); if (G3.snap || (q.X > -30 && q.X < G3.W + 30)) nearZ = Math.max(nearZ, it.pl.z); }
-  placeCamera(dt, { camX: scene.camX, camZ: scene.camZ, nearZ: isFinite(nearZ) ? nearZ : null, reduced: scene.reduced, shake: fx.shake, fast: scene.ball && scene.ball.state === 'shot', vertical: scene.vertical });
+  placeCamera(dt, { camX: scene.camX, camZ: scene.camZ, ballX: scene.ball ? scene.ball.x : null, ballZ: scene.ball ? scene.ball.z : null, nearZ: isFinite(nearZ) ? nearZ : null, reduced: scene.reduced, shake: fx.shake, fast: scene.ball && scene.ball.state === 'shot', vertical: scene.vertical });
   G3.vertical = scene.vertical || 0;
   const m = scene.m;
   // players
@@ -376,7 +378,8 @@ export function draw3d(scene, fx) {
   B.material.emissive.setRGB(0.32, 0.1, 0.02).multiplyScalar(ball && ball.state !== 'held' && ball.state !== 'dead' && ball.y > 1.2 ? 1 : 0);
   // trail while the ball is a shot in flight, cleared once it drops below the rim (no ghosts over the hoop)
   const inShot = ball && ball.state === 'shot' && !scene.reduced && !(ball.y < COURT.rimY - 0.4 && ball.vy < 0);
-  if (inShot) G3.trailFx.update(B.position, G3.camera, scene.perfect ? 0xffc23a : 0xfff0d8, 0.5);
+  // (a close camera would see the ribbon end-on, as a pale disc around the ball)
+  if (inShot && G3.camera.position.distanceTo(B.position) > 22) G3.trailFx.update(B.position, G3.camera, scene.perfect ? 0xffc23a : 0xfff0d8, 0.5);
   else G3.trailFx.clear();
   // the ball's dark outline keeps about 1.5 px on screen at any distance
   if (ball && B.visible) { const q = project(B.position.x + HL, B.position.z + HW, B.position.y); const rpx = Math.max(1, q.s * 0.4 * B.scale.x); B.children[0].scale.setScalar(1 + 1.6 / rpx); }
@@ -418,10 +421,13 @@ export function draw3d(scene, fx) {
   G3.cheer = Math.max(0, G3.cheer - dt * 0.6);
   if (scene.cheer) { G3.cheer = Math.max(G3.cheer, scene.cheer); if (!scene.reduced && scene.m) G3.punch = 1; }
   G3.punch = Math.max(0, G3.punch - dt * 2.2);
+  // the camera-side stands exist only for reverse angles
+  if (V3.near) V3.near.g.visible = !!G3.camOverride;
   const cu = V3.crowd.material.uniforms;
   if (scene.cheer) cu.uCheerTeam.value = V3.arena || scene.cheerTeam == null ? -1 : scene.cheerTeam;
   cu.uTime.value = G3.time; cu.uCheer.value = scene.reduced ? 0 : Math.min(1, G3.cheer + (m ? (m.crowd || 0) * 0.25 : 0));
   cu.uRight.value.setFromMatrixColumn(G3.camera.matrixWorld, 0);
+  if (V3.near && V3.near.g.visible) { const nu = V3.near.crowd.material.uniforms; nu.uTime.value = cu.uTime.value; nu.uCheer.value = cu.uCheer.value; nu.uCheerTeam.value = cu.uCheerTeam.value; nu.uRight.value.copy(cu.uRight.value); }
   // shadow camera follows the action
   // overhead key, slightly behind the court, so its glint on the floor falls outside the broadcast view
   G3.sun.position.set(G3.camX - HL - 4, 90, -18); G3.sun.target.position.set(G3.camX - HL, 0, 0); G3.sun.target.updateMatrixWorld();
@@ -455,7 +461,8 @@ function drawShotClock3(dg, txt) {
 // (high → medium drops real-time shadows; medium → low drops the floor reflection). Never steps back up.
 const GOV = { t: 0, slow: 0, frames: 0 };
 function govern(ms, dt) {
-  if (!dt || dt > 0.2 || G3.tier === 'low' || G3.camOverride) return; // step(n) hooks draw one long frame: not a real frame time
+  // test hooks (step(n)) draw frames whose dt is not a frame time at all
+  if (!dt || dt > 0.2 || G3.hooked || G3.tier === 'low' || G3.camOverride) return;
   GOV.t += dt; GOV.frames++;
   if (dt > 1 / 40) GOV.slow++;
   if (GOV.t < 2.5) return;

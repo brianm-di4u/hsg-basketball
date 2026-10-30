@@ -92,7 +92,7 @@ function kitMaterial() {
           float fr = pow(1.0 - saturate(dot(normal, V)), 2.5);
           reflectedLight.indirectDiffuse += diffuseColor.rgb * (0.18 + fr * 0.45);
           float rim = pow(1.0 - saturate(dot(normal, V)), 3.0) * saturate(dot(normal, normalize(vec3(0.3, 0.6, -0.75))) + 0.3);
-          reflectedLight.directSpecular += vec3(0.62, 0.72, 0.95) * rim * 1.1; }`);
+          reflectedLight.directSpecular += vec3(0.62, 0.72, 0.95) * rim * 2.2; }`);
   };
   mat.customProgramCacheKey = () => 'kit2';
   return mat;

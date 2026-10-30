@@ -1,13 +1,9 @@
 // 3D renderer: boot, fallback, venues, player close-ups, the shot payoff and replays. The shots here are the
 // visual review record. "Graphics: 3D gym" is forced through the saved settings, because the harness's
 // headless Chromium renders WebGL in software, where the game's Auto setting keeps the classic 2D court.
-// file:// and real-GPU frame rates are checked by tools/perf3d.mjs (the harness blocks file:// URLs).
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+// Download budgets live in budget.test.mjs; real-GPU frame rates in perf-gpu.test.mjs (run with --gpu).
 import { exhibition } from './helpers.mjs';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
 const FORCE_3D = () => { try { localStorage.setItem('hsg-hoops-v1', JSON.stringify({ v: 1, settings: { graphics: '3d' } })); } catch (e) { /* storage blocked */ } };
 
 async function ready3d(t) {
@@ -140,16 +136,6 @@ export const tests = [
       await t.game('step', 40);
       await t.shot('v51-shootout');
       await t.checkLayout();
-    },
-  },
-  {
-    name: 'download size: game, three.js and packed assets',
-    viewports: ['desktop'],
-    async run(t) {
-      const total = ['index.html', 'vendor/three.bundle.js', 'assets/players.js', 'assets/tex.js']
-        .reduce((n, f) => n + fs.statSync(path.join(here, '..', f)).size, 0);
-      t.log(`download: ${(total / 1024 / 1024).toFixed(2)} MB`);
-      t.expect(total < 2.5 * 1024 * 1024, 'total download under 2.5 MB');
     },
   },
   {

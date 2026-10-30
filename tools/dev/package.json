@@ -1,0 +1,12 @@
+{
+  "name": "hsg-basketball-dev-tools",
+  "private": true,
+  "description": "Build-time only: bundles three.js and the post-processing libraries into vendor/, packs HQ assets. Never shipped.",
+  "license": "MIT",
+  "dependencies": {
+    "esbuild": "0.28.2",
+    "n8ao": "2.0.1",
+    "postprocessing": "6.39.5",
+    "three": "0.186.1"
+  }
+}

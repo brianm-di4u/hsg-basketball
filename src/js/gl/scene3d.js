@@ -6,6 +6,8 @@ import { COURT, rimFor } from '../court.js';
 import { initPlayers, makePlayer, dressPlayer, updatePlayer } from './players3d.js';
 import { buildVenue, makeReflector, loadImages, drawScoreboard, LAYER_REFLECT } from './venue3d.js';
 import { fmtClock } from '../util.js';
+import { CORE } from './build-info.js';
+import { makePost } from './post.js';
 
 const HL = COURT.L / 2, HW = COURT.W / 2;
 export const G3 = {
@@ -31,12 +33,12 @@ function script(src) {
     document.head.appendChild(s);
   });
 }
-// What WebGL this device offers. Software renderers (SwiftShader, llvmpipe) can't hold a frame rate in 3D,
-// so the game's "Auto" graphics setting keeps the classic 2D court on them.
+// What WebGL this device offers (three.js needs WebGL 2). Software renderers (SwiftShader, llvmpipe) can't hold
+// a frame rate in 3D, so the game's "Auto" graphics setting keeps the classic 2D court on them.
 export function glProbe() {
   try {
     const cv = document.createElement('canvas');
-    const g = cv.getContext('webgl2') || cv.getContext('webgl');
+    const g = cv.getContext('webgl2');
     if (!g) return { ok: false, renderer: '', software: false };
     const ext = g.getExtension('WEBGL_debug_renderer_info');
     const renderer = String(ext ? g.getParameter(ext.UNMASKED_RENDERER_WEBGL) : g.getParameter(g.RENDERER));
@@ -53,10 +55,10 @@ export async function load3d(stage, tier) {
   if (!glProbe().ok) { G3.state = 'unsupported'; return G3.state; }
   G3.state = 'loading'; G3.tier = tier;
   try {
-    if (!globalThis.THREE) await script('vendor/three.bundle.js');
+    if (!globalThis.THREE) await script(CORE.three);
     const A = globalThis.HOOPS_ASSETS || {};
-    if (!A.players) await script('assets/players.js');
-    if (!A.tex) await script('assets/tex.js');
+    if (!A.players) await script(CORE.players);
+    if (!A.tex) await script(CORE.tex);
     const assets = globalThis.HOOPS_ASSETS;
     const bin = Uint8Array.from(atob(assets.players), (ch) => ch.charCodeAt(0)).buffer;
     const gltf = await new Promise((res, rej) => new THREE.GLTFLoader().parse(bin, '', res, rej));
@@ -77,14 +79,16 @@ function init(stage) {
   cv.id = 'gl'; cv.setAttribute('aria-hidden', 'true');
   stage.insertBefore(cv, stage.firstChild);
   G3.canvas = cv;
-  const r = new THREE.WebGLRenderer({ canvas: cv, antialias: G3.tier === 'high', powerPreference: 'high-performance' });
+  // no canvas MSAA: post.js renders into its own (multisampled on high) target
+  const r = new THREE.WebGLRenderer({ canvas: cv, antialias: false, powerPreference: 'high-performance' });
+  r.info.autoReset = false; // the composer renders several passes a frame; draw3d resets the counters once
   // a lost context (driver reset, memory pressure on a phone) drops back to the classic 2D court
   cv.addEventListener('webglcontextlost', (e) => { e.preventDefault(); G3.state = 'lost'; G3.err = 'WebGL context lost'; cv.style.visibility = 'hidden'; if (G3.onLost) G3.onLost(); });
   r.outputColorSpace = THREE.SRGBColorSpace;
   r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 0.97;
   r.shadowMap.enabled = G3.tier === 'high';
   r.shadowMap.autoUpdate = false; // updated once per frame before the main pass, never for the reflection
-  r.shadowMap.type = THREE.PCFSoftShadowMap;
+  r.shadowMap.type = THREE.PCFShadowMap;
   G3.renderer = r;
   G3.scene = new THREE.Scene();
   G3.camera = new THREE.PerspectiveCamera(30, 1, 2, 900);
@@ -97,7 +101,7 @@ function init(stage) {
   const sz = G3.tier === 'high' ? 2048 : 1024;
   sun.shadow.mapSize.set(sz, sz);
   Object.assign(sun.shadow.camera, { left: -60, right: 60, top: 36, bottom: -36, near: 10, far: 160 });
-  sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.02;
+  sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.02; sun.shadow.radius = 3;
   G3.scene.add(sun, sun.target); G3.sun = sun;
   sun.layers.enable(LAYER_REFLECT); hemi.layers.enable(LAYER_REFLECT);
   // a cool fill from the camera side (its glint reflects away from the lens)
@@ -135,6 +139,7 @@ function init(stage) {
   if (G3.tier !== 'low') G3.reflector = makeReflector(G3.tier === 'high' ? 0.5 : 0.33);
   G3.pmrem = new THREE.PMREMGenerator(r);
   G3.envs = {};
+  G3.post = makePost(r, G3.scene, G3.camera, G3.tier);
   G3.P = project;
 }
 
@@ -159,6 +164,7 @@ export function resize3d(w, h, dpr) {
   G3.W = w; G3.H = h;
   G3.renderer.setPixelRatio(G3.dpr);
   G3.renderer.setSize(w, h, true);
+  if (G3.post) G3.post.setSize(w, h);
   G3.camera.aspect = w / h; G3.camera.updateProjectionMatrix();
   G3.snap = true;
 }
@@ -432,11 +438,12 @@ export function draw3d(scene, fx) {
   V3.floor.mat.userData.u.uRefl.value = G3.reflector && G3.flags.reflect ? (V3.arena ? 0.2 : 0.14) : 0;
   G3.scene.environment = G3.flags.env ? envFor(V3.arena) : null;
   G3.sun.visible = G3.flags.sun;
+  r.info.reset();
   const t1 = performance.now();
   if (G3.reflector && G3.flags.reflect) G3.reflector.render(r, G3.scene, G3.camera, V3.floor.mat, G3.W * G3.dpr, G3.H * G3.dpr);
   const t2 = performance.now();
   r.shadowMap.needsUpdate = true;
-  r.render(G3.scene, G3.camera);
+  if (G3.post) G3.post.render(dt); else r.render(G3.scene, G3.camera);
   const t3 = performance.now();
   const pf = G3.prof || (G3.prof = { n: 0, js: 0, refl: 0, main: 0 });
   pf.n++; pf.js += t1 - t0; pf.refl += t2 - t1; pf.main += t3 - t2;
@@ -475,6 +482,8 @@ export function setTier(t) {
   if (t === 'low') { if (G3.reflector) G3.reflector.dispose(); G3.reflector = null; }
   else if (!G3.reflector) G3.reflector = makeReflector(t === 'high' ? 0.5 : 0.33);
   else G3.reflector.scale = t === 'high' ? 0.5 : 0.33;
+  if (G3.post) G3.post.dispose();
+  G3.post = makePost(r, G3.scene, G3.camera, t);
   r.getContext(); // materials pick up shadow changes on their next compile
   G3.scene.traverse((o) => { if (o.material) for (const m of [].concat(o.material)) m.needsUpdate = true; });
   resize3d(G3.W, G3.H, window.devicePixelRatio || 1);

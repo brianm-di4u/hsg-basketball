@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Packs the 3D assets into classic scripts that load under file:// (WebGL refuses file:// images, so every
 // texture travels as a data URI and the GLB as base64):
-//   assets/players.js  ← art-src/players.glb (Blender, art-src/blender/build_players.py)
-//   assets/tex.js      ← art-src/floor-maple.png, wall-block.png (seamless tiles, WebP)
+//   assets/players.<hash>.js  ← art-src/players.glb (Blender, art-src/blender/build_players.py)
+//   assets/tex.<hash>.js      ← art-src/floor-maple.png, wall-block.png (seamless tiles, WebP)
 //                        art-src/crowd-*.png, band.png, cheer.png (Codex sprite sheets → one WebP atlas)
 //
 //   node tools/pack-assets.mjs
@@ -12,6 +12,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { writeHashed, writeBuildInfo } from './hashed.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const game = path.join(here, '..');

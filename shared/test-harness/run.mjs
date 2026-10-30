@@ -4,7 +4,7 @@
 // Usage:
 //   node shared/test-harness/run.mjs games/<slug> [--milestone m1] [--viewport desktop|mobile|both]
 //                                               [--only <substring>] [--file <substring>] [--headed] [--no-gallery]
-//                                               [--gpu] [--file-url] [--slow] [--clean]
+//                                               [--gpu] [--uncapped] [--file-url] [--slow] [--clean]
 //   node shared/test-harness/run.mjs smoke
 //
 // Discovers games/<slug>/tests/*.test.mjs. Each test file exports:
@@ -12,6 +12,7 @@
 //                           url?: 'index.html?x=1', initScript?: () => {...}, fileUrl?: false, slow?: false,
 //                           node?: false, run: async (t) => { ... } }]
 // See README.md in this folder for the `t` API. HS_GPU=1 in the environment is the same as --gpu.
+// --uncapped (with --gpu) turns off vsync and the frame-rate limit, so fps measures GPU headroom.
 
 import { chromium } from 'playwright';
 import http from 'node:http';
@@ -32,11 +33,13 @@ const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript',
   '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml',
   '.jpg': 'image/jpeg', '.webp': 'image/webp', '.woff2': 'font/woff2', '.txt': 'text/plain',
+  '.glb': 'model/gltf-binary', '.ktx2': 'image/ktx2', '.wasm': 'application/wasm', '.bin': 'application/octet-stream',
+  '.hdr': 'image/vnd.radiance', '.webm': 'video/webm',
 };
 
 function parseArgs(argv) {
   const a = { target: null, milestone: 'latest', viewport: 'both', only: null, file: null, headed: false, gallery: true,
-    gpu: process.env.HS_GPU === '1', fileUrl: false, slow: false, clean: false };
+    gpu: process.env.HS_GPU === '1', uncapped: false, fileUrl: false, slow: false, clean: false };
   for (let i = 0; i < argv.length; i++) {
     const v = argv[i];
     if (v === '--milestone') a.milestone = argv[++i];
@@ -46,6 +49,7 @@ function parseArgs(argv) {
     else if (v === '--headed') a.headed = true;
     else if (v === '--no-gallery') a.gallery = false;
     else if (v === '--gpu') a.gpu = true;
+    else if (v === '--uncapped') a.uncapped = true;
     else if (v === '--file-url') a.fileUrl = true;
     else if (v === '--slow') a.slow = true;
     else if (v === '--clean') a.clean = true;
@@ -77,6 +81,7 @@ function startServer() {
 // WebGL 5–20× slower than any real device and its fps meaningless.
 const GPU_ARGS = ['--enable-gpu', '--ignore-gpu-blocklist',
   `--use-angle=${process.platform === 'win32' ? 'd3d11' : process.platform === 'darwin' ? 'metal' : 'gl'}`];
+const UNCAPPED_ARGS = ['--disable-gpu-vsync', '--disable-frame-rate-limit'];
 
 async function loadTests(testDir, only, file = null) {
   if (!fs.existsSync(testDir)) return [];
@@ -328,7 +333,7 @@ async function runNodeTest(test, milestone) {
 }
 
 export async function runSuite({ gameDir, testDir, milestone = 'latest', viewport = 'both', only = null, file = null, headed = false, gallery = true,
-  gpu = false, fileUrl = false, slow = false, clean = false }) {
+  gpu = false, uncapped = false, fileUrl = false, slow = false, clean = false }) {
   let tests = await loadTests(testDir, only, file);
   if (!tests.length) { console.error(`no tests found in ${testDir}`); return { ok: false }; }
   // Slow tests (long balance sims) run only when asked for, or at the final milestone.
@@ -340,8 +345,9 @@ export async function runSuite({ gameDir, testDir, milestone = 'latest', viewpor
   const server = await startServer();
   const origin = `http://127.0.0.1:${server.address().port}`;
   const relGame = path.relative(ROOT, gameDir).replace(/\\/g, '/');
-  const browser = await chromium.launch({ headless: !headed, args: gpu ? GPU_ARGS : [] });
-  if (gpu) console.log('gpu: Chromium launched with ' + GPU_ARGS.join(' '));
+  const args = gpu ? [...GPU_ARGS, ...(uncapped ? UNCAPPED_ARGS : [])] : [];
+  const browser = await chromium.launch({ headless: !headed, args });
+  if (gpu) console.log('gpu: Chromium launched with ' + args.join(' '));
   const vps = viewport === 'both' ? ['desktop', 'mobile'] : [viewport];
   const repDir = path.join(gameDir, 'screenshots', milestone);
   if (clean && !only && !file) {
@@ -351,7 +357,7 @@ export async function runSuite({ gameDir, testDir, milestone = 'latest', viewpor
       if (fs.existsSync(dir)) for (const f of fs.readdirSync(dir)) { try { fs.unlinkSync(path.join(dir, f)); } catch { /* locked or a folder */ } }
     }
   }
-  const report = { game: relGame, milestone, started: new Date().toISOString(), gpu, fileUrl, tests: [] };
+  const report = { game: relGame, milestone, started: new Date().toISOString(), gpu, uncapped, fileUrl, tests: [] };
   let failed = 0;
 
   for (const test of tests) {
@@ -391,6 +397,8 @@ export async function runSuite({ gameDir, testDir, milestone = 'latest', viewpor
       const t = makeT({ page, viewportName: vpName, shotDir, milestone, origin, results, test });
       t.fileUrl = asFile;
       t.gpu = gpu;
+      t.uncapped = gpu && uncapped;
+      t.browser = browser;
       const rel = test.url || 'index.html';
       const q = rel.search(/[?#]/);
       const url = asFile ? pathToFileURL(path.join(gameDir, q < 0 ? rel : rel.slice(0, q))).href + (q < 0 ? '' : rel.slice(q))
@@ -449,6 +457,6 @@ if (isMain) {
   const a = parseArgs(process.argv.slice(2));
   const gameDir = a.target === 'smoke' ? path.join(HERE, 'smoke') : path.resolve(ROOT, a.target);
   const { ok } = await runSuite({ gameDir, testDir: path.join(gameDir, 'tests'), milestone: a.milestone, viewport: a.viewport, only: a.only, file: a.file, headed: a.headed, gallery: a.gallery,
-    gpu: a.gpu, fileUrl: a.fileUrl, slow: a.slow, clean: a.clean });
+    gpu: a.gpu, uncapped: a.uncapped, fileUrl: a.fileUrl, slow: a.slow, clean: a.clean });
   process.exit(ok ? 0 : 1);
 }

@@ -8,6 +8,7 @@ import { createShootout, shootoutTick, forceShootoutShot, SPOTS } from './shooto
 import { challenge } from './challenges.js';
 import { R, initRender, resize, draw, pop, burst, shake, netHit, rimHit, confetti, is3d } from './render.js';
 import { G3, load3d, pickTier, info3d, glProbe, resize3d, setTier } from './gl/scene3d.js';
+import { startHQ, hqInfo } from './gl/hq.js';
 import { CREST_KEYS, crestURL } from './art.js';
 import { I, initInput, initTouch, setEnabled, drain } from './input.js';
 import { AU, unlock, play, setVolume, setOn } from './audio.js';
@@ -71,7 +72,10 @@ function start3d() {
   G3.onLost = () => { document.body.classList.remove('gl'); R.snap = true; R.key = ''; layout(); drawFrame(0); };
   load3d($('#stage'), pickTier(st.width, st.height)).then(() => {
     state.busy3d = false;
-    if (G3.state === 'ready') { document.body.classList.toggle('gl', is3d()); layout(); if (R.v) resize3d(R.v.W, R.v.H, window.devicePixelRatio || 1); R.snap = true; }
+    if (G3.state === 'ready') {
+      document.body.classList.toggle('gl', is3d()); layout(); if (R.v) resize3d(R.v.W, R.v.H, window.devicePixelRatio || 1); R.snap = true;
+      startHQ(G3.renderer, { tier: G3.tier, software: probe.software && state.settings.graphics !== '3d' }); // high-quality art streams in behind the lite gym
+    }
     wantLoop(); drawFrame(0);
   });
 }
@@ -598,7 +602,7 @@ const crestSrc = (T) => crestURL(T, 56);
 // ---------------------------------------------------------------- title demo
 function ensureDemo() {
   if (state.demo) return;
-  const k = (Date.now() / 1000) | 0;
+  const k = window.__TEST__ ? state.seed || 1 : (Date.now() / 1000) | 0; // tests capture the same title every run
   const a = COUNTY[k % 7], b = COUNTY[(k + 3) % 7];
   state.demo = startMatch({ mode: 'demo', home: a.key, away: b.key, program: k % 2 ? 'girls' : 'boys', user: 'none', qLen: 60, shotClock: 35, autoBreak: true, seed: k & 0xffff, venue: 'home' });
   for (let i = 0; i < 90; i++) tick(state.demo);
@@ -733,9 +737,18 @@ function sumState() {
     replay: state.replay ? { kind: state.replay.kind, f: Math.floor(state.replay.f), n: state.replay.frames.length } : null,
     pick: { ...state.pick }, audio: { ctx: !!AU.ctx, on: AU.on }, reduced: R.reduced, touch: touchOn(), fx: R.fx.parts.length, loop: !!raf,
     view: R.v ? { W: R.v.W, H: R.v.H, s: +R.v.s.toFixed(2), camX: +R.v.camX.toFixed(2) } : null,
-    gfx: { mode: is3d() ? '3d' : '2d', gl: state.gl || null, ...info3d() },
+    gfx: { mode: is3d() ? '3d' : '2d', gl: state.gl || null, ...info3d(), hq: hqInfo() },
+    hud: hudState(),
     ui: { focus: document.activeElement ? (document.activeElement.dataset.act || document.activeElement.id || document.activeElement.tagName) : null },
   };
+}
+
+// on-screen callouts, for the capture and review tests (same visibility rule as drawMatch)
+function hudState() {
+  const m = state.match, sl = state.slam;
+  const age = sl && m && sl.m === m ? m.time - sl.at : -1;
+  const live = age >= 0 && age < 1.4 && state.scene !== 'title' && m.ball.state !== 'shot';
+  return { slam: live ? { text: sl.text, age: +age.toFixed(2) } : null, pops: R.fx.pops.map((p) => ({ text: p.text, age: +p.t.toFixed(2) })) };
 }
 
 function stepN(n) {

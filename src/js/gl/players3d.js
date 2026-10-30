@@ -4,7 +4,7 @@
 /* global THREE */
 import { COURT } from '../court.js';
 import { mix, makePose, blendPose, MASKS } from './anim-mixer.js';
-import { solveLegs } from './ik.js';
+import { solveLegs, reachArm } from './ik.js';
 
 const TAU = Math.PI * 2;
 const MODEL_H = 1.86; // rest height of the Blender bodies, metres
@@ -365,6 +365,7 @@ export function dressPlayer(pm, r, kit) {
   pm.key = k;
   // attachments are placed in the rest pose (a pooled rig may still hold its last pose)
   for (const n of BONES) pm.bones[n].b.quaternion.copy(pm.bones[n].rest);
+  pm.bones.hips.b.position.copy(pm.hipRest); // and a clip may have lowered the hips
   setKit(pm, kit, { ...r.look, id: r.id || r.num });
   colLook(pm.hairMat.color, r.look.hairC, 0.5);
   if (pm.hair) pm.hair.parent.remove(pm.hair);
@@ -543,12 +544,24 @@ export function updatePlayer(pm, ctx) {
   const toBall = Math.atan2(ctx.ballX - pl.x, ctx.ballZ - pl.z);
   ctx.lookYaw = Math.max(-0.9, Math.min(0.9, angDiff(st.head, toBall)));
   const sc = (ctx.r.height / 12) / MODEL_H;
-  pm.root.position.set(pl.x - COURT.L / 2, pl.y || 0, pl.z - COURT.W / 2);
+  // the sim leaves the floor the tick a jumper starts: show the knee load first (the first 0.13 s rise eases in)
+  const lift = pl.act === 'shoot' ? smooth(Math.min(1, (pl.actT || 0) / 0.13)) : 1;
+  pm.root.position.set(pl.x - COURT.L / 2, (pl.y || 0) * lift, pl.z - COURT.W / 2);
   pm.root.rotation.y = st.head;
   pm.root.scale.setScalar(sc);
   const P = poseFor(pm, ctx);
   st.hash = st.hash ?? ((ctx.r.num || 0) * 7 + (ctx.r.id ? String(ctx.r.id).length : 3));
   ctx.hash = st.hash;
+  // the dribbling hand is the one on the camera's side (the ball never hides behind the body); a change of hand
+  // waits a third of a second and plays as a crossover
+  if (ctx.dribbling && ctx.camX != null) {
+    const rx = -Math.cos(st.head), rz = Math.sin(st.head);
+    const want = rx * (ctx.camX - pl.x) + rz * (ctx.camZ - pl.z) >= 0 ? 'R' : 'L';
+    if (!st.drib) st.drib = want;
+    st.dribWait = want === st.drib ? 0 : (st.dribWait || 0) + ctx.dt;
+    if (st.dribWait > 0.33) { st.drib = want; st.dribWait = 0; if (st.mx) st.mx.cross = true; }
+  }
+  ctx.dribHand = st.drib || 'R';
   const clipPose = pm.noClips ? null : mix(st, ctx, sc);
   if (clipPose) {
     // the procedural layers the clips don't cover: defensive hands, the two-hand hold, the head turned to the ball
@@ -560,9 +573,32 @@ export function updatePlayer(pm, ctx) {
     applyPoseQ(pm, clipPose);
     st.dy = clipPose.dy; st.c = clipPose.c;
   } else { applyPose(pm, P); pm.bones.hips.b.position.copy(pm.hipRest); st.c = -1; }
-  poseFingers(pm, ctx.hasBall ? 1 : 0, ctx.hasBall && (ctx.holdBall || ctx.pl.act === 'shoot' || ctx.pl.act === 'layup') ? 0.8 : 0);
+  const two = ctx.hasBall && (ctx.holdBall || ctx.pl.act === 'shoot' || ctx.pl.act === 'layup');
+  poseFingers(pm, ctx.hasBall && (two || ctx.dribHand !== 'L') ? 1 : 0, two ? 0.8 : ctx.hasBall && ctx.dribHand === 'L' ? 1 : 0);
   pm.root.updateMatrixWorld(true);
   if (clipPose) solveLegs(pm, st, ctx);
+  // the dribble: the ball bounces in a lane ahead of the right hip, where the camera sees it, and the hand comes
+  // down onto it at the top of each bounce
+  // layups and dunks: the hand goes to the front of the rim (a dunk holds it there through the throw-down)
+  if (clipPose && pl.act === 'layup' && ctx.rimX != null) {
+    const dunk = pl.stype === 'dunk';
+    if (!ctx.released) st.rimPost = 0; else st.rimPost = (st.rimPost || 0) + ctx.dt;
+    const w = !ctx.released ? smooth(Math.max(0, Math.min(1, (ctx.meterF - 0.35) / 0.5))) : Math.max(0, 1 - Math.max(0, st.rimPost - (dunk ? 0.32 : 0.05)) / 0.2);
+    const dir = ctx.rimX > COURT.L / 2 ? 1 : -1;
+    P3.tmpT = P3.tmpT || new THREE.Vector3();
+    P3.tmpT.set(ctx.rimX - dir * (dunk ? 0.55 : 0.9) - COURT.L / 2, dunk ? 10.35 : 10.6, COURT.rimZ - COURT.W / 2);
+    reachArm(pm, 'R', P3.tmpT, w * (dunk ? 1 : 0.7));
+  }
+  if (ctx.dribbling && clipPose) {
+    const run = Math.min(1, Math.hypot(pl.vx || 0, pl.vz || 0) / 14);
+    const hs = ctx.dribHand === 'L' ? 1 : -1;
+    const lane = P3.tmpV.set(0.3 * hs, 0, 0.3 + 0.12 * run).applyMatrix4(pm.root.matrixWorld);
+    const w = smooth(Math.max(0, Math.min(1, (ctx.ballY / ctx.ballTop - 0.5) / 0.42)));
+    P3.tmpT = P3.tmpT || new THREE.Vector3();
+    reachArm(pm, ctx.dribHand, P3.tmpT.set(lane.x, ctx.ballY + 0.44 + 0.08 * sc, lane.z), w * 0.95);
+    lane.y = ctx.ballTop + 2; // the scene takes the sim's height (the lower of the two)
+    return lane;
+  }
   const hand = pm.bones.hand_R.b;
   return P3.tmpV.copy(pm.socket).applyMatrix4(hand.matrixWorld);
 }

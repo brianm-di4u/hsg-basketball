@@ -9,7 +9,8 @@
 // tools/build-anims.mjs bakes these at 30 fps beside the CMU clips.
 
 const STANCE = { thigh_L: [-0.2, 0, 0.06], thigh_R: [-0.2, 0, -0.06], shin_L: [0.36, 0, 0], shin_R: [0.36, 0, 0], foot_L: [-0.12, 0, -0.04], foot_R: [-0.12, 0, 0.04], spine: [0.1, 0, 0] };
-const ARMS_DOWN = { upperarm_L: [-0.08, 0.15, 0.12], upperarm_R: [-0.08, -0.15, -0.12], forearm_L: [-0.3, 0, 0], forearm_R: [-0.3, 0, 0] };
+// arms hanging at the sides (the rest A-pose holds them 25° out)
+const ARMS_DOWN = { upperarm_L: [-0.06, 0.1, -0.26], upperarm_R: [-0.06, -0.1, 0.26], forearm_L: [-0.28, 0, 0], forearm_R: [-0.28, 0, 0] };
 const P = (...parts) => Object.assign({}, ...parts.map((p) => JSON.parse(JSON.stringify(p))));
 
 export const KEYED = {
@@ -89,7 +90,7 @@ export const KEYED = {
   // shot from the chin, so the arms carry the ball to a set point over the forehead and finish at full extension
   // with the wrist snapped, held through the fall
   jumper: {
-    from: 'jumper', marks: { start: 0.45, release: 0.8 },
+    from: 'jumper', marks: { start: 0.3, release: 0.8 },
     keys: [
       [0, { upperarm_R: [-0.7, 0, -0.2], forearm_R: [-1.7, 0, 0.4], hand_R: [-0.6, 0, 0], upperarm_L: [-0.7, 0, 0.2], forearm_L: [-1.7, 0, -0.4] }],
       [0.45, { upperarm_R: [-1.0, 0, -0.25], forearm_R: [-1.6, 0, 0.3], hand_R: [-0.9, 0, 0], upperarm_L: [-0.9, 0, 0.45], forearm_L: [-1.4, 0, 0.35] }],
@@ -109,6 +110,17 @@ export const KEYED = {
       [0.7, { upperarm_R: [-3.0, 0, -0.18], forearm_R: [-0.1, 0, 0], hand_R: [-0.2, 0, 0], upperarm_L: [-3.0, 0, 0.18], forearm_L: [-0.1, 0, 0], hand_L: [-0.2, 0, 0], neck: [-0.25, 0, 0], head: [-0.2, 0, 0] }],
       [0.95, { upperarm_R: [-2.6, 0, -0.25], forearm_R: [-0.3, 0, 0], upperarm_L: [-2.6, 0, 0.25], forearm_L: [-0.3, 0, 0] }],
       [1.4, { upperarm_R: [-0.5, 0, -0.3], forearm_R: [-0.7, 0, 0], upperarm_L: [-0.5, 0, 0.3], forearm_L: [-0.7, 0, 0] }],
+    ],
+  },
+  // officials: the three-point signal, both arms straight up, held, then down
+  ref3: {
+    dur: 1.4, mask: 'upper',
+    keys: [
+      [0, ARMS_DOWN],
+      [0.18, { upperarm_L: [-2.6, 0, 0.35], upperarm_R: [-2.6, 0, -0.35], forearm_L: [-0.3, 0, 0], forearm_R: [-0.3, 0, 0] }],
+      [0.32, { upperarm_L: [-3.05, 0, 0.12], upperarm_R: [-3.05, 0, -0.12], forearm_L: [-0.05, 0, 0], forearm_R: [-0.05, 0, 0], hand_L: [-0.2, 0, 0], hand_R: [-0.2, 0, 0] }],
+      [1.1, { upperarm_L: [-3.05, 0, 0.12], upperarm_R: [-3.05, 0, -0.12], forearm_L: [-0.05, 0, 0], forearm_R: [-0.05, 0, 0], hand_L: [-0.2, 0, 0], hand_R: [-0.2, 0, 0] }],
+      [1.4, ARMS_DOWN],
     ],
   },
   // celebrations (a player keeps one): fist pump, arms up in a V with a hop, point to the sky with a chest thump

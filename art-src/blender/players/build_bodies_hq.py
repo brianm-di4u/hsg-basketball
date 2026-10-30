@@ -167,11 +167,17 @@ def build(bid):
     jv = list({v for f in jersey for v in f.verts})
     names = {g.index: g.name for g in human.vertex_groups}
     clav = {s_: vg['clavicle_' + s_] for s_ in ('L', 'R')}
+    # ...but the cloth over the shoulder cap keeps part of the upper arm, so a lowered arm doesn't leave the armhole
+    # edge standing off the shoulder like a wing: the more the vertex sat on the arm, the more of it stays
     for v in jv:
         d = v[dl]; moved = {'L': 0.0, 'R': 0.0}
+        A = sum(w for gi, w in d.items() if names.get(gi, '').startswith(('upperarm_', 'forearm_', 'hand_')))
+        keep = max(0.0, min(1.0, (A - 0.15) / 0.55)) * 0.65
         for gi in list(d.keys()):
             n = names.get(gi, '')
-            if n.startswith(('upperarm_', 'forearm_', 'hand_')):
+            if n.startswith('upperarm_') and keep > 0:
+                moved[n[-1]] += d[gi] * (1 - keep); d[gi] = d[gi] * keep
+            elif n.startswith(('upperarm_', 'forearm_', 'hand_')):
                 moved[n[-1]] += d[gi]; del d[gi]
         for s_, w in moved.items():
             if w > 0: d[clav[s_]] = d.get(clav[s_], 0.0) + w

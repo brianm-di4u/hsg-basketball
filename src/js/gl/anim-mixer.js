@@ -110,6 +110,7 @@ function shotFor(ctx) {
   if (act === 'jump') return 'block';
   if (act === 'pass') return 'pass';
   if (act === 'steal') return 'steal';
+  if (act === 'ref3') return 'ref3';
   if (act === 'celebrate') return ['celebrate1', 'celebrate2', 'celebrate3'][ctx.hash % 3];
   return null;
 }
@@ -158,13 +159,15 @@ export function mix(st, ctx, scale) {
   if (ctx.hasBall && !ctx.holdBall && C.dribble) {
     const ph = ctx.dribblePhase != null ? ctx.dribblePhase : (st.t * 1.35) % 1;
     // the clip's hand top is its first frame; the ball tops out at phase 0.5
-    sampleClip(C.dribble, ((ph + 0.5) % 1) * C.dribble.dur, tmp);
+    const left = ctx.dribHand === 'L', s = left ? -1 : 1;
+    sampleClip(C.dribble, ((ph + 0.5) % 1) * C.dribble.dur, tmp, left);
     // the performer bounced it in front of the belly: the dribbling arm moves out to the side
-    _e.set(-0.12, 0, -0.5, 'YXZ'); _qb.setFromEuler(_e); tmp.q.upperarm_R.premultiply(_qb);
-    _e.set(0, 0.35, 0, 'YXZ'); _qb.setFromEuler(_e); tmp.q.forearm_R.premultiply(_qb);
+    addTurn(left ? tmp.q.upperarm_L : tmp.q.upperarm_R, -0.12, 0, -0.5 * s);
+    addTurn(left ? tmp.q.forearm_L : tmp.q.forearm_R, 0, 0.35 * s, 0);
     blendPose(base, tmp, 1, UPPER);
     // a crossover when the handler cuts back across the body
-    if (C.crossover && Math.sign(lat) !== Math.sign(M.prevLat) && Math.abs(lat) > 6 && Math.abs(M.prevLat) > 6 && M.xoT <= 0) { M.xoT = C.crossover.dur / 1.6; M.xo = lat > 0; }
+    if (C.crossover && M.cross && M.xoT <= 0) { M.xoT = C.crossover.dur / 1.6; M.xo = ctx.dribHand === 'R'; }
+    M.cross = false;
   }
   if (Math.abs(lat) > 2) M.prevLat = lat;
   if (M.xoT > 0 && ctx.hasBall && C.crossover) {
@@ -177,7 +180,7 @@ export function mix(st, ctx, scale) {
   const want = shotFor(ctx);
   if (want && C[want]) {
     if (want !== M.oneName) { M.oneName = want; M.oneTime = 0; M.relT = null; A.seen.add(want); }
-    M.oneW = Math.min(1, M.oneW + dt / 0.12);
+    M.oneW = dt < 1e-4 ? 1 : Math.min(1, M.oneW + dt / 0.12); // a still redraw (a frozen replay) shows the pose at once
   } else {
     M.oneW = Math.max(0, M.oneW - dt / 0.15);
     if (M.oneW === 0) M.oneName = '';
@@ -196,7 +199,7 @@ export function mix(st, ctx, scale) {
         M.post += dt;
         // an early release still reaches the set point (in 0.08 s) before the follow-through
         const rr = Math.max(M.relT, r), q = Math.min(1, M.post / 0.08);
-        t = q < 1 ? M.relT + (rr - M.relT) * q : rr + Math.min(M.post - 0.08, 0.1) + Math.max(0, M.post - 0.18) * 0.3;
+        t = q < 1 ? M.relT + (rr - M.relT) * q : rr + Math.min(M.post - 0.08, 0.06) + Math.max(0, M.post - 0.14) * 0.55;
       }
     } else t = (mk.start || 0) + M.oneTime;
     sampleClip(clip, t, tmp);
@@ -206,6 +209,10 @@ export function mix(st, ctx, scale) {
     blendPose(base, tmp, smooth(M.oneW), mask);
   }
   if (air && !M.oneName) base.dy = Math.min(0, base.dy);
+  // landing: the hips sink and the knees take it (the leg IK keeps the feet on the floor)
+  if (M.wasAir && !air) M.land = 0.24;
+  M.wasAir = air;
+  if (M.land > 0) { M.land = Math.max(0, M.land - dt); base.dy -= 0.085 * Math.sin(Math.PI * (1 - M.land / 0.24)); }
   A.stats.ms += performance.now() - t0; A.stats.players++;
   return base;
 }

@@ -65,9 +65,9 @@ def sample(a, f):
     bpy.context.scene.frame_set(f)
     return {n: (a.matrix_world @ a.pose.bones[s].matrix) for n, s in MAP.items()}
 
-def heading_of(m):
-    # the hips' forward (-y in Blender) on the floor
-    fwd = m.to_3x3() @ Vector((0, -1, 0))
+def heading_of(q):
+    # the performer's forward (-y in Blender at rest) carried by the hips' change from rest, on the floor
+    fwd = q @ Vector((0, -1, 0))
     return math.atan2(fwd.x, -fwd.y)
 
 def survey(take, step=12, f_a=None, f_b=None):
@@ -111,7 +111,7 @@ def export_clip(name, take, f0, f1, loop):
     heads, mats, hips, cont, toes = [], [], [], [], []
     for f in frames:
         M = sample(a, f); mats.append(M)
-        heads.append(heading_of(M['hips'])); hips.append(M['hips'].to_translation())
+        heads.append(heading_of(M['hips'].to_quaternion() @ rest_q['hips'].inverted())); hips.append(M['hips'].to_translation())
         toes.append([a.matrix_world @ a.pose.bones[s].head for s in ('LeftToeBase', 'RightToeBase')])
         anks = [(a.matrix_world @ a.pose.bones[s].head).z for s in ('LeftFoot', 'RightFoot')]
         cont.append([anks[k] - ank0 < 0.035 or toes[-1][k].z - toe0 < 0.025 for k in (0, 1)])

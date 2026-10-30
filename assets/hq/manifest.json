@@ -1,6 +1,6 @@
 {
  "schema": 3,
- "build": "2026-10-30T06:12:55.990Z",
+ "build": "2026-10-30T13:21:27.717Z",
  "packages": {
   "venue-gym": {
    "prio": 1,
@@ -44,10 +44,10 @@
    "prio": 3,
    "tiers": {
     "high": [
-     "players-hq.9a354206.glb"
+     "players-hq.1ccd0a14.glb"
     ],
     "medium": [
-     "players-hq.9a354206.glb"
+     "players-hq.1ccd0a14.glb"
     ]
    }
   },
@@ -55,12 +55,12 @@
    "prio": 4,
    "tiers": {
     "high": [
-     "anims.a5314179.json",
-     "anims.272169b8.bin"
+     "anims.511ae593.json",
+     "anims.72e09382.bin"
     ],
     "medium": [
-     "anims.a5314179.json",
-     "anims.272169b8.bin"
+     "anims.511ae593.json",
+     "anims.72e09382.bin"
     ]
    }
   }
@@ -96,14 +96,14 @@
   "arena-lm-shell-m.013a9703.webp": {
    "bytes": 93242
   },
-  "players-hq.9a354206.glb": {
+  "players-hq.1ccd0a14.glb": {
    "bytes": 2258008
   },
-  "anims.a5314179.json": {
-   "bytes": 12384
+  "anims.511ae593.json": {
+   "bytes": 12949
   },
-  "anims.272169b8.bin": {
-   "bytes": 88008
+  "anims.72e09382.bin": {
+   "bytes": 94544
   }
  }
 }

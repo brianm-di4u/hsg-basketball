@@ -33,9 +33,23 @@ async function forcedShot(t, seed, q, want) {
 }
 const installShotFrom = (t) => t.page.evaluate(`window.__shotFrom = ${shotFromInPage.toString()}`);
 // a close camera aimed at a player's chest (court feet): from `side` (+1 near sideline) at distance d
-async function closeOn(t, i, { d = 9, h = 5.2, side = 1, fov = 28 } = {}) {
+// (face: true aims from the side the player faces, a quarter turn off the nose, so the face is in frame)
+async function closeOn(t, i, { d = 9, h = 5.2, side = 1, fov = 28, face = false, ty = 4.6 } = {}) {
   const s = await t.state(), p = s.match.players.find((q) => q.i === i);
-  await t.game('act', 'cam', { p: [p.x - 2, h, p.z + side * d], t: [p.x, 4.6, p.z], fov });
+  let cam = [p.x - 2, h, p.z + side * d];
+  if (face) {
+    // the way the face points, read from the model itself: the head bone to the eyes
+    const f = await t.page.evaluate((i) => {
+      const pm = window.__G3.players.get(i); if (!pm) return null;
+      const hd = pm.bones.head.b, h0 = hd.getWorldPosition(new THREE.Vector3());
+      const e = pm.meta && pm.meta.eye ? new THREE.Vector3(0, pm.meta.eye[1], pm.meta.eye[2] + 0.2) : new THREE.Vector3(0, 1.75, 0.3);
+      const e0 = pm.rig.localToWorld(e);
+      return [e0.x - h0.x, e0.z - h0.z, h0.y];
+    }, i);
+    // at the head's own height (a crouched defender's face is low), a touch below the eyes
+    if (f) { const a = Math.atan2(f[0], f[1]) + 0.5; ty = f[2] - 0.15; cam = [p.x + Math.sin(a) * d, ty - 0.35, p.z + Math.cos(a) * d]; }
+  }
+  await t.game('act', 'cam', { p: cam, t: [p.x, ty, p.z], fov });
 }
 
 export const tests = [
@@ -73,7 +87,7 @@ export const tests = [
       await liveGame(t, { seed: 3, home: 'fountain-lake', away: 'mountain-pine' });
       await G(t, () => { const g = window.__game; g.act('give', 0, 0); g.act('place', 0, 0, 80, 6); g.step(1); g.act('shootAt', 1); g.step(90); g.act('replay', 'THREE', 1, 0.93); g.act('freeze', true); });
       await cshot(t, 'c08-replay'); // late beat: the ball at the rim
-      await G(t, () => { const g = window.__game; g.act('replay', 'THREE', 1, 0.42); g.act('freeze', true); });
+      await G(t, () => { const g = window.__game; g.act('replay', 'THREE', 1, { release: -4 }); g.act('freeze', true); });
       await cshot(t, 'c17-replay-early'); // early beat: the release
       await G(t, () => { const g = window.__game; g.act('freeze', false); g.act('endReplay'); });
 
@@ -90,7 +104,7 @@ export const tests = [
       await t.game('step', 120);
       await t.game('act', 'cam', { p: [44, 5, 9], t: [33, 1.8, -5.5], fov: 36 });
       await cshot(t, 'c15-bench-close');
-      await closeOn(t, 5, { d: 7, h: 5.6, fov: 24 }); // an opponent: the user's YOU chevron would cover the face
+      await closeOn(t, 5, { d: 7, h: 5.9, fov: 22, face: true, ty: 5.3 }); // an opponent: the user's YOU chevron would cover the face
       await cshot(t, 'c21-face-close');
       await t.game('act', 'cam', null);
       await t.game('step', 236); await settle(t);
@@ -132,7 +146,7 @@ export const tests = [
       await burst(t, 'drive', { frames: 16, every: 3, onFrame: (k) => k === 6 && G(t, () => { window.__game.act('input', { mx: 0, mz: 0 }); window.__game.act('shootAt', 1); }) });
       // a dunk: the center at speed just outside the restricted area (the sim picks a dunk for a fast, long reach)
       await liveGame(t, { seed: 12, home: 'hot-springs', away: 'lakeside', user: 'none' });
-      await G(t, () => { const g = window.__game; g.act('give', 0, 4); g.act('place', 0, 4, 84.6, 25); for (let s = 0; s < 5; s++) g.act('place', 1, s, 40, 5 + s * 10); g.act('push', 0, 4, 14, 0); g.act('shootAt', 1); });
+      await G(t, () => { const g = window.__game; g.act('give', 0, 4); g.act('place', 0, 4, 84.6, 25); for (let s = 0; s < 5; s++) g.act('place', 1, s, 40, 5 + s * 10); g.act('push', 0, 4, 14, 0); g.act('cam', null); g.act('shootAt', 1); });
       await burst(t, 'dunk', { frames: 16, every: 3 });
       // open play: running, dribbling, defensive slides
       await liveGame(t, { seed: 14, home: 'lake-hamilton', away: 'hot-springs', user: 'none' });

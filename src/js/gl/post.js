@@ -16,12 +16,15 @@ export const GLOW = 3.2;
 // camera-motion blur: reproject each pixel's world position with last frame's view-projection
 const BLUR_FRAG = `
 uniform mat4 uInvVP, uPrevVP;
-uniform float uAmount;
+uniform vec3 uCam;
+uniform float uAmount, uSharp;
 void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth, out vec4 outputColor) {
   vec4 ndc = vec4(uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
   vec4 wp = uInvVP * ndc; wp /= wp.w;
   vec4 pp = uPrevVP * wp; pp.xy /= pp.w;
-  vec2 vel = (uv - (pp.xy * 0.5 + 0.5)) * uAmount;
+  // only what lies well behind the subject smears: the subject and everything nearer stay sharp
+  float far = smoothstep(uSharp, uSharp * 1.6, distance(wp.xyz, uCam));
+  vec2 vel = (uv - (pp.xy * 0.5 + 0.5)) * uAmount * far;
   float L = length(vel);
   if (L > 0.012) vel *= 0.012 / L;
   vec4 acc = inputColor;
@@ -31,7 +34,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
 function makeBlur(PP) {
   class CameraBlur extends PP.Effect {
     constructor() {
-      super('CameraBlur', BLUR_FRAG, { attributes: PP.EffectAttribute.DEPTH, uniforms: new Map([['uInvVP', new THREE.Uniform(new THREE.Matrix4())], ['uPrevVP', new THREE.Uniform(new THREE.Matrix4())], ['uAmount', new THREE.Uniform(0.6)]]) });
+      super('CameraBlur', BLUR_FRAG, { attributes: PP.EffectAttribute.DEPTH, uniforms: new Map([['uInvVP', new THREE.Uniform(new THREE.Matrix4())], ['uPrevVP', new THREE.Uniform(new THREE.Matrix4())], ['uAmount', new THREE.Uniform(0.6)], ['uCam', new THREE.Uniform(new THREE.Vector3())], ['uSharp', new THREE.Uniform(30)]]) });
     }
   }
   return new CameraBlur();
@@ -46,7 +49,7 @@ export function makePost(renderer, scene, camera, tier) {
   const composer = new PP.EffectComposer(renderer, { frameBufferType: THREE.HalfFloatType, multisampling: cfg.msaa });
   composer.addPass(new PP.RenderPass(scene, camera));
   // cinema: depth of field (and motion blur on high) in HDR, before the grade; off in live play
-  const dof = new PP.DepthOfFieldEffect(camera, { focusDistance: 30, focusRange: 6, bokehScale: tier === 'high' ? 5 : 3.5, resolutionScale: 0.5 });
+  const dof = new PP.DepthOfFieldEffect(camera, { focusDistance: 30, focusRange: 12, bokehScale: tier === 'high' ? 5 : 3.5, resolutionScale: 0.5 });
   dof.target = new THREE.Vector3();
   const blur = tier === 'high' ? makeBlur(PP) : null;
   const cine = new PP.EffectPass(camera, ...(blur ? [dof, blur] : [dof]));
@@ -83,6 +86,8 @@ export function makePost(renderer, scene, camera, tier) {
         blur.uniforms.get('uPrevVP').value.copy(prevVP);
         // a step(n) hook draws one frame for many ticks: scale the smear to one 60 Hz frame
         blur.uniforms.get('uAmount').value = Math.min(1, (1 / 60) / Math.max(dt || 1 / 60, 1 / 240)) * 0.7;
+        blur.uniforms.get('uCam').value.copy(camera.position);
+        blur.uniforms.get('uSharp').value = camera.position.distanceTo(dof.target) + 8;
         prevVP.copy(vp);
       }
       composer.render(dt);

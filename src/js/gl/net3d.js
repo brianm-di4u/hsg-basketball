@@ -32,12 +32,16 @@ export function makeNetSim(mesh) {
   const len = (a, b) => Math.hypot(r0[a * 3] - r0[b * 3], r0[a * 3 + 1] - r0[b * 3 + 1], r0[a * 3 + 2] - r0[b * 3 + 2]);
   for (let row = 0; row <= ROWS; row++) for (let k = 0; k < AROUND; k++) {
     const a = idx(row, k);
-    cons.push([a, idx(row, k + 1)]);
-    if (row < ROWS) { cons.push([a, idx(row + 1, k)]); cons.push([a, idx(row + 1, k + 1)]); cons.push([a, idx(row + 1, k - 1)]); }
+    // [a, b, rest, stretch per unit of the make spring]: the cords lengthen toward the hem, the rings flare
+    const f = (row + 1) / ROWS;
+    cons.push([a, idx(row, k + 1), 0, 0.3 * (row / ROWS)]);
+    if (row < ROWS) { cons.push([a, idx(row + 1, k), 0, 0.4 * f]); cons.push([a, idx(row + 1, k + 1), 0, 0.4 * f]); cons.push([a, idx(row + 1, k - 1), 0, 0.4 * f]); }
   }
-  for (const c of cons) c.push(len(c[0], c[1]));
+  for (const c of cons) c[2] = len(c[0], c[1]);
   const pos = mesh.geometry.attributes.position;
   let acc = 0, energy = 0;
+  // a make drives a damped spring (about 2.5 Hz, light damping): the net stretches, recoils past rest, settles
+  let sp = 0, sv = 0;
 
   function substep(h, ball) {
     for (let i = AROUND; i < n; i++) { // the top ring is pinned
@@ -48,13 +52,14 @@ export function makeNetSim(mesh) {
         p[j + a] += v + (a === 1 ? GRAV * h * h : 0);
       }
       // a gentle pull back to the rest shape keeps the cone from collapsing under gravity
-      for (let a = 0; a < 3; a++) p[j + a] += (r0[j + a] - p[j + a]) * 0.06;
+      for (let a = 0; a < 3; a++) p[j + a] += (r0[j + a] - p[j + a]) * (0.06 - 0.05 * Math.min(1, Math.abs(sp)));
       if (ball) { // push particles out of the ball
         const dx = p[j] - ball[0], dy = p[j + 1] - ball[1], dz = p[j + 2] - ball[2], d = Math.hypot(dx, dy, dz), rr = 0.46;
         if (d < rr && d > 1e-4) { const s = (rr - d) / d; p[j] += dx * s; p[j + 1] += dy * s * 0.5; p[j + 2] += dz * s; }
       }
     }
-    for (let it = 0; it < ITER; it++) for (const [a, b, L] of cons) {
+    for (let it = 0; it < ITER; it++) for (const [a, b, L0, k] of cons) {
+      const L = L0 * (1 + k * sp);
       const ja = a * 3, jb = b * 3;
       const dx = p[jb] - p[ja], dy = p[jb + 1] - p[ja + 1], dz = p[jb + 2] - p[ja + 2];
       const d = Math.hypot(dx, dy, dz) || 1e-6, diff = (d - L) / d;
@@ -74,16 +79,21 @@ export function makeNetSim(mesh) {
         if (side) q[j] -= side * 0.05 * strength * (1 - f);
       }
       energy = Math.max(energy, strength);
+      if (!side) sv += 9 * strength; // a swish: the stretch spring
     },
     // dt in seconds; ballLocal = the ball centre in the net's frame, or null
     update(dt, ballLocal) {
       const near = ballLocal && Math.hypot(ballLocal[0], ballLocal[2]) < R0 + 0.5 && ballLocal[1] < 0.6 && ballLocal[1] > -LEN - 0.6;
       if (near) energy = 1;
-      if (energy < 0.002 && !near) return false; // at rest: leave the buffer alone
+      if (energy < 0.002 && !near && Math.abs(sp) < 0.003 && Math.abs(sv) < 0.01) return false; // at rest: leave the buffer alone
       acc += Math.min(dt, 0.25);
       const h = 1 / 120;
       let steps = 0;
-      while (acc >= h && steps < 30) { substep(h, near ? ballLocal : null); acc -= h; steps++; }
+      while (acc >= h && steps < 30) {
+        const w = 2 * Math.PI * 2.5;
+        sv += (-w * w * sp - 2 * 0.3 * w * sv) * h; sp += sv * h;
+        substep(h, near ? ballLocal : null); acc -= h; steps++;
+      }
       energy *= Math.pow(0.4, dt);
       // write the particle rings into the cone's vertex rings (the seam column repeats column 0)
       for (let row = 0; row <= ROWS; row++) for (let k = 0; k <= AROUND; k++) {

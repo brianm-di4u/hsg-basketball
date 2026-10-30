@@ -197,7 +197,10 @@ function placeCamera(dt, scene) {
     return;
   }
   const vert = scene.vertical || 0;
-  let goal = vert ? Math.max(24, Math.min(COURT.L - 24, scene.camX ?? HL)) : clampCam3(scene.camX ?? HL);
+  // phones: a layup or dunk pulls the camera in toward the rim (the play is never a speck at the far end)
+  G3.rimZoom = (G3.rimZoom || 0) + ((scene.rimPlay ? 1 : 0) - (G3.rimZoom || 0)) * Math.min(1, dt * (scene.rimPlay ? 6 : 2));
+  const edgeV = 24 - 11 * (G3.rimZoom || 0);
+  let goal = vert ? Math.max(edgeV, Math.min(COURT.L - edgeV, scene.camX ?? HL)) : clampCam3(scene.camX ?? HL);
   // a horizontal dead zone: small moves of the play leave the camera still, so the frame stops swimming
   if (!vert && !G3.snap) { const dz = f.span * 0.06, c = G3.camGoal ?? goal; goal = goal > c + dz ? goal - dz : goal < c - dz ? goal + dz : c; }
   G3.camGoal = goal;
@@ -215,7 +218,7 @@ function placeCamera(dt, scene) {
     const fov = portrait ? 50 : 40;
     if (cam.fov !== fov) { cam.fov = fov; cam.updateProjectionMatrix(); }
     const pitch = (portrait ? 32 : 26) * Math.PI / 180, hf = 2 * Math.atan(Math.tan((fov * Math.PI / 180) / 2) * (G3.W / G3.H));
-    const D = (portrait ? 14.5 : 22) / Math.tan(hf / 2);
+    const D = (portrait ? 14.5 : 22) / Math.tan(hf / 2) * (1 - 0.3 * (G3.rimZoom || 0));
     const tx = G3.camX - HL + vert * (portrait ? 3 : 4), tz = G3.camZ * (portrait ? 0.85 : 0.5);
     const sh = scene.shake ? (Math.random() - 0.5) * scene.shake * 0.5 : 0;
     cam.position.set(tx - vert * Math.cos(pitch) * D + sh, 3 + Math.sin(pitch) * D, tz + sh);
@@ -334,7 +337,7 @@ export function draw3d(scene, fx) {
     if (shotX != null && Math.abs(it.pl.x - shotX) > 22) continue; // a shot frames the shooter's neighbourhood
     const q = project(it.pl.x, it.pl.z, 0); if (G3.snap || (q.X > -30 && q.X < G3.W + 30)) nearZ = Math.max(nearZ, it.pl.z);
   }
-  placeCamera(dt, { camX: scene.camX, camZ: scene.camZ, ballX: scene.ball ? scene.ball.x : null, ballZ: scene.ball ? scene.ball.z : null, nearZ: isFinite(nearZ) ? nearZ : null, reduced: scene.reduced, shake: fx.shake, fast: scene.ball && scene.ball.state === 'shot', vertical: scene.vertical });
+  placeCamera(dt, { camX: scene.camX, camZ: scene.camZ, ballX: scene.ball ? scene.ball.x : null, ballZ: scene.ball ? scene.ball.z : null, nearZ: isFinite(nearZ) ? nearZ : null, reduced: scene.reduced, shake: fx.shake, fast: scene.ball && scene.ball.state === 'shot', vertical: scene.vertical, rimPlay: (scene.players || []).some((it) => it.pl.act === 'layup') || !!(scene.ball && scene.ball.state === 'shot' && scene.ball.shot && /layup|dunk/.test(scene.ball.shot.type)) });
   G3.vertical = scene.vertical || 0;
   const m = scene.m;
   // players
@@ -362,12 +365,28 @@ export function draw3d(scene, fx) {
       holdBall: hasBall && m && (m.phase === 'inbound' || m.phase === 'ft' || m.phase === 'dead'),
       // the sim's bounce: ball height = |sin(dp)|; 0 on the floor, 0.5 at the top (in the hand)
       dribblePhase: hasBall && ball.dp != null ? (ball.dp / Math.PI) % 1 : null,
+      ballY: ball ? ball.y : 0, ballTop: (it.r.height / 12) * 0.5 + 0.4, rimX: atk,
+      camX: G3.camera.position.x + HL, camZ: G3.camera.position.z + HW,
     };
+    // an airborne body near the rim is drawn in front of it (never through the ring or the board); the offset
+    // eases in and out so nothing pops
+    {
+      const off = G3.rimOff || (G3.rimOff = new Map());
+      const dir = atk > HL ? 1 : -1, front = (atk - pl.x) * dir; // feet in front of the rim's centre
+      let want = 0;
+      if ((pl.y || 0) > 0.2 && front < 2.4 && Math.abs(COURT.rimZ - pl.z) < 2.6) want = 2.4 - front;
+      const cur = off.get(idx) || 0, nv = cur + (want - cur) * Math.min(1, dt / (want > cur ? 0.05 : 0.5));
+      off.set(idx, nv);
+      if (nv > 0.01) ctx.pl = { ...pl, x: pl.x - dir * nv };
+    }
+    ctx.dribbling = hasBall && !ctx.holdBall && !/shoot|layup|pass/.test(pl.act) && ball.y <= ctx.ballTop * 1.02;
     const hp = updatePlayer(pm, ctx);
     if (hasBall) { handPos = hp.clone(); handScale = pm.root.scale.x; }
+    if (pl.act === 'layup' && pl.stype === 'dunk') G3.dunkHand = { p: hp.clone(), at: G3.time };
     if (it.user) { G3.userRing.visible = true; G3.userRing.position.x = pl.x - HL; G3.userRing.position.z = pl.z - HW; }
   }
   if (!(scene.players || []).some((it) => it.user)) G3.userRing.visible = false;
+  if (G3.refSignal > 0) G3.refSignal -= dt;
   // two officials: the trail on the far sideline behind the ball, the lead on the baseline being attacked
   if (m && ball && m.phase !== 'final' && scene.players && scene.players.length >= 10) {
     const d = m.poss >= 0 ? m.dir[m.poss] : 1;
@@ -383,6 +402,8 @@ export function draw3d(scene, fx) {
       seen.add(200 + k);
       dressPlayer(pm, REF_LOOK[k], REF_KIT);
       pm.root.visible = true;
+      // the officials signal a made three
+      ref.act = G3.refSignal > 0 ? 'ref3' : 'idle';
       updatePlayer(pm, { pl: ref, r: REF_LOOK[k], dt, snap: G3.snap, hasBall: false, defending: false, chasing: false, faceX: ball.x, faceZ: ball.z, ballX: ball.x, ballZ: ball.z, meterF: 0, released: true, dribbleY: 0, holdBall: false });
     });
   }
@@ -417,6 +438,12 @@ export function draw3d(scene, fx) {
       else if (handScale) G3.ballErr = Math.max(G3.ballErr || 0, B.position.distanceTo(handPos) / handScale);
       if (B.position.y < 0.4) B.position.y = 0.4;
     } else B.position.set(ball.x - HL, Math.max(0.4, ball.y), ball.z - HW);
+    // a dunk's ball stays in the hand until it is through the ring
+    const sh = ball.state === 'shot' && ball.shot;
+    if (sh && sh.type === 'dunk' && G3.dunkHand && G3.time - G3.dunkHand.at < 0.2) {
+      const u = Math.min(1, sh.t / sh.T), k = u < 0.55 ? 0 : (u - 0.55) / 0.45;
+      B.position.lerpVectors(G3.dunkHand.p, B.position, k * k * (3 - 2 * k));
+    }
     const d = B.position.distanceTo(prev);
     if (d < 6) { G3.ballSpin += d / 0.4; B.rotation.set(G3.ballSpin * 0.7, 0, -G3.ballSpin); }
   } else B.visible = false;
@@ -476,7 +503,7 @@ export function draw3d(scene, fx) {
   if (scene.cheer) { G3.cheer = Math.max(G3.cheer, scene.cheer); if (!scene.reduced && scene.m) G3.punch = 1; }
   G3.punch = Math.max(0, G3.punch - dt * 2.2);
   // the camera-side stands exist only for reverse angles
-  if (V3.near) V3.near.g.visible = !!G3.camOverride;
+  if (V3.near) V3.near.g.visible = !!G3.camOverride && !G3.camOverride.attract; // replays and close-ups (an orbit passes through them)
   const cu = V3.crowd.material.uniforms;
   if (scene.cheer) cu.uCheerTeam.value = V3.arena || scene.cheerTeam == null ? -1 : scene.cheerTeam;
   cu.uTime.value = G3.time; cu.uCheer.value = scene.reduced ? 0 : Math.min(1, G3.cheer + (m ? (m.crowd || 0) * 0.25 : 0));

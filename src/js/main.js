@@ -447,10 +447,11 @@ function matchEvents(m) {
       case 'score': {
         const side = rimSide(rimFor(m.dir[e.t]));
         pop(`+${e.pts}`, COURT.rimX[side], 14.8, 25, '#FFF6E0', e.pts === 3); // above the backboard, never on the rim
-        if (e.pts === 3) burst('steam', COURT.rimX[side], 10, 25, 10, ['#fff']);
+        if (e.pts === 3) { burst('steam', COURT.rimX[side], 10, 25, 10, ['#fff']); G3.refSignal = 1.4; }
         play('cheer', { big: e.pts === 3 || m.teams[e.t].isUser });
         state.cheer = e.pts === 3 ? 1 : 0.75; state.cheerTeam = e.t;
-        { const lm = state.lastMake || {}; if (e.pts === 3 || lm.dunk || lm.buzzer) { state.slam = { m, text: lm.buzzer ? 'BUZZER BEATER' : lm.dunk ? 'SLAM DUNK' : '3 POINTS', color: m.teams[e.t].colors.primary, sub: m.teams[e.t].short.toUpperCase(), at: m.time, side }; } if (e.pts === 3 || lm.dunk || lm.buzzer) queueReplay(m, lm.dunk ? 'DUNK' : lm.buzzer ? 'BUZZER BEATER' : 'THREE', lm.side ?? rimSide(m.ball.x)); state.lastMake = null; }
+        // the sim says 'score' before 'swish' in the same tick: the shot type comes from this tick's swish
+        { const sw = m.ev.find((x) => x.k === 'swish' && x.t === e.t); const lm = { ...(state.lastMake || {}), dunk: sw ? sw.type === 'dunk' : false, side: sw ? rimSide(rimFor(m.dir[e.t])) : (state.lastMake || {}).side }; if (e.pts === 3 || lm.dunk || lm.buzzer) { state.slam = { m, text: lm.buzzer ? 'BUZZER BEATER' : lm.dunk ? 'SLAM DUNK' : '3 POINTS', color: m.teams[e.t].colors.primary, sub: m.teams[e.t].short.toUpperCase(), at: m.time, side }; } if (e.pts === 3 || lm.dunk || lm.buzzer) queueReplay(m, lm.dunk ? 'DUNK' : lm.buzzer ? 'BUZZER BEATER' : 'THREE', lm.side ?? rimSide(m.ball.x)); state.lastMake = null; }
         announce(`${m.teams[e.t].short} scores ${e.pts}. ${m.teams[0].short} ${m.teams[0].score}, ${m.teams[1].short} ${m.teams[1].score}.`);
         break;
       }
@@ -869,7 +870,11 @@ const HOOKS = {
       case 'gfx': Object.assign(G3.flags, a[0] || {}); if (a[1]) setTier(a[1]); drawFrame(0); return { ...G3.flags, tier: G3.tier };
       case 'cam': G3.camOverride = a[0] || null; R.snap = true; drawFrame(0); return true;
       case 'anim': { const r = animCtl(a[0]); drawFrame(0); return r; } // 'proc' | 'mixer' | a lab pose { clip, t, mirror } | null
-      case 'replay': { if (!m) return false; state.replayPending = { kind: a[0] || 'THREE', side: a[1] ?? rimSide(m.ball.x) }; const ok = startReplay(); if (ok && a[2] != null) state.replay.f = a[2] * (state.replay.frames.length - 1); drawFrame(0); return ok; }
+      case 'replay': { // a[2]: a fraction of the clip, or { release: n } = n ticks after the release (negative: before)
+        if (!m) return false; state.replayPending = { kind: a[0] || 'THREE', side: a[1] ?? rimSide(m.ball.x) }; const ok = startReplay();
+        if (ok && a[2] != null && typeof a[2] === 'object') { const fr = state.replay.frames; let k = fr.length - 1; while (k > 0 && fr[k].b[3] !== 'shot') k--; while (k > 0 && fr[k].b[3] !== 'held') k--; let k0 = k; while (k0 > 0 && fr[k0 - 1].b[3] === 'held' && fr[k0 - 1].b[4] === fr[k].b[4]) k0--; state.replay.f = Math.max(k0, Math.min(fr.length - 1, k + (a[2].release || 0))); } // never before the shooter had it
+        else if (ok && a[2] != null) state.replay.f = a[2] * (state.replay.frames.length - 1);
+        drawFrame(0); return ok; }
       case 'endReplay': if (state.replay) endReplay(); drawFrame(0); return true;
       case 'roster': return makeRoster(a[0], a[1], a[2] || team(a[0]).cls, a[3] || 1);
       case 'storage': return store.ok;

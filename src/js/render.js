@@ -226,9 +226,11 @@ function slamCallout(c, v, P, scene) {
   }
   const y = ref.slot.y, cx = ref.slot.x;
   R.slamBox = { x: Math.round(cx - wPx / 2), y: Math.round(y - hPx / 2), w: Math.round(wPx), h: Math.round(hPx) };
-  const slide = R.reduced ? 0 : (1 - inT) * v.W * 0.4;
+  // it slides in from the right but never past the viewport edge (it fades in over the slide instead)
+  const room = Math.max(0, v.W - 6 - (cx + wPx / 2));
+  const slide = R.reduced ? 0 : Math.min((1 - inT) * v.W * 0.4, room);
   c.save();
-  c.globalAlpha = Math.max(0, out) * (s.fade ?? 1);
+  c.globalAlpha = Math.max(0, out) * (s.fade ?? 1) * Math.min(1, 0.25 + inT);
   c.translate(cx + slide, y);
   c.font = `400 ${size}px "Bebas Neue", "Arial Black", Impact, sans-serif`;
   const w = c.measureText(s.text).width + size * 1.2, h = size * 1.15;

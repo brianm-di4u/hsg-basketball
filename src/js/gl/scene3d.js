@@ -4,6 +4,7 @@
 /* global THREE */
 import { COURT, rimFor } from '../court.js';
 import { initPlayers, makePlayer, dressPlayer, updatePlayer } from './players3d.js';
+// (HQ player bodies swap in through swapPlayersHQ below)
 import { buildVenue, loadImages, drawScoreboard, LAYER_REFLECT } from './venue3d.js';
 import { makeProbe } from './probe3d.js';
 import { makeTrail } from './trail3d.js';
@@ -293,6 +294,13 @@ function disposeTree(o) {
     for (const m of ms) { for (const key of ['map']) if (m[key] && !m[key].userData.keep) m[key].dispose(); m.dispose(); }
   });
 }
+// Rebuild every player on the HQ MPFB bodies (the lite rigs go; the pools refill from the new builds).
+function swapPlayersHQ() {
+  G3.hqPlayers = true;
+  try { initPlayers(HQ.packages['players-hq']['players-hq.glb'], true); } catch (e) { console.info('[hq] players:', e.message); return; }
+  for (const pm of G3.players.values()) G3.scene.remove(pm.root);
+  G3.players.clear(); G3.pool = { M: [], F: [] };
+}
 function playerFor(idx, build) {
   let pm = G3.players.get(idx);
   if (pm && pm.build === build) return pm;
@@ -311,7 +319,9 @@ export function draw3d(scene, fx) {
   const t0 = performance.now();
   const dt = Math.min(0.5, scene.dt || 0); // a step(n) hook draws once for n ticks; let the camera catch up
   G3.time += dt; G3.frames++;
-  ensureVenue(scene.venue, !scene.m || scene.m.phase !== 'live' || !!G3.camOverride || !!scene.reduced);
+  const canSwap = !scene.m || scene.m.phase !== 'live' || !!G3.camOverride || !!scene.reduced;
+  ensureVenue(scene.venue, canSwap);
+  if (canSwap && !G3.hqPlayers && HQ.packages['players-hq'] && HQ.packages['players-hq']['players-hq.glb']) swapPlayersHQ();
   // the nearest player to the camera sets the bottom of the broadcast frame (no empty wood under the play)
   // (only players inside the frame horizontally count, judged from the last frame's camera)
   let nearZ = -Infinity;
@@ -522,6 +532,6 @@ export function info3d() {
   if (G3.state !== 'ready') return { state: G3.state, err: G3.err };
   const i = G3.renderer.info;
   return { state: G3.state, tier: G3.tier, prof: G3.prof ? { ...G3.prof } : null, calls: i.render.calls, tris: i.render.triangles, geos: i.memory.geometries, texs: i.memory.textures, venue: G3.venueKey, frames: G3.frames,
-    hqVenue: !!(G3.venue && G3.venue.hq),
+    hqVenue: !!(G3.venue && G3.venue.hq), hqPlayers: !!G3.hqPlayers,
     cam: { x: +G3.camera.position.x.toFixed(1), y: +G3.camera.position.y.toFixed(1), z: +G3.camera.position.z.toFixed(1), fov: G3.camera.fov } };
 }

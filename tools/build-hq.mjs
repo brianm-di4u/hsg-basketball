@@ -9,6 +9,7 @@
 // Packages:
 //   venue-gym     the shared home-gym shell (GLB) and its two lightmaps, WebP 2048 for high, 1024 for medium
 //   venue-arena   the state-finals bowl, the same way
+//   players-hq    the MPFB-based player bodies (art-src/blender/players/build_bodies_hq.py), one GLB for both tiers
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -71,6 +72,13 @@ for (const kind of ['gym', 'arena']) {
     scales[tag] = scale;
   }
   packages[`venue-${kind}`] = { prio: kind === 'gym' ? 1 : 2, tiers: { high, medium }, lmScale: scales };
+}
+
+// ---- players-hq
+{
+  if (args.includes('--bake')) execFileSync(BLENDER, ['-b', '--factory-startup', '--python', path.join(ART, 'blender', 'players', 'build_bodies_hq.py')], { stdio: 'inherit' });
+  const glb = put('players-hq', '.glb', fs.readFileSync(path.join(ART, 'players-hq.glb')));
+  packages['players-hq'] = { prio: 3, tiers: { high: [glb], medium: [glb] } };
 }
 
 await browser.close();

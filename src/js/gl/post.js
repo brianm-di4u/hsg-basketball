@@ -19,7 +19,7 @@ export function makePost(renderer, scene, camera, tier) {
   renderer.toneMapping = THREE.NoToneMapping;
   const composer = new PP.EffectComposer(renderer, { frameBufferType: THREE.HalfFloatType, multisampling: cfg.msaa });
   composer.addPass(new PP.RenderPass(scene, camera));
-  const bloom = new PP.BloomEffect({ luminanceThreshold: 1.05, luminanceSmoothing: 0.25, intensity: 0.85, mipmapBlur: true, radius: 0.7, resolutionScale: cfg.bloomScale });
+  const bloom = new PP.BloomEffect({ luminanceThreshold: 1.05, luminanceSmoothing: 0.25, intensity: 1.1, mipmapBlur: true, radius: 0.7, resolutionScale: cfg.bloomScale });
   const grade = new PP.BrightnessContrastEffect({ brightness: 0.0, contrast: 0.07 });
   const sat = new PP.HueSaturationEffect({ saturation: 0.08 });
   const tone = new PP.ToneMappingEffect({ mode: PP.ToneMappingMode.ACES_FILMIC });

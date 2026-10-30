@@ -298,7 +298,11 @@ export function draw3d(scene, fx) {
   // the nearest player to the camera sets the bottom of the broadcast frame (no empty wood under the play)
   // (only players inside the frame horizontally count, judged from the last frame's camera)
   let nearZ = -Infinity;
-  for (const it of scene.players || []) { const q = project(it.pl.x, it.pl.z, 0); if (G3.snap || (q.X > -30 && q.X < G3.W + 30)) nearZ = Math.max(nearZ, it.pl.z); }
+  const shotX = scene.ball && scene.ball.state === 'shot' && scene.ball.shot ? scene.ball.x : null;
+  for (const it of scene.players || []) {
+    if (shotX != null && Math.abs(it.pl.x - shotX) > 22) continue; // a shot frames the shooter's neighbourhood
+    const q = project(it.pl.x, it.pl.z, 0); if (G3.snap || (q.X > -30 && q.X < G3.W + 30)) nearZ = Math.max(nearZ, it.pl.z);
+  }
   placeCamera(dt, { camX: scene.camX, camZ: scene.camZ, ballX: scene.ball ? scene.ball.x : null, ballZ: scene.ball ? scene.ball.z : null, nearZ: isFinite(nearZ) ? nearZ : null, reduced: scene.reduced, shake: fx.shake, fast: scene.ball && scene.ball.state === 'shot', vertical: scene.vertical });
   G3.vertical = scene.vertical || 0;
   const m = scene.m;
@@ -350,6 +354,8 @@ export function draw3d(scene, fx) {
     });
   }
   for (const [idx, pm] of G3.players) if (!seen.has(idx)) pm.root.visible = false;
+  // a cinematic camera never looks through someone standing at the lens (an official walking into the replay)
+  if (G3.camOverride && !G3.camOverride.attract) for (const pm of G3.players.values()) if (pm.root.visible && pm.root.position.distanceTo(G3.camera.position) < 7) pm.root.visible = false;
   G3.ball.scale.setScalar(G3.camOverride && !G3.camOverride.attract ? 0.95 : 1.12);
   // ball: in the hand when held (the sim keeps its own carry point for the rules)
   const B = G3.ball;

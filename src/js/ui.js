@@ -52,10 +52,10 @@ export function selectScreen(st) {
     <div class="pickers"><div><h3 id="h-home">Home team</h3>${grid('pickHome', x.home, 'Home team')}</div>
     <div><h3 id="h-away">Away team</h3>${grid('pickAway', x.away, 'Away team')}</div></div>
     ${x.home === x.away ? '<p class="warn" role="alert">Pick two different schools.</p>' : ''}
-    ${seg('pickSide', [['home', 'Home'], ['away', 'Away']], x.side, 'You play')}
+    <div class="opts">${seg('pickSide', [['home', 'Home'], ['away', 'Away']], x.side, 'You play')}
     ${seg('setQ', [[120, '2 min'], [240, '4 min'], [480, '8 min (full)']], st.settings.qLen, 'Quarters')}
-    ${seg('setClock', [[35, '35-second clock'], [0, 'Classic (off)']], st.settings.shotClock, 'Shot clock')}
-    ${seg('setDiff', DIFF.map((d, i) => [i, d.name]), st.settings.difficulty, 'Difficulty')}
+    ${seg('setClock', [[35, '35 seconds'], [0, 'Off (classic)']], st.settings.shotClock, 'Shot clock')}
+    ${seg('setDiff', DIFF.map((d, i) => [i, d.name]), st.settings.difficulty, 'Difficulty')}</div>
     ${hs ? seg('setThrow', [[1, '1912-style throwback'], [0, 'Regular']], x.throwback ? 1 : 0, 'Hot Springs kit') : ''}
     <div class="row end">${btn('title', 'Back')}${btn('startExhibition', 'Tip off', { cls: 'primary', disabled: x.home === x.away })}</div>
   </div>`;

@@ -21,6 +21,8 @@ const C = (hex) => new THREE.Color(hex).convertSRGBToLinear();
 const CL = (hex) => new THREE.Color(hex);
 export const LAYER_REFLECT = 1;
 
+let white = null;
+const whiteTex = () => white || (white = Object.assign(new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1), { needsUpdate: true }));
 function canvas(w, h) { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; return cv; }
 function texOf(cv, o = {}) {
   const t = new THREE.CanvasTexture(cv);
@@ -139,15 +141,19 @@ function makeFloor(home, arena, opts) {
   const geo = new THREE.PlaneGeometry(FLOOR_X * 2, FLOOR_Z * 2);
   geo.rotateX(-Math.PI / 2);
   const mat = new THREE.MeshPhysicalMaterial({ map: markTex, roughness: 0.62, metalness: 0, clearcoat: 0.75, clearcoatRoughness: 0.16, envMapIntensity: arena ? 0.7 : 0.6 });
-  const u = { tWood: { value: wood }, uWoodTint: { value: arena ? C('#F0E4D4') : C('#F7EEE2') } };
+  // tLM/uLM: the HQ venue's baked floor light (venue-hq.js), applied as a multiplier; off (uLM 0) on the lite floor
+  const u = { tWood: { value: wood }, uWoodTint: { value: arena ? C('#F0E4D4') : C('#F7EEE2') }, tLM: { value: whiteTex() }, uLM: { value: 0 } };
   mat.userData.u = u;
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
-    sh.vertexShader = 'varying vec2 vWoodUv;\n' + sh.vertexShader
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\n vWoodUv = position.xz / 4.6;');
-    sh.fragmentShader = 'uniform sampler2D tWood; uniform vec3 uWoodTint; varying vec2 vWoodUv;\n' + sh.fragmentShader
+    // the markings' UVs come from position, so any floor mesh works: the lite plane or the HQ shell's floor
+    sh.vertexShader = 'attribute vec2 uv1; varying vec2 vWoodUv; varying vec2 vMarkUv; varying vec2 vLMUv;\n' + sh.vertexShader
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        vWoodUv = position.xz / 4.6; vLMUv = uv1;
+        vMarkUv = vec2((position.x + ${FLOOR_X.toFixed(1)}) / ${(FLOOR_X * 2).toFixed(1)}, (${FLOOR_Z.toFixed(1)} - position.z) / ${(FLOOR_Z * 2).toFixed(1)});`);
+    sh.fragmentShader = 'uniform sampler2D tWood; uniform vec3 uWoodTint; uniform sampler2D tLM; uniform float uLM; varying vec2 vWoodUv; varying vec2 vMarkUv; varying vec2 vLMUv;\n' + sh.fragmentShader
       .replace('#include <map_fragment>', `
-        vec4 mk = texture2D(map, vMapUv);
+        vec4 mk = texture2D(map, vMarkUv);
         vec3 wd = texture2D(tWood, vec2(vWoodUv.y, vWoodUv.x)).rgb * uWoodTint;
         diffuseColor.rgb = mix(wd, mk.rgb, mk.a);
         { vec2 q = vWoodUv * 4.6; // court-centred feet: a lit court, pools under the lamp rows, the keys a touch brighter
@@ -155,14 +161,15 @@ function makeFloor(home, arena, opts) {
           float lamps = 0.0;
           for (int i = -3; i <= 3; i++) for (int j = -1; j <= 1; j++) { vec2 d = q - vec2(float(i) * 15.0, float(j) * 20.0); lamps += exp(-dot(d, d) / 70.0); }
           float keys = exp(-dot(q - vec2(41.0, 0.0), q - vec2(41.0, 0.0)) / 260.0) + exp(-dot(q + vec2(41.0, 0.0), q + vec2(41.0, 0.0)) / 260.0);
-          diffuseColor.rgb *= 0.56 + 0.34 * pool + 0.12 * min(lamps, 1.0) * pool + 0.08 * keys; }`);
+          if (uLM > 0.0) diffuseColor.rgb *= texture2D(tLM, vLMUv).rgb * uLM; // the baked light replaces the painted pools
+          else diffuseColor.rgb *= 0.56 + 0.34 * pool + 0.12 * min(lamps, 1.0) * pool + 0.08 * keys; }`);
   };
-  mat.customProgramCacheKey = () => 'floor2';
+  mat.customProgramCacheKey = () => 'floor3';
   if (opts.probe) boxProject(mat, opts.room, opts.probe);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.receiveShadow = true;
   // surround (painted concrete / rubber)
-  const sur = new THREE.Mesh(new THREE.PlaneGeometry(400, 300).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: arena ? C('#262A3A') : C('#9A7E62'), roughness: 0.85 }));
+  const sur = new THREE.Mesh(new THREE.PlaneGeometry(400, 300).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: arena ? C('#262A3A') : C('#B89A7A'), roughness: 0.85, emissive: arena ? C('#1A1E2C') : C('#7A6046') })); // with a little bounce where the stands shade it
   sur.position.y = -0.03; sur.receiveShadow = true;
   return { mesh, sur, mat };
 }
@@ -285,8 +292,8 @@ function makeCrowd(seats, atlas, palette, rng) {
     size.set([ht * (atlas.meta.cw / atlas.meta.ch) * (1 / sp.h) * sp.h, ht / sp.h * sp.h], i * 2);
     // cell art is bottom-aligned; the visible figure fills sp.h of the cell height
     size[i * 2] = ht / sp.h * (atlas.meta.cw / atlas.meta.ch); size[i * 2 + 1] = ht / sp.h;
-    const col = st.tint || palette[Math.floor(rng() * palette.length)];
-    tint.set([col.r, col.g, col.b], i * 3);
+    const col = st.tint || palette[Math.floor(rng() * palette.length)], j = 0.92 + rng() * 0.16; // ±8% so neighbours differ
+    tint.set([col.r * j, col.g * j, col.b * j], i * 3);
     phase[i] = rng(); stand[i] = st.g === 'stand' || st.g === 'cheer' ? 1 : 0; team[i] = st.team ?? 0;
     m.makeTranslation(st.x, st.y, st.z);
     mesh.setMatrixAt(i, m);
@@ -533,7 +540,7 @@ export function buildVenue(v, opts) {
   if (!arena) {
     // ---- home gym
     const woodMat = new THREE.MeshStandardMaterial({ color: C('#8E6640'), roughness: 0.55 });
-    const riserMat = new THREE.MeshStandardMaterial({ color: C('#6B4A2E'), roughness: 0.8 });
+    const riserMat = new THREE.MeshStandardMaterial({ color: C('#8A6440'), roughness: 0.8, emissive: C('#9A7650') }); // bounce on the shadowed riser fronts (C squares the value: this is about 0.1)
     const ROWS = 12, RD = 2.3, RH = 1.3, Z0 = -(HW + 9.5), LEN = 126;
     for (let r = 0; r < ROWS; r++) {
       const z = Z0 - r * RD, y = r * RH;
@@ -607,10 +614,10 @@ export function buildVenue(v, opts) {
       if (Math.abs(z) < 5.5 || rng() < 0.12) continue;
       seats.push({ x: s * (HL + 9.5 + r * 1.6), y: r * 0.9, z: z + (rng() - 0.5) * 0.5, g: 'stand', row: r });
     }
-    const riserEnd = new THREE.MeshStandardMaterial({ color: C('#3A2C22'), roughness: 0.85 });
+    const riserEnd = new THREE.MeshStandardMaterial({ color: C('#8E6640'), roughness: 0.6 }); // wood, like the bleachers: the students stand on steps, not a dark ledge
     for (const s of [-1, 1]) for (let r = 1; r < 3; r++) { const st = new THREE.Mesh(new THREE.BoxGeometry(1.6, r * 0.9, HW * 2 - 2), riserEnd); st.position.set(s * (HL + 9.5 + r * 1.6), r * 0.45, 0); g.add(st); }
     // team benches: substitutes in team colors
-    for (const [s, tm] of [[-1, home], [1, away]]) for (let k = 1; k < 8; k++) if (rng() < 0.8) seats.push({ x: s * (15 + k * 2.0), y: 0.0, z: -(HW + 4.75), g: 'seat', tint: CL(tm.colors.primary), team: s < 0 ? 0 : 1 }); // drawn just in front of the chair, so the figure covers it as a seated player would
+    // (the team chairs stay empty until the benches get real players; spectators in them read wrong)
     // cheer squad on the baseline corners (standing sprites)
     for (const s of [-1, 1]) for (let k = 0; k < 3; k++) seats.push({ x: s * (HL - 9 + k * 2.4), y: 0, z: -(HW + 2.6) - (k % 2) * 0.6, g: 'cheer', tint: CL(home.colors.primary) });
     // ceiling: dark deck, steel trusses and round high-bay lamps

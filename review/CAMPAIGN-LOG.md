@@ -133,3 +133,16 @@ Iterated against dev captures (`v3-m2-dev`) and automated gates (`tools/gates.mj
 **Deferred:** title banners in the desktop gameplay band. The back wall above the bleachers is outside the
 lower camera's frame, so the HQ venue (M3) redesigns the wall layout. End-wall pennants already show in end
 frames (c07).
+
+## Player art direction (user, 2026-10-29)
+The user named TurboSquid 1926052, "3D Basketball Player", as the quality target for the HQ players:
+https://www.turbosquid.com/3d-models/3d-basketball-player-3d-model-1926052
+
+It's a paid asset: reference only, not bought, downloaded or copied. What it shows is a stylized,
+animated-film athlete:
+- large expressive eyes with catchlights; a defined nose, ears and brows
+- smooth skin with a soft sheen; hair sculpted in clumps
+- fully modeled five-finger hands
+- a jersey and shorts with piped collar and armholes and side-panel stripes; wristbands; detailed sneakers
+
+M4 builds originals toward that from MPFB2 bases, and the panel's M4 Art judgement uses this description.

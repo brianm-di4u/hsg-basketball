@@ -147,7 +147,7 @@ function P2(x, z, y = 0) { const v = R.v; _p2.X = sx(v, x); _p2.Y = sy(v, z, y);
 
 // The HUD layer, shared by both renderers: YOU marker, particles, callouts, meters, off-screen arrow.
 function drawHud(c, v, P, scene) {
-  if (is3d()) ballHalo(c, P, scene.ball);
+  if (is3d() && !v.portrait) ballHalo(c, P, scene.ball); // landscape only: there the crowd is what sits behind the ball's arc
   for (const it of scene.players || []) if (it.user) chevron(c, v, P, it);
   for (const p of R.fx.parts) {
     const q = P(p.x, p.z, p.y), X = q.X, Y = q.Y, s = q.s;
@@ -186,7 +186,7 @@ function drawHud(c, v, P, scene) {
 function ballHalo(c, P, b) {
   if (!b || b.state === 'held' || b.state === 'dead' || b.y < 7) return; // a high ball only: near the floor a dark disc reads as a smudge
   const q = P(b.x, b.z, b.y), r = Math.max(4, q.s * 0.45);
-  if (r > 12) return; // a close camera shows the ball large enough on its own
+  if (r > 12 || G3.camOverride) return; // close and cinematic cameras show the ball well enough on their own
   const g = c.createRadialGradient(q.X, q.Y, r * 1.12, q.X, q.Y, r * 5);
   g.addColorStop(0, 'rgba(8,6,12,0.72)'); g.addColorStop(0.4, 'rgba(8,6,12,0.45)'); g.addColorStop(1, 'rgba(8,6,12,0)');
   c.fillStyle = g; c.beginPath(); c.arc(q.X, q.Y, r * 5, 0, TAU); c.arc(q.X, q.Y, r * 1.12, 0, TAU, true); c.fill();
@@ -212,7 +212,7 @@ function slamCallout(c, v, P, scene) {
     }
     const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
     // first choice: the band over the crowd, under the score bug, where play rarely goes after a make
-    const ys = v.portrait ? [0.27, 0.62, 0.8, 0.42] : [0.27, 0.74, 0.84, 0.56], xs = [0.5, 0.3, 0.7];
+    const ys = v.portrait ? [0.25, 0.62, 0.8, 0.42] : [0.23, 0.74, 0.84, 0.56], xs = [0.5, 0.3, 0.7];
     let best = null;
     for (const fy of ys) for (const fx of xs) {
       const cx = clamp(v.W * fx, wPx / 2 + 8, v.W - wPx / 2 - 8), box = { x: cx - wPx / 2, y: v.H * fy - hPx / 2, w: wPx, h: hPx };
@@ -225,7 +225,7 @@ function slamCallout(c, v, P, scene) {
   R.slamBox = { x: Math.round(cx - wPx / 2), y: Math.round(y - hPx / 2), w: Math.round(wPx), h: Math.round(hPx) };
   const slide = R.reduced ? 0 : (1 - inT) * v.W * 0.4;
   c.save();
-  c.globalAlpha = Math.max(0, out);
+  c.globalAlpha = Math.max(0, out) * (s.fade ?? 1);
   c.translate(cx + slide, y);
   c.font = `400 ${size}px "Bebas Neue", "Arial Black", Impact, sans-serif`;
   const w = c.measureText(s.text).width + size * 1.2, h = size * 1.15;
@@ -237,7 +237,7 @@ function slamCallout(c, v, P, scene) {
   c.textAlign = 'center'; c.textBaseline = 'middle';
   c.lineWidth = Math.max(4, size * 0.08); c.strokeStyle = '#0B0A10'; c.strokeText(s.text, 0, 3);
   c.fillStyle = '#FFF6E0'; c.fillText(s.text, 0, 3);
-  if (s.sub) { c.font = `400 ${Math.round(size * 0.34)}px "Bebas Neue", "Arial Black", sans-serif`; c.fillStyle = '#FFF6E0'; c.fillText(s.sub, 0, h / 2 + size * 0.32); }
+  if (s.sub && y > v.H * 0.4) { c.font = `400 ${Math.round(size * 0.34)}px "Bebas Neue", "Arial Black", sans-serif`; c.fillStyle = '#FFF6E0'; c.fillText(s.sub, 0, h / 2 + size * 0.32); }
   c.restore();
 }
 
@@ -252,7 +252,7 @@ function banner(c, v, b) {
   c.fillStyle = '#FF4A3A'; c.beginPath(); c.arc(x + big * 0.75, y + h / 2, big * 0.22, 0, TAU); c.fill();
   c.fillStyle = '#FFF6E0'; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText(b.text, x + big * 1.15, y + h / 2 + 1);
   if (b.sub) {
-    c.font = `700 ${Math.round(big * 0.6)}px system-ui, sans-serif`;
+    c.font = `700 ${Math.max(13, Math.round(big * 0.6))}px system-ui, sans-serif`;
     const sw = c.measureText(b.sub).width + 16;
     c.fillStyle = 'rgba(14,12,22,0.75)'; c.beginPath(); c.roundRect(x, y + h + 6, sw, big * 1.1, 5); c.fill();
     c.fillStyle = '#E9E2D2'; c.fillText(b.sub, x + 8, y + h + 6 + big * 0.56);

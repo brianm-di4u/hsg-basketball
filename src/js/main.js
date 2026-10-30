@@ -386,7 +386,7 @@ function startReplay(speed = 0.5) {
   state.replayPending = null;
   if (REC.buf.length < 60) return false;
   state.lastReplayAt = m.time;
-  document.body.classList.add('replay');
+  document.body.classList.add('replay'); layout(); // the touch deck steps aside: the replay takes the full height
   state.replay = { frames: REC.buf.slice(-130), f: 0, speed, kind: pend.kind, side: pend.side }; // about 4 s at half speed
   R.snap = true;
   announce(`Replay: ${pend.kind.toLowerCase()}.`);
@@ -400,7 +400,7 @@ function stepReplay(dt) {
 }
 function endReplay() {
   state.replay = null;
-  document.body.classList.remove('replay');
+  document.body.classList.remove('replay'); layout();
   G3.camOverride = null; R.snap = true; acc = 0;
 }
 function replayScene(m) {
@@ -545,11 +545,14 @@ function drawMatch(m, dt) {
   }
   const perfect = m.ball.state === 'shot' && m.ball.shot && m.ball.shot.label === 'PERFECT';
   const slamT = state.slam && state.slam.m === m ? (m.time - state.slam.at) / SLAM_S : -1;
-  const slam = slamT >= 0 && slamT < 1 && state.scene !== 'title' && m.ball.state !== 'shot' ? { ...state.slam, t: slamT, ref: state.slam } : null;
+  // the card fades from the moment the inbound puts the ball back in play and is gone 0.3 s later
+  if (state.slam && state.slam.m === m && m.phase === 'live' && state.slam.liveAt == null && slamT > 0.05) state.slam.liveAt = m.time;
+  const liveFade = state.slam && state.slam.liveAt != null ? 1 - (m.time - state.slam.liveAt) / 0.3 : 1;
+  const slam = slamT >= 0 && slamT < 1 && liveFade > 0 && state.scene !== 'title' && m.ball.state !== 'shot' ? { ...state.slam, t: slamT, fade: Math.max(0, liveFade), ref: state.slam } : null;
   // title attract mode: a slow sweep around the gym (the 3D view only; reduced motion keeps the game camera)
   if (state.scene === 'title' && !R.reduced) {
     const tt = performance.now() / 1000, ang = Math.sin(tt * 0.05) * 0.85;
-    G3.camOverride = { attract: true, p: [47 + Math.sin(ang) * 66, 19 + Math.sin(tt * 0.07) * 3, 25 + Math.cos(ang) * 66], t: [m.ball.x * 0.5 + 23.5, 5, 22], fov: 34 };
+    G3.camOverride = { attract: true, p: [47 + Math.sin(ang) * 40, 21 + Math.sin(tt * 0.07) * 3, 25 + Math.cos(ang) * 40], t: [m.ball.x * 0.5 + 23.5, 5, 18], fov: 42 };
   } else if (G3.camOverride && G3.camOverride.attract) { G3.camOverride = null; R.snap = true; }
   draw({ m, venue: venueOf(m), dt, camX, camZ: m.ball.z, players, ball: m.ball, meter, ftMeter, offscreen, cheer, cheerTeam: state.cheerTeam, perfect, slam, vertical: verticalDir(m) });
   updateScoreboard();
@@ -752,7 +755,7 @@ const SLAM_S = 1.0;
 function hudState() {
   const m = state.match, sl = state.slam;
   const age = sl && m && sl.m === m ? m.time - sl.at : -1;
-  const live = age >= 0 && age < SLAM_S && state.scene !== 'title' && m.ball.state !== 'shot';
+  const live = age >= 0 && age < SLAM_S && !(sl.liveAt != null && m.time - sl.liveAt >= 0.3) && state.scene !== 'title' && m.ball.state !== 'shot';
   return { slam: live ? { text: sl.text, age: +age.toFixed(2) } : null, slamBox: live && R.slamBox ? { ...R.slamBox } : null, pops: R.fx.pops.map((p) => ({ text: p.text, age: +p.t.toFixed(2) })) };
 }
 

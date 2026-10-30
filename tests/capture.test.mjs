@@ -69,10 +69,10 @@ export const tests = [
       await cshot(t, 'c07-miss', { wait: false });
 
       await liveGame(t, { seed: 3, home: 'fountain-lake', away: 'mountain-pine' });
-      await G(t, () => { const g = window.__game; g.act('give', 0, 0); g.act('place', 0, 0, 80, 6); g.step(1); g.act('shootAt', 1); g.step(90); g.act('replay', 'THREE', 1, 0.6); g.act('freeze', true); });
-      await cshot(t, 'c08-replay');
-      await G(t, () => { const g = window.__game; g.act('replay', 'THREE', 1, 0.45); g.act('freeze', true); });
-      await cshot(t, 'c17-replay-early');
+      await G(t, () => { const g = window.__game; g.act('give', 0, 0); g.act('place', 0, 0, 80, 6); g.step(1); g.act('shootAt', 1); g.step(90); g.act('replay', 'THREE', 1, 0.8); g.act('freeze', true); });
+      await cshot(t, 'c08-replay'); // late beat: the ball at the rim
+      await G(t, () => { const g = window.__game; g.act('replay', 'THREE', 1, 0.2); g.act('freeze', true); });
+      await cshot(t, 'c17-replay-early'); // early beat: the release
       await G(t, () => { const g = window.__game; g.act('freeze', false); g.act('endReplay'); });
 
       await G(t, () => { const g = window.__game; g.seed(4); g.newGame({ mode: 'challenge', challenge: 'lady-trojans-five', program: 'girls', paused: true }); g.step(176); });

@@ -7,13 +7,16 @@
 #                      UVMap (TEXCOORD_0) carries tiling detail; LM (TEXCOORD_1) the lightmap layout.
 #   gym-lm-shell.exr   baked irradiance (direct + indirect light, no surface color) for everything but the floor
 #   gym-lm-floor.exr   the same for the floor and its surround
+#   gym-lm-*.rgba      the same divided by its scale, sRGB-encoded 8-bit RGBA, top row first (encoded to KTX2)
+#   gym-lm.json        each lightmap's size and scale (linear irradiance = decoded texel × scale)
 #   gym-anchors.json   named anchor points (pennants, banners, scoreboards, crowd rows) and their irradiance
 #
 # All seven home gyms share this geometry (src/js/gl/venue3d.js builds them from the same constants), so one
 # bake serves every school: colors, wordmarks and pennants stay procedural in the game and are multiplied by
-# the baked light. Units are feet, matching the game; game (x, y, z) = Blender (x, -y, z) with z up, which the
+# the baked light. Units are feet, matching the game; game (x, y, z) = Blender (x, -z, y) with z up, which the
 # glTF exporter turns back into y up.
 import bpy, bmesh, math, os, sys, json
+import numpy as np
 from mathutils import Vector
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -182,11 +185,24 @@ def bake(o, tag):
     bpy.ops.object.bake(type='DIFFUSE', pass_filter={'DIRECT', 'INDIRECT'}, use_clear=True, margin=6)
     path = os.path.join(OUT, f'gym-lm-{tag}.exr')
     img.filepath_raw = path; img.file_format = 'OPEN_EXR'; img.save()
-    print(f'[venue] baked {tag} -> {path}')
+    # the 8-bit copy for the game: scaled so the 99.5th percentile lands at 1, sRGB-encoded for shadow precision
+    px = np.array(img.pixels[:], dtype=np.float32).reshape(SIZE, SIZE, 4)
+    lum = 0.2126 * px[..., 0] + 0.7152 * px[..., 1] + 0.0722 * px[..., 2]
+    scale = float(np.percentile(lum[lum > 1e-4], 99.5))
+    lin = np.clip(px[..., :3] / scale, 0, 1)
+    srgb = np.where(lin <= 0.0031308, lin * 12.92, 1.055 * np.power(lin, 1 / 2.4) - 0.055)
+    out = np.empty((SIZE, SIZE, 4), dtype=np.uint8)
+    out[..., :3] = np.round(srgb * 255); out[..., 3] = 255
+    out[::-1].tofile(os.path.join(OUT, f'gym-lm-{tag}.rgba'))  # Blender stores bottom row first; files want top first
+    LM[tag] = {'size': SIZE, 'scale': scale, 'mean': float(lum[lum > 1e-4].mean())}
+    print(f'[venue] baked {tag} -> {path} (scale {scale:.3f})')
     return img
 
+LM = {}
 bake(floor, 'floor')
 bake(shell, 'shell')
+with open(os.path.join(OUT, 'gym-lm.json'), 'w') as f:
+    json.dump(LM, f, indent=1)
 
 # ---- anchors for the game's procedural pieces, with the light at each (sampled from a quick probe bake later)
 anchors = {

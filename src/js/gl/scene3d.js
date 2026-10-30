@@ -7,6 +7,7 @@ import { initPlayers, makePlayer, dressPlayer, updatePlayer } from './players3d.
 import { buildVenue, loadImages, drawScoreboard, LAYER_REFLECT } from './venue3d.js';
 import { makeProbe } from './probe3d.js';
 import { makeTrail } from './trail3d.js';
+import { HQ } from './hq.js';
 import { fmtClock } from '../util.js';
 import { CORE } from './build-info.js';
 import { makePost } from './post.js';
@@ -135,6 +136,7 @@ function init(stage) {
   G3.probe = makeProbe(r, G3.tier === 'high' ? 256 : G3.tier === 'medium' ? 128 : 64);
   G3.post = makePost(r, G3.scene, G3.camera, G3.tier);
   G3.P = project;
+  if (window.__TEST__) window.__G3 = G3; // test and debug access
 }
 
 function ballTexture() {
@@ -249,13 +251,27 @@ function project(x, z, y = 0) {
 }
 
 // ---------------------------------------------------------------- venue and players
-function venueKey(v) { return `${v.kind}|${v.home.key}|${v.away.key}|${(v.pennants || []).map((p) => p.year + p.label).join(',')}`; }
-function ensureVenue(v) {
-  const k = venueKey(v);
+function venueKey(v, hq) { return `${v.kind}|${v.home.key}|${v.away.key}|${(v.pennants || []).map((p) => p.year + p.label).join(',')}|${hq ? 'hq' : 'lite'}`; }
+// the HQ home-gym shell once its package has streamed in (hq.js): the GLB scene, both lightmaps, their scales
+function gymShell() {
+  const pkg = HQ.packages['venue-gym'];
+  if (!pkg || !pkg['gym.glb']) return null;
+  if (G3.shell) return G3.shell;
+  const lm = (tag) => pkg[`gym-lm-${tag}-h.webp`] || pkg[`gym-lm-${tag}-m.webp`];
+  if (!lm('floor') || !lm('shell')) return null;
+  G3.shell = { scene: pkg['gym.glb'].scene, lm: { floor: lm('floor'), shell: lm('shell') }, lmScale: HQ.manifest.packages['venue-gym'].lmScale };
+  for (const t of Object.values(G3.shell.lm)) t.userData.keep = true; // shared across venue rebuilds
+  return G3.shell;
+}
+function ensureVenue(v, canSwap) {
+  const shell = v.kind !== 'arena' ? gymShell() : null;
+  const k = venueKey(v, !!shell);
   if (k === G3.venueKey) return;
+  // the lite gym turning into the HQ one waits for a dead ball, so nothing pops mid-play
+  if (G3.venue && shell && G3.venueKey === venueKey(v, false) && !canSwap) return;
   if (G3.venue) { G3.scene.remove(G3.venue.g); disposeTree(G3.venue.g); }
   G3.venueKey = k;
-  G3.venue = buildVenue(v, { images: G3.images, floorPx: G3.tier === 'high' ? 18 : 13, probe: G3.probe.pos });
+  G3.venue = buildVenue(v, { images: G3.images, floorPx: G3.tier === 'high' ? 18 : 13, probe: G3.probe.pos, shell });
   G3.scene.add(G3.venue.g);
   const arena = v.kind === 'arena';
   G3.hemi.intensity = arena ? 0.5 : 0.8;
@@ -294,7 +310,7 @@ export function draw3d(scene, fx) {
   const t0 = performance.now();
   const dt = Math.min(0.5, scene.dt || 0); // a step(n) hook draws once for n ticks; let the camera catch up
   G3.time += dt; G3.frames++;
-  ensureVenue(scene.venue);
+  ensureVenue(scene.venue, !scene.m || scene.m.phase !== 'live' || !!G3.camOverride || !!scene.reduced);
   // the nearest player to the camera sets the bottom of the broadcast frame (no empty wood under the play)
   // (only players inside the frame horizontally count, judged from the last frame's camera)
   let nearZ = -Infinity;
@@ -493,5 +509,6 @@ export function info3d() {
   if (G3.state !== 'ready') return { state: G3.state, err: G3.err };
   const i = G3.renderer.info;
   return { state: G3.state, tier: G3.tier, prof: G3.prof ? { ...G3.prof } : null, calls: i.render.calls, tris: i.render.triangles, geos: i.memory.geometries, texs: i.memory.textures, venue: G3.venueKey, frames: G3.frames,
+    shellTex: G3.shell ? Object.fromEntries(Object.entries(G3.shell.lm).map(([k, t]) => [k, { format: t.format, type: t.type, compressed: !!t.isCompressedTexture, cs: t.colorSpace, mips: t.mipmaps ? t.mipmaps.length : 0 }])) : null,
     cam: { x: +G3.camera.position.x.toFixed(1), y: +G3.camera.position.y.toFixed(1), z: +G3.camera.position.z.toFixed(1), fov: G3.camera.fov } };
 }

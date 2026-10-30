@@ -45,6 +45,8 @@ export const tests = [
     async run(t) {
       await ready3d(t);
       await installShotFrom(t);
+      // streamed HQ art settles first (or fails, or is off): every still shows the build the player gets
+      await t.page.waitForFunction(() => { const h = window.__game.getState().gfx.hq; return h && !['off', 'loading'].includes(h.state); }, null, { timeout: 60000 });
       await t.page.waitForTimeout(1200); // the title's attract camera settles in real time
       await cshot(t, 'c01-title');
       if (!t.gpu) { t.log('software GL: first still only; run with --gpu for the full capture'); return; }
@@ -71,7 +73,7 @@ export const tests = [
       await liveGame(t, { seed: 3, home: 'fountain-lake', away: 'mountain-pine' });
       await G(t, () => { const g = window.__game; g.act('give', 0, 0); g.act('place', 0, 0, 80, 6); g.step(1); g.act('shootAt', 1); g.step(90); g.act('replay', 'THREE', 1, 0.8); g.act('freeze', true); });
       await cshot(t, 'c08-replay'); // late beat: the ball at the rim
-      await G(t, () => { const g = window.__game; g.act('replay', 'THREE', 1, 0.2); g.act('freeze', true); });
+      await G(t, () => { const g = window.__game; g.act('replay', 'THREE', 1, 0.5); g.act('freeze', true); });
       await cshot(t, 'c17-replay-early'); // early beat: the release
       await G(t, () => { const g = window.__game; g.act('freeze', false); g.act('endReplay'); });
 

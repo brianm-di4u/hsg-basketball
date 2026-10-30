@@ -202,7 +202,7 @@ function slamCallout(c, v, P, scene) {
   // every player (plus a margin), scored over a grid of candidate places; the card never jumps
   const ref = s.ref || s;
   if (!ref.slot) {
-    const pad = 24, keep = [];
+    const pad = v.portrait ? 30 : 24, keep = [];
     if (s.side != null) { const r = P(COURT.rimX[s.side], COURT.rimZ, COURT.rimY); keep.push({ x: r.X - 3.5 * r.s, y: r.Y - 5 * r.s, w: 7 * r.s, h: 11 * r.s, wt: 4 }); }
     if (scene.ball) { const b = P(scene.ball.x, scene.ball.z, Math.max(0.4, scene.ball.y)); keep.push({ x: b.X - 2 * b.s - pad, y: b.Y - 2 * b.s - pad, w: 4 * b.s + 2 * pad, h: 4 * b.s + 2 * pad, wt: 4 }); }
     for (const it of scene.players || []) {
@@ -212,7 +212,7 @@ function slamCallout(c, v, P, scene) {
     }
     const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
     // first choice: the band over the crowd, under the score bug, where play rarely goes after a make
-    const ys = v.portrait ? [0.25, 0.62, 0.8, 0.42] : [0.23, 0.74, 0.84, 0.56], xs = [0.5, 0.3, 0.7];
+    const ys = v.portrait ? [0.22, 0.34, 0.62, 0.8, 0.46] : [0.23, 0.74, 0.84, 0.56], xs = [0.5, 0.3, 0.7];
     let best = null;
     for (const fy of ys) for (const fx of xs) {
       const cx = clamp(v.W * fx, wPx / 2 + 8, v.W - wPx / 2 - 8), box = { x: cx - wPx / 2, y: v.H * fy - hPx / 2, w: wPx, h: hPx };

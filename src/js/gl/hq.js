@@ -37,6 +37,7 @@ let loaders = null;
 function getLoaders(renderer) {
   if (loaders) return loaders;
   const ktx2 = new THREE.KTX2Loader().setTranscoderPath('vendor/basis/').detectSupport(renderer);
+  if (/[?&]ktxraw=1/.test(location.search)) for (const k of Object.keys(ktx2.workerConfig)) ktx2.workerConfig[k] = false; // debug: uncompressed RGBA
   const gltf = new THREE.GLTFLoader().setKTX2Loader(ktx2).setMeshoptDecoder(THREE.MeshoptDecoder);
   loaders = { ktx2, gltf };
   return loaders;
@@ -50,6 +51,11 @@ async function fetchBuf(file, signal) {
 async function decode(file, buf, L) {
   if (file.endsWith('.glb')) return new Promise((res, rej) => L.gltf.parse(buf, BASE, res, rej));
   if (file.endsWith('.ktx2')) return new Promise((res, rej) => L.ktx2.parse(buf, res, rej));
+  if (/\.(webp|png|jpe?g)$/.test(file)) {
+    const bmp = await createImageBitmap(new Blob([buf]), { imageOrientation: 'none' });
+    const t = new THREE.Texture(bmp); t.colorSpace = THREE.SRGBColorSpace; t.flipY = false; t.needsUpdate = true;
+    return t;
+  }
   if (file.endsWith('.json')) return JSON.parse(new TextDecoder().decode(buf));
   return buf; // .bin and anything raw
 }

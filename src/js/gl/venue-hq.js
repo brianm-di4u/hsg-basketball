@@ -8,8 +8,9 @@
 import { GLOW } from './post.js';
 import { contrast } from '../util.js';
 
-// exposure for the baked light: the floor's mean irradiance maps to about 1 (venue3d's lite floor brightness)
-const EXPOSURE = 0.26;
+// exposure for the baked light, calibrated with tools/probe.mjs against the lite gym: the court a touch brighter
+// than the lite floor (floorY about 0.24), the stands and walls as bright as before
+const EXPOSURE = 0.26, FLOOR_EXPOSURE = 0.12;
 
 // the shell's own colors (school tints replace the tint_* slots); C = the venue's linear color helper
 function slotColor(name, home, C) {
@@ -35,14 +36,16 @@ export function addShell(g, shell, home, floorMat, wallTex, C) {
   for (const tag of ['floor', 'shell']) { const t = shell.lm[tag]; t.channel = 1; t.flipY = false; lmMat[tag] = t; }
   root.traverse((o) => {
     if (!o.isMesh) return;
+    o.geometry = o.geometry.clone(); // each venue owns its copy: rebuilding disposes the old venue's geometry
+    o.userData.dyn = true; // already batched by material, and venue3d's static merge would drop the lightmap UVs
     const name = (o.material && o.material.name) || '';
     const tag = name === 'floor' || name === 'surround' ? 'floor' : 'shell';
-    const lm = lmMat[tag], k = shell.lmScale[tag] * EXPOSURE * Math.PI; // MeshBasic divides baked light by π
+    const lm = lmMat[tag], k = shell.lmScale[tag] * (tag === 'floor' ? FLOOR_EXPOSURE : EXPOSURE) * Math.PI; // MeshBasic divides baked light by π
     if (name === 'floor') {
       // the court keeps its live material; its UVs for the markings come from position (see the floor shader)
       o.material = floorMat;
       floorMat.userData.u.tLM.value = lm;
-      floorMat.userData.u.uLM.value = shell.lmScale.floor * EXPOSURE;
+      floorMat.userData.u.uLM.value = shell.lmScale.floor * FLOOR_EXPOSURE;
       o.receiveShadow = true;
       return;
     }

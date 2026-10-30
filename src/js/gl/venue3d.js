@@ -10,6 +10,7 @@ import { contrast } from '../util.js';
 import { boxProject } from './probe3d.js';
 import { netGeometry, makeNetSim } from './net3d.js';
 import { GLOW } from './post.js';
+import { addShell } from './venue-hq.js';
 // emitters are brighter than white so the bloom pass picks them out (and only them)
 const glow = (k = 1) => new THREE.Color(GLOW * k, GLOW * k, GLOW * k);
 
@@ -522,11 +523,14 @@ export function buildVenue(v, opts) {
   const arena = v.kind === 'arena';
   const home = v.home, away = v.away;
   const g = new THREE.Group();
+  // the HQ home-gym shell (venue-hq.js) replaces the procedural architecture: A() adds a piece only without it
+  const shell = !arena && opts.shell ? opts.shell : null;
+  const A = (o) => { if (!shell) g.add(o); return o; };
   const rng = rngOf(hashStr(v.kind + home.key + away.key));
   // the room the probe sees, for box-projected reflections (walls, roof; the camera side is open, so far away)
   const room = arena ? { min: new THREE.Vector3(-112, 0, -96), max: new THREE.Vector3(112, 82, 96) } : { min: new THREE.Vector3(-66, 0, -64), max: new THREE.Vector3(66, 82, 70) };
   const floor = makeFloor(home, arena, { ...opts, room });
-  g.add(floor.mesh, floor.sur);
+  if (!shell) g.add(floor.mesh, floor.sur);
   const padCap = arena ? '#D4AF37' : contrast(home.colors.primary, '#111111') < 2.2 ? home.colors.secondary : '#F4F1EA';
   const hoops = [0, 1].map((s) => makeHoop(s, arena ? '#1E3F8A' : home.colors.primary, padCap));
   for (const h of hoops) g.add(h.g);
@@ -544,8 +548,8 @@ export function buildVenue(v, opts) {
     const ROWS = 12, RD = 2.3, RH = 1.3, Z0 = -(HW + 9.5), LEN = 126;
     for (let r = 0; r < ROWS; r++) {
       const z = Z0 - r * RD, y = r * RH;
-      const step = new THREE.Mesh(new THREE.BoxGeometry(LEN, 0.35, RD), woodMat); step.position.set(0, y + RH - 0.17, z - RD / 2 + 0.05); step.receiveShadow = true; g.add(step);
-      const riser = new THREE.Mesh(new THREE.BoxGeometry(LEN, RH, 0.2), riserMat); riser.position.set(0, y + RH / 2, z); g.add(riser);
+      const step = new THREE.Mesh(new THREE.BoxGeometry(LEN, 0.35, RD), woodMat); step.position.set(0, y + RH - 0.17, z - RD / 2 + 0.05); step.receiveShadow = true; A(step);
+      const riser = new THREE.Mesh(new THREE.BoxGeometry(LEN, RH, 0.2), riserMat); riser.position.set(0, y + RH / 2, z); A(riser);
       for (let x = -LEN / 2 + 1.2; x < LEN / 2 - 1; x += 1.75 + rng() * 0.5) {
         if (rng() < 0.16) continue;
         // a pep-band block on the left end of the first rows
@@ -561,12 +565,12 @@ export function buildVenue(v, opts) {
     // the block tile is 4 × 8 blocks of 16 × 8 in, i.e. 5.33 ft square
     const wallM = new THREE.MeshStandardMaterial({ color: C('#E4DED0'), roughness: 0.55, map: wallTex });
     if (wallTex) wallTex.repeat.set(150 / 5.33, 84 / 5.33);
-    const back = new THREE.Mesh(new THREE.PlaneGeometry(150, 84), wallM); back.position.set(0, 42, backZ); g.add(back);
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(150, 84), wallM); back.position.set(0, 42, backZ); A(back);
     const endM = wallM.clone(); if (wallTex) { endM.map = wallTex.clone(); endM.map.needsUpdate = true; endM.map.repeat.set(130 / 5.33, 84 / 5.33); }
     for (const s of [-1, 1]) {
-      const end = new THREE.Mesh(new THREE.PlaneGeometry(130, 84), endM); end.position.set(s * 66, 42, -10); end.rotation.y = -s * Math.PI / 2; g.add(end);
-      const wain = new THREE.Mesh(new THREE.PlaneGeometry(130, 7), new THREE.MeshStandardMaterial({ color: C(padCap === home.colors.secondary ? home.colors.secondary : home.colors.primary), roughness: 0.9 })); // a near-black school color would read as a void wain.position.set(s * 65.9, 3.5, -10); wain.rotation.y = -s * Math.PI / 2; g.add(wain);
-      const stripe = new THREE.Mesh(new THREE.PlaneGeometry(130, 2.2), new THREE.MeshStandardMaterial({ color: C(home.colors.secondary), roughness: 0.7 })); stripe.position.set(s * 65.85, 13, -10); stripe.rotation.y = -s * Math.PI / 2; g.add(stripe);
+      const end = new THREE.Mesh(new THREE.PlaneGeometry(130, 84), endM); end.position.set(s * 66, 42, -10); end.rotation.y = -s * Math.PI / 2; A(end);
+      const wain = new THREE.Mesh(new THREE.PlaneGeometry(130, 7), new THREE.MeshStandardMaterial({ color: C(padCap === home.colors.secondary ? home.colors.secondary : home.colors.primary), roughness: 0.9 })); wain.position.set(s * 65.9, 3.5, -10); wain.rotation.y = -s * Math.PI / 2; A(wain); // a near-black school color would read as a void: those schools get their second color
+      const stripe = new THREE.Mesh(new THREE.PlaneGeometry(130, 2.2), new THREE.MeshStandardMaterial({ color: C(home.colors.secondary), roughness: 0.7 })); stripe.position.set(s * 65.85, 13, -10); stripe.rotation.y = -s * Math.PI / 2; A(stripe);
     }
     // end walls: a scoreboard over each baseline, two spirit banners and lit exit signs
     const boxM = new THREE.MeshStandardMaterial({ color: C('#1A181F'), roughness: 0.6 });
@@ -584,7 +588,7 @@ export function buildVenue(v, opts) {
       ex.position.set(s * 65.7, 10.5, 34); ex.rotation.y = -s * Math.PI / 2; g.add(ex);
     }
     const bandM = new THREE.MeshStandardMaterial({ color: C(home.colors.primary), roughness: 0.7 });
-    const topBand = new THREE.Mesh(new THREE.PlaneGeometry(150, 3.2), bandM); topBand.position.set(0, ROWS * RH + 4.6, backZ + 0.05); g.add(topBand);
+    const topBand = new THREE.Mesh(new THREE.PlaneGeometry(150, 3.2), bandM); topBand.position.set(0, ROWS * RH + 4.6, backZ + 0.05); A(topBand);
     // wall lettering above the bleachers: "<MASCOT>" in the school's second color
     const lc = canvas(1024, 96), l = lc.getContext('2d');
     l.font = '900 74px "Arial Black", Impact, sans-serif'; l.textAlign = 'center'; l.textBaseline = 'middle';
@@ -615,18 +619,18 @@ export function buildVenue(v, opts) {
       seats.push({ x: s * (HL + 9.5 + r * 1.6), y: r * 0.9, z: z + (rng() - 0.5) * 0.5, g: 'stand', row: r });
     }
     const riserEnd = new THREE.MeshStandardMaterial({ color: C('#8E6640'), roughness: 0.6 }); // wood, like the bleachers: the students stand on steps, not a dark ledge
-    for (const s of [-1, 1]) for (let r = 1; r < 3; r++) { const st = new THREE.Mesh(new THREE.BoxGeometry(1.6, r * 0.9, HW * 2 - 2), riserEnd); st.position.set(s * (HL + 9.5 + r * 1.6), r * 0.45, 0); g.add(st); }
+    for (const s of [-1, 1]) for (let r = 1; r < 3; r++) { const st = new THREE.Mesh(new THREE.BoxGeometry(1.6, r * 0.9, HW * 2 - 2), riserEnd); st.position.set(s * (HL + 9.5 + r * 1.6), r * 0.45, 0); A(st); }
     // team benches: substitutes in team colors
     // (the team chairs stay empty until the benches get real players; spectators in them read wrong)
     // cheer squad on the baseline corners (standing sprites)
     for (const s of [-1, 1]) for (let k = 0; k < 3; k++) seats.push({ x: s * (HL - 9 + k * 2.4), y: 0, z: -(HW + 2.6) - (k % 2) * 0.6, g: 'cheer', tint: CL(home.colors.primary) });
     // ceiling: dark deck, steel trusses and round high-bay lamps
-    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(160, 140), new THREE.MeshStandardMaterial({ color: C('#2B2A2E'), roughness: 0.95 })); ceil.rotation.x = Math.PI / 2; ceil.position.y = 82; g.add(ceil);
+    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(160, 140), new THREE.MeshStandardMaterial({ color: C('#2B2A2E'), roughness: 0.95 })); ceil.rotation.x = Math.PI / 2; ceil.position.y = 82; A(ceil);
     const trussM = new THREE.MeshStandardMaterial({ color: C('#3C3F47'), roughness: 0.5, metalness: 0.5 });
-    for (let x = -60; x <= 60; x += 15) { const t = new THREE.Mesh(new THREE.BoxGeometry(0.8, 2.6, 140), trussM); t.position.set(x, 80, -10); g.add(t); }
+    for (let x = -60; x <= 60; x += 15) { const t = new THREE.Mesh(new THREE.BoxGeometry(0.8, 2.6, 140), trussM); t.position.set(x, 80, -10); A(t); }
     const lampM = new THREE.MeshBasicMaterial({ color: C('#FFF4DC').multiplyScalar(GLOW * 1.4) });
     for (let x = -45; x <= 45; x += 15) for (const z of [-20, 0, 20]) {
-      const lamp = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.6, 0.6, 16), lampM); lamp.position.set(x, 76, z); g.add(lamp);
+      const lamp = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.6, 0.6, 16), lampM); lamp.position.set(x, 76, z); A(lamp);
     }
   } else {
     // ---- finals arena: two-tier bowl of royal-blue chairs; the +x end has only a short lower block
@@ -689,6 +693,7 @@ export function buildVenue(v, opts) {
   const palette = arena
     ? pal([home.colors.primary, home.colors.secondary, away.colors.primary, away.colors.secondary, '#3A3F4A', '#2B3A5C', '#F4F1EA', '#555B66', '#7A8494', '#1F4E9C', '#8C2A2A', '#2E5E3A'])
     : pal([home.colors.primary, home.colors.primary, home.colors.secondary, '#F4F1EA', home.colors.primary, '#3A3F4A', '#2B3A5C', away.colors.primary]);
+  if (shell) addShell(g, shell, home, floor.mat, wallTex, C);
   const crowd = makeCrowd(seats, atlas, palette, rng);
   crowd.material.uniforms.uLight.value = arena ? 0.36 : 0.54; // the house sits darker than the floor
   g.add(crowd);
@@ -697,5 +702,5 @@ export function buildVenue(v, opts) {
   // sweep). The broadcast camera sits where these stands would be, so they are shown only for those cameras.
   const near = nearSide(arena, home, away, atlas, palette, rng);
   near.g.visible = false; g.add(near.g);
-  return { g, floor, hoops, crowd, near, sbCanvas, sbTex, ribbon, arena, room, sbLast: '' };
+  return { g, floor, hoops, crowd, near, sbCanvas, sbTex, ribbon, arena, room, hq: !!shell, sbLast: '' };
 }

@@ -252,6 +252,12 @@ function finalHTML(st) {
   return UI.finalScreen(st, m, tops, extra);
 }
 
+// the pinned footer says when more of the panel sits below it (phones, long setup screens)
+function moreCue(scr) {
+  const set = () => scr.classList.toggle('more', scr.scrollHeight - scr.clientHeight - scr.scrollTop > 24);
+  if (!scr.dataset.cue) { scr.dataset.cue = 1; scr.addEventListener('scroll', set, { passive: true }); window.addEventListener('resize', set); }
+  set();
+}
 function render() {
   const sc = state.scene;
   document.body.dataset.scene = sc;
@@ -262,6 +268,7 @@ function render() {
   if (overlay) {
     scr.innerHTML = html;
     scr.classList.remove('enter'); void scr.offsetWidth; scr.classList.add('enter');
+    moreCue(scr);
     state.busy = reducedMotion() ? 0 : performance.now() + 220;
     const f = scr.querySelector('.btn.primary:not([disabled])') || scr.querySelector('button');
     if (f) f.focus({ preventScroll: true });

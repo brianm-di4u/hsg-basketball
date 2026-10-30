@@ -1,6 +1,42 @@
 {
-  "schema": 3,
-  "build": "m1-empty",
-  "packages": {},
-  "files": {}
+ "schema": 3,
+ "build": "2026-10-30T04:12:30.813Z",
+ "packages": {
+  "venue-gym": {
+   "prio": 1,
+   "tiers": {
+    "high": [
+     "gym.eeb659c1.glb",
+     "gym-lm-floor-h.285a08a7.webp",
+     "gym-lm-shell-h.596bfb0e.webp"
+    ],
+    "medium": [
+     "gym.eeb659c1.glb",
+     "gym-lm-floor-m.21929daa.webp",
+     "gym-lm-shell-m.40e3ce5d.webp"
+    ]
+   },
+   "lmScale": {
+    "floor": 8.055625915527344,
+    "shell": 6.890482425689697
+   }
+  }
+ },
+ "files": {
+  "gym.eeb659c1.glb": {
+   "bytes": 143428
+  },
+  "gym-lm-floor-h.285a08a7.webp": {
+   "bytes": 205066
+  },
+  "gym-lm-floor-m.21929daa.webp": {
+   "bytes": 10632
+  },
+  "gym-lm-shell-h.596bfb0e.webp": {
+   "bytes": 388682
+  },
+  "gym-lm-shell-m.40e3ce5d.webp": {
+   "bytes": 69112
+  }
+ }
 }

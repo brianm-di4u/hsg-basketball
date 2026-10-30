@@ -7,12 +7,21 @@
 // Every file is content-hashed (served immutable by the site); files no package lists are deleted.
 //
 // Packages:
-//   venue-gym   the shared home-gym shell (GLB) and its two lightmaps, UASTC 2048 for high, ETC1S 1024 for medium
+//   venue-gym   the shared home-gym shell (GLB) and its two lightmaps, WebP 2048 for high, 1024 for medium
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { GAME, hash8, SCHEMA } from './hashed.mjs';
-import { encodeKTX2 } from './ktx.mjs';
+import { pathToFileURL } from 'node:url';
+
+// lightmaps are smooth: lossy WebP keeps them small and decodes everywhere (KTX2 sampled black on ANGLE D3D11)
+const { chromium } = await import(pathToFileURL(path.join(GAME, 'shared/test-harness/node_modules/playwright/index.mjs')).href);
+const browser = await chromium.launch();
+const page = await browser.newPage();
+async function webp(rgba, size, quality) {
+  const b64 = await page.evaluate(([d, size, q]) => { const c = document.createElement('canvas'); c.width = c.height = size; const g = c.getContext('2d'); const bytes = Uint8ClampedArray.from(atob(d), (ch) => ch.charCodeAt(0)); g.putImageData(new ImageData(bytes, size, size), 0, 0); return c.toDataURL('image/webp', q).split(',')[1]; }, [Buffer.from(rgba).toString('base64'), size, quality]);
+  return Buffer.from(b64, 'base64');
+}
 
 const args = process.argv.slice(2);
 const BLENDER = 'C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender.exe';
@@ -55,14 +64,15 @@ const packages = {};
   for (const tag of ['floor', 'shell']) {
     const { size, scale } = lm[tag];
     const rgba = new Uint8Array(fs.readFileSync(path.join(dir, `gym-lm-${tag}.rgba`)));
-    console.log(`ktx2: gym-lm-${tag} ${size}² UASTC + ${size / 2}² ETC1S`);
-    high.push(put(`gym-lm-${tag}-h`, '.ktx2', await encodeKTX2(rgba, size, size, { mode: 'uastc', srgb: true })));
-    medium.push(put(`gym-lm-${tag}-m`, '.ktx2', await encodeKTX2(halve(rgba, size), size / 2, size / 2, { mode: 'etc1s', srgb: true, quality: 200 })));
+    console.log(`webp: gym-lm-${tag} ${size}² + ${size / 2}²`);
+    high.push(put(`gym-lm-${tag}-h`, '.webp', await webp(rgba, size, 0.9)));
+    medium.push(put(`gym-lm-${tag}-m`, '.webp', await webp(halve(rgba, size), size / 2, 0.88)));
     scales[tag] = scale;
   }
   packages['venue-gym'] = { prio: 1, tiers: { high, medium }, lmScale: scales };
 }
 
+await browser.close();
 // delete orphans, write the manifest
 for (const f of fs.readdirSync(HQ)) if (f !== 'manifest.json' && !files[f]) fs.rmSync(path.join(HQ, f));
 const manifest = { schema: SCHEMA, build: new Date().toISOString(), packages, files };

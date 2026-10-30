@@ -146,3 +146,42 @@ animated-film athlete:
 - a jersey and shorts with piped collar and armholes and side-panel stripes; wristbands; detailed sneakers
 
 M4 builds originals toward that from MPFB2 bases, and the panel's M4 Art judgement uses this description.
+
+## M2 result: closed on the plateau rule
+| Round | Overall | Blockers |
+|---|---|---|
+| r1 | 6.5 | 4 |
+| r2 | 6.6 | 3 |
+| r3 | 6.6 (+0.06) | 4 |
+
+r3's gain was under 0.2, so M2 closed by the stop rule.
+- **Met:** Lighting 6.5, UI 7.0, Animation 6.5.
+- **Missed:** overall (6.6 vs 7.0) and Readability (7.0 vs 7.5).
+- **Carried forward:** shot-camera and portrait framing for Readability, Hot Streak dressing, desktop title
+  banners (the HQ venue's walls), and net strand shading.
+
+r3's four blockers are fixed in the next round, v3-m3-r1:
+1. the mobile card margin (top-band first, 30 px pad)
+2. mobile Select (pinned footer with a "More options below" cue)
+3. the early replay beat (0.5)
+4. dark skin rendering as black silhouettes
+
+The fourth was a real bug: `players3d.js col()` converted sRGB to linear twice (`Color.set()` already
+linearizes in r186), crushing dark skin to black and darkening every kit color. The same bug was in the crowd
+tints, fixed earlier.
+
+Also found and fixed: an M2r1 edit had commented out the end-wall wainscot mid-line, so it never rendered.
+
+## M3 (in progress): HQ baked venue
+- **Blender** (`art-src/blender/venue/build_gym.py`): the shared gym shell is built, its lightmaps baked with
+  Cycles OptiX on the RTX 5060 (1024 samples, 2048², about 2 min), and exported as a GLB with `LM` → `uv1`.
+- **`tools/build-hq.mjs`:** hashed, written to `assets/hq` with the manifest. Lightmaps ship as WebP (0.78 MB
+  total, high and medium tiers).
+  - KTX2 encoding works (`tools/ktx.mjs`, libktx wasm), but BC7 sampled black in early tests.
+  - The real cause turned out to be `mergeStatic()` stripping `uv1`; KTX2 can come back for detail textures.
+- **Runtime:**
+  - `venue-hq.js` dresses the shell per school: MeshBasic materials with school tints × lightmap; the floor
+    keeps its live material with the baked light as a multiplier.
+  - Exposure is calibrated by probe: floorY about 0.27, against 0.21 lite.
+  - `scene3d.ensureVenue` swaps lite → HQ at a dead ball.
+- **Perf** (v3-m3-r1, uncapped): desktop 552-632 fps, mobile 920 fps.

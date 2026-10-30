@@ -1,4 +1,79 @@
 [
-  {"round":"v2-final","scores":{"art":6.5,"lighting":5,"animation":5.5,"ui":6,"typography":5.5,"readability":6.5,"mobile":7,"authenticity":6.5},"overall":6.1,"blockers":0,"note":"previous campaign, review/history/final-review.md"},
-  {"round":"v3-m0-r1","scores":{"art":6,"lighting":6,"animation":6,"ui":6,"typography":5.5,"readability":6,"mobile":6.5,"authenticity":6.5},"overall":6.1,"blockers":4}
+  {
+    "round": "v2-final",
+    "scores": {
+      "art": 6.5,
+      "lighting": 5,
+      "animation": 5.5,
+      "ui": 6,
+      "typography": 5.5,
+      "readability": 6.5,
+      "mobile": 7,
+      "authenticity": 6.5
+    },
+    "overall": 6.1,
+    "blockers": 0,
+    "note": "previous campaign, review/history/final-review.md"
+  },
+  {
+    "round": "v3-m0-r1",
+    "scores": {
+      "art": 6,
+      "lighting": 6,
+      "animation": 6,
+      "ui": 6,
+      "typography": 5.5,
+      "readability": 6,
+      "mobile": 6.5,
+      "authenticity": 6.5
+    },
+    "overall": 6.1,
+    "blockers": 4
+  },
+  {
+    "round": "v3-m2-r1",
+    "scores": {
+      "art": 6,
+      "lighting": 6.5,
+      "animation": 6.5,
+      "ui": 6.5,
+      "typography": 6,
+      "readability": 7,
+      "mobile": 7,
+      "authenticity": 6.5
+    },
+    "overall": 6.5,
+    "blockers": 4
+  },
+  {
+    "round": "v3-m2-r2",
+    "scores": {
+      "art": 6,
+      "lighting": 6.5,
+      "animation": 6.5,
+      "ui": 6.5,
+      "typography": 6.5,
+      "readability": 7,
+      "mobile": 7,
+      "authenticity": 6.5
+    },
+    "overall": 6.6,
+    "blockers": 3
+  },
+  {
+    "round": "v3-m2-r3",
+    "scores": {
+      "art": 6,
+      "lighting": 6.5,
+      "animation": 6.5,
+      "ui": 7,
+      "typography": 6.5,
+      "readability": 7,
+      "mobile": 7,
+      "authenticity": 6.5
+    },
+    "overall": 6.6,
+    "blockers": 4,
+    "note": "plateau (+0.06): M2 closed; its blockers fixed in v3-m3-r1"
+  }
 ]

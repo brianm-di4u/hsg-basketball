@@ -101,7 +101,8 @@ function kitMaterial() {
   return mat;
 }
 
-const col = (c, hex) => c.set(hex).convertSRGBToLinear();
+// Color.set() already converts sRGB hex to linear (three's color management); converting again crushed dark skin to black
+const col = (c, hex) => c.set(hex);
 
 function setKit(pm, kit, look) {
   const u = pm.mat.userData.u;

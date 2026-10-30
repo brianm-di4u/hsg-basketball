@@ -54,5 +54,20 @@ export const CROWD_CLIPS = [
     [0, with_(STAND, { upperarm_L: [-0.75, 0.3, -0.45], upperarm_R: [-0.75, -0.3, 0.45], forearm_L: [-1.75, -0.9, 0], forearm_R: [-1.75, 0.9, 0], head: [0, 0.3, 0], chest: [0, 0.1, 0] }), -0.01],
     [2.0, with_(STAND, { upperarm_L: [-0.75, 0.3, -0.45], upperarm_R: [-0.75, -0.3, 0.45], forearm_L: [-1.75, -0.9, 0], forearm_R: [-1.75, 0.9, 0], head: [0, -0.3, 0], chest: [0, -0.1, 0] }), -0.015],
     [4.0, with_(STAND, { upperarm_L: [-0.75, 0.3, -0.45], upperarm_R: [-0.75, -0.3, 0.45], forearm_L: [-1.75, -0.9, 0], forearm_R: [-1.75, 0.9, 0], head: [0, 0.3, 0], chest: [0, 0.1, 0] }), -0.01]] },
+  // 10 sitlean: seated, leaning in, elbows on the knees, hands together
+  { name: 'sitlean', loop: true, dur: 3.6, keys: [
+    [0, with_(SIT, { spine: [0.5, 0, 0], chest: [0.15, 0, 0], neck: [-0.45, 0, 0], head: [-0.1, 0.1, 0], upperarm_L: [-0.9, 0.35, -0.2], upperarm_R: [-0.9, -0.35, 0.2], forearm_L: [-1.5, 0.7, 0], forearm_R: [-1.5, -0.7, 0] }), SIT_DY],
+    [1.8, with_(SIT, { spine: [0.54, 0, 0], chest: [0.15, 0, 0], neck: [-0.5, 0, 0], head: [-0.1, -0.15, 0], upperarm_L: [-0.9, 0.35, -0.2], upperarm_R: [-0.9, -0.35, 0.2], forearm_L: [-1.5, 0.7, 0], forearm_R: [-1.5, -0.7, 0] }), SIT_DY],
+    [3.6, with_(SIT, { spine: [0.5, 0, 0], chest: [0.15, 0, 0], neck: [-0.45, 0, 0], head: [-0.1, 0.1, 0], upperarm_L: [-0.9, 0.35, -0.2], upperarm_R: [-0.9, -0.35, 0.2], forearm_L: [-1.5, 0.7, 0], forearm_R: [-1.5, -0.7, 0] }), SIT_DY]] },
+  // 11 sitback: seated back, arms folded
+  { name: 'sitback', loop: true, dur: 4.2, keys: [
+    [0, with_(SIT, { spine: [-0.08, 0, 0], chest: [-0.05, 0, 0], neck: [0.05, 0, 0], head: [0, 0.2, 0], upperarm_L: [-0.75, 0.3, -0.45], upperarm_R: [-0.75, -0.3, 0.45], forearm_L: [-1.75, -0.9, 0], forearm_R: [-1.75, 0.9, 0] }), SIT_DY + 0.01],
+    [2.1, with_(SIT, { spine: [-0.08, 0, 0], chest: [-0.03, 0, 0], neck: [0.05, 0, 0], head: [0, -0.25, 0], upperarm_L: [-0.75, 0.3, -0.45], upperarm_R: [-0.75, -0.3, 0.45], forearm_L: [-1.75, -0.9, 0], forearm_R: [-1.75, 0.9, 0] }), SIT_DY + 0.01],
+    [4.2, with_(SIT, { spine: [-0.08, 0, 0], chest: [-0.05, 0, 0], neck: [0.05, 0, 0], head: [0, 0.2, 0], upperarm_L: [-0.75, 0.3, -0.45], upperarm_R: [-0.75, -0.3, 0.45], forearm_L: [-1.75, -0.9, 0], forearm_R: [-1.75, 0.9, 0] }), SIT_DY + 0.01]] },
+  // 12 sittalk: seated, turned to the neighbour, one hand talking
+  { name: 'sittalk', loop: true, dur: 2.0, keys: [
+    [0, with_(SIT, { chest: [0.05, 0.35, 0], neck: [0, 0.3, 0], head: [0, 0.35, 0], upperarm_R: [-0.9, -0.1, 0.2], forearm_R: [-1.3, -0.4, 0] }), SIT_DY],
+    [1.0, with_(SIT, { chest: [0.05, 0.38, 0], neck: [0, 0.3, 0], head: [-0.05, 0.4, 0], upperarm_R: [-1.1, -0.2, 0.25], forearm_R: [-1.1, -0.5, 0] }), SIT_DY],
+    [2.0, with_(SIT, { chest: [0.05, 0.35, 0], neck: [0, 0.3, 0], head: [0, 0.35, 0], upperarm_R: [-0.9, -0.1, 0.2], forearm_R: [-1.3, -0.4, 0] }), SIT_DY]] },
 ];
 export const CROWD_FPS = 30;

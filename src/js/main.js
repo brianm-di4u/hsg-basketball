@@ -522,13 +522,13 @@ function menuHeroes(sc, key) {
   const program = (state.season && state.season.program) || state.pick.program || 'boys';
   const sides = sc === 'select' ? [[state.pick.home || key, 'home'], [state.pick.away || 'lakeside', 'away']] : [[key, 'home'], [key, 'home']];
   // (the title moment looks a little up, so the arena's standing crowd fills the frame behind the champions)
-  const cam = sc === 'champion' ? { p: [47, 5.6, 42.5], t: [47, 5.6, 22], fov: 46 } : { p: [47, 5.4, 41.5], t: [47, 4.6, 25], fov: 40 };
+  const cam = sc === 'champion' ? { p: [47, 8.5, 43], t: [47, 4.8, 22], fov: 46 } : { p: [47, 5.4, 41.5], t: [47, 4.6, 25], fov: 40 };
   G3.camOverride = { attract: true, ...cam };
   const out = [];
   sides.forEach(([k, side], i) => {
     const T = team(k), roster = heroRoster(k, program), r = roster[i === 0 ? 0 : 2] || roster[0];
     const x = 47 + (i === 0 ? -7.6 : 7.6), z = 26.5;
-    out.push({ pl: { idx: 300 + i, t: i, x, z, y: 0, vx: 0, vz: 0, act: sc === 'champion' ? 'celebrate' : 'idle', actT: 0, meter: 0, lookAt: [47 + (i === 0 ? 2 : -2), 41.5] },
+    out.push({ pl: { idx: 300 + i, t: i, x, z, y: 0, vx: 0, vz: 0, act: sc === 'champion' ? 'celebrate' : i === 0 ? 'fold' : 'idle', actT: 0, meter: 0, lookAt: [47 + (i === 0 ? 2 : -2), 41.5] },
       r, kit: kitFor(T, side), home: side === 'home', user: false });
   });
   return out;

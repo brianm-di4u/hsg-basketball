@@ -121,7 +121,7 @@ vec3 kitColor(vec3 p) {
       return (h > 0.255 && h < 0.275) ? uStripe : uSock;
     }
     if (uRef < 0.5) { float wd = length(vec3(ax0, h, p.z) - uHand); if (wd > 0.034 && wd < 0.085 && h > uHand.y - 0.004 && h < uHand.y + 0.11) { kitRough = 0.85; return uStripe; } }
-    if (uRef > 0.5 && h > 0.1 && h < 1.0 && ax0 < 0.27) { kitRough = 0.7; return vec3(0.025); }                 // officials: slacks
+    if (uRef > 0.5 && h > 0.1 && h < 1.12 && ax0 < 0.27) { kitRough = 0.7; return vec3(0.025); }                // officials: slacks
     // and a full striped shirt over the tank's bare shoulders and chest: short sleeves to the elbow, a black crew neck
     if (uRef > 0.5 && h > 1.0 && h < 1.585 && ax0 < 0.34 && !(ax0 > 0.19 && h < 1.24)) {
       kitRough = 0.75;
@@ -135,6 +135,7 @@ vec3 kitColor(vec3 p) {
   if (z < 1.5 || (z > 2.5 && z < 3.5)) {                         // jersey or shorts
     kitRough = 0.8;
     bool shorts = z > 2.5;
+    if (shorts && uRef > 0.5) discard; // officials wear slacks: the body's legs underneath are painted black
     float ax = abs(p.x), front = p.z > 0.0 ? 1.0 : 0.0;
     // the garment's edges as smooth curves of the rest pose (y up, +z forward): distance inside the edge, metres
     float d;
@@ -251,15 +252,16 @@ function setKit(pm, kit, look) {
 function numberTexture(num, fg, edge) {
   const k = `${num}|${fg}|${edge}`;
   if (P3.numTex.has(k)) return P3.numTex.get(k);
-  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  // 256 px (sharp in the menus' close camera); premultiplied alpha, so the filtered edge never darkens to a halo
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256;
   const c = cv.getContext('2d');
-  c.font = '900 92px "Arial Black", Impact, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.font = '900 184px "Arial Black", Impact, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
   const s = String(num);
-  c.save(); c.translate(64, 68); if (s.length > 1) c.scale(0.86, 1);
-  c.lineJoin = 'round'; c.lineWidth = 12; c.strokeStyle = edge; c.strokeText(s, 0, 0);
+  c.save(); c.translate(128, 136); if (s.length > 1) c.scale(0.86, 1);
+  c.lineJoin = 'round'; c.lineWidth = 22; c.strokeStyle = edge; c.strokeText(s, 0, 0);
   c.fillStyle = fg; c.fillText(s, 0, 0);
   c.restore();
-  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; t.premultiplyAlpha = true;
   P3.numTex.set(k, t);
   return t;
 }
@@ -353,7 +355,7 @@ export function makePlayer(build) {
     }
   }
   const hairMat = new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0 });
-  const numMatF = new THREE.MeshStandardMaterial({ transparent: true, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -2, depthWrite: false });
+  const numMatF = new THREE.MeshStandardMaterial({ transparent: true, premultipliedAlpha: true, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -2, depthWrite: false });
   const numMatB = numMatF.clone();
   const plane = new THREE.PlaneGeometry(0.25, 0.25);
   const meta = P3.hq ? P3.meta[build] : null;

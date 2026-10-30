@@ -111,6 +111,7 @@ function shotFor(ctx) {
   if (act === 'pass') return 'pass';
   if (act === 'steal') return 'steal';
   if (act === 'ref3') return 'ref3';
+  if (act === 'fold') return 'fold';
   if (act === 'celebrate') return ['celebrate1', 'celebrate2', 'celebrate3'][ctx.hash % 3];
   return null;
 }

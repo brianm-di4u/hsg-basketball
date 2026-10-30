@@ -66,12 +66,12 @@
    "prio": 4,
    "tiers": {
     "high": [
-     "anims.511ae593.json",
-     "anims.72e09382.bin"
+     "anims.b666b466.json",
+     "anims.a8e7f592.bin"
     ],
     "medium": [
-     "anims.511ae593.json",
-     "anims.72e09382.bin"
+     "anims.b666b466.json",
+     "anims.a8e7f592.bin"
     ]
    }
   }
@@ -113,11 +113,11 @@
   "fans.769fe3a7.glb": {
    "bytes": 155852
   },
-  "anims.511ae593.json": {
-   "bytes": 12949
+  "anims.b666b466.json": {
+   "bytes": 14208
   },
-  "anims.72e09382.bin": {
-   "bytes": 94544
+  "anims.a8e7f592.bin": {
+   "bytes": 108224
   }
  }
 }

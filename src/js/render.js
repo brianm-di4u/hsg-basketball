@@ -159,7 +159,7 @@ function drawHud(c, v, P, scene) {
   }
   for (const p of R.fx.pops) {
     if (scene.slam && scene.slam.t < 0.12 && /^\+\d/.test(p.text)) continue; // the +3 follows the card's landing
-    if (scene.slam && v.portrait && /^\+\d/.test(p.text)) continue; // phones: the card says it; the +3 would sit on the board
+    if (v.portrait && /^\+\d/.test(p.text)) continue; // phones: the score bug and the card say it; a +3 would sit on the board
     const q = P(p.x, p.z, p.y);
     if (q.X < 0 || q.X > v.W || q.Y < 0 || q.Y > v.H || q.vis === false) continue; // its rim or player is off screen
     const X = clamp(q.X, 70, v.W - 70), Y = clamp(q.Y - p.t * q.s * 2.2, 40, v.H - 30);
@@ -245,7 +245,14 @@ function slamCallout(c, v, P, scene) {
   c.textAlign = 'center'; c.textBaseline = 'middle';
   c.lineWidth = Math.max(4, size * 0.08); c.strokeStyle = '#0B0A10'; c.strokeText(s.text, 0, 3);
   c.fillStyle = '#FFF6E0'; c.fillText(s.text, 0, 3);
-  if (s.sub && y > v.H * 0.4) { c.font = `400 ${Math.round(size * 0.34)}px "Bebas Neue", "Arial Black", sans-serif`; c.fillStyle = '#FFF6E0'; c.fillText(s.sub, 0, h / 2 + size * 0.32); }
+  // the team under the card, on its own plate, never under 15 px
+  if (s.sub && y > v.H * 0.4) {
+    const fs = Math.max(15, Math.round(size * 0.34));
+    c.font = `700 ${fs}px "Barlow Condensed", system-ui, sans-serif`;
+    const tw = c.measureText(s.sub).width + 14, ty = h / 2 + fs * 0.95;
+    c.fillStyle = 'rgba(10,9,16,0.9)'; c.fillRect(-tw / 2, ty - fs * 0.62, tw, fs * 1.24);
+    c.fillStyle = '#FFF6E0'; c.fillText(s.sub, 0, ty);
+  }
   c.restore();
 }
 

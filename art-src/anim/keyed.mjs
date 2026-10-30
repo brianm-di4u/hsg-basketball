@@ -123,6 +123,15 @@ export const KEYED = {
       [1.4, ARMS_DOWN],
     ],
   },
+  // a confident stand for the menus: arms folded, weight shifting
+  fold: {
+    loop: true, dur: 3.0,
+    keys: [
+      [0, P(STANCE, { upperarm_L: [-0.8, 0.35, -0.5], upperarm_R: [-0.8, -0.35, 0.5], forearm_L: [-1.8, -0.95, 0], forearm_R: [-1.8, 0.95, 0], chest: [-0.05, 0, 0], head: [-0.05, 0.08, 0], hips: [0, 0.05, 0.03] }), -0.03],
+      [1.5, P(STANCE, { upperarm_L: [-0.8, 0.35, -0.5], upperarm_R: [-0.8, -0.35, 0.5], forearm_L: [-1.8, -0.95, 0], forearm_R: [-1.8, 0.95, 0], chest: [-0.03, 0, 0], head: [-0.05, -0.08, 0], hips: [0, -0.05, -0.03] }), -0.035],
+      [3.0, P(STANCE, { upperarm_L: [-0.8, 0.35, -0.5], upperarm_R: [-0.8, -0.35, 0.5], forearm_L: [-1.8, -0.95, 0], forearm_R: [-1.8, 0.95, 0], chest: [-0.05, 0, 0], head: [-0.05, 0.08, 0], hips: [0, 0.05, 0.03] }), -0.03],
+    ],
+  },
   // celebrations (a player keeps one): fist pump, arms up in a V with a hop, point to the sky with a chest thump
   celebrate1: {
     loop: true, dur: 0.7,

@@ -51,7 +51,7 @@ button { font: inherit; color: inherit; }
 .sb-name { font: 400 1.35rem/1 var(--font-display); letter-spacing: .06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sb-arrow { width: 0; height: 0; border-left: 8px solid #3A3546; border-top: 6px solid transparent; border-bottom: 6px solid transparent; }
 .sb-team.poss .sb-arrow { border-left-color: #FFD84D; filter: drop-shadow(0 0 4px #FFD84D); }
-.sb-score { font: 700 1.9rem/1 var(--font-mono); color: #FFC83D; text-shadow: 0 0 8px rgba(255, 200, 61, .65); min-width: 2ch; text-align: right; }
+.sb-score { font: 700 2.1rem/1 var(--font-text); font-variant-numeric: tabular-nums; color: #FFC83D; text-shadow: 0 0 8px rgba(255, 200, 61, .65); min-width: 2ch; text-align: right; }
 .sb-fouls { grid-column: 2 / span 3; font: 700 var(--fs-xs) var(--font-text); letter-spacing: .1em; color: #E9E2D2; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .sb-team:last-child .sb-fouls { justify-content: flex-start; }
 .sb-fouls b { color: #FFB4A8; letter-spacing: .1em; }
@@ -60,8 +60,8 @@ button { font: inherit; color: inherit; }
 .lamps i.on { background: #FF5A4A; box-shadow: 0 0 5px #FF5A4A; }
 .sb-mid { display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0C0B10; border: 1px solid #3B3546; border-radius: var(--radius-md); padding: 3px 14px; min-width: 104px; box-shadow: inset 0 0 12px rgba(0,0,0,.8); }
 .sb-q { font: 400 .95rem/1 var(--font-display); letter-spacing: .14em; color: #E9E2D2; }
-.sb-clock { font: 700 1.6rem/1.05 var(--font-mono); color: #FF8A7A; text-shadow: 0 0 8px rgba(255, 90, 90, .6); }
-.sb-shot { font: 700 1rem/1 var(--font-mono); color: #8FE3FF; text-shadow: 0 0 6px rgba(79, 195, 255, .5); }
+.sb-clock { font: 700 1.75rem/1.05 var(--font-text); font-variant-numeric: tabular-nums; letter-spacing: .04em; color: #FF8A7A; text-shadow: 0 0 8px rgba(255, 90, 90, .6); }
+.sb-shot { font: 700 1.1rem/1 var(--font-text); font-variant-numeric: tabular-nums; color: #8FE3FF; text-shadow: 0 0 6px rgba(79, 195, 255, .5); }
 .sb-shot.off { font: 700 var(--fs-xs) var(--font-text); letter-spacing: .1em; }
 .sb-crowd { display: block; width: 72px; height: 6px; margin-top: 3px; background: #3A3550; border-radius: 3px; overflow: hidden; }
 .sb-crowd i { display: block; height: 100%; background: linear-gradient(90deg, #D4AF37, #FFD84D); }
@@ -101,7 +101,7 @@ body.replay #sb, body.replay #pad { display: none; } /* the replay gets the phon
 #knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%; background: #D8CFBD; box-shadow: 0 3px 0 #8A8590; pointer-events: none; }
 .pbtns { display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; gap: 10px; align-items: center; }
 .pb { width: 72px; height: 72px; border-radius: 50%; border: 3px solid #14121F; background: #D8CFBD; color: #14121F; font: 700 var(--fs-sm)/1.05 var(--font-text); letter-spacing: .03em; display: flex; flex-direction: column; align-items: center; justify-content: center; touch-action: none; box-shadow: 0 4px 0 #8A8590; }
-.pb small { font-size: .8rem; font-weight: 700; opacity: .9; }
+.pb small { font-size: var(--fs-xs); font-weight: 700; opacity: .9; }
 .pb.big { width: 92px; height: 92px; background: #FFD84D; grid-row: 1 / span 2; grid-column: 2; font-size: .95rem; }
 .pb.small { width: 64px; height: 56px; border-radius: 16px; font-size: var(--fs-xs); }
 .pb.on { transform: translateY(3px); box-shadow: 0 1px 0 #8A8590; filter: brightness(.9); }
@@ -141,21 +141,21 @@ h1, h2, h3 { font-family: var(--font-deco); margin: 0 0 .5em; line-height: 1.15;
 h2 { font: 400 2.1rem/1.05 var(--font-display); letter-spacing: .03em; }
 h3 { font-size: 1.1rem; }
 p { margin: .4em 0 .7em; }
-.kicker { text-transform: uppercase; letter-spacing: .12em; font-size: .78rem; color: var(--muted); margin: 0 0 .3em; font-weight: 700; }
+.kicker { text-transform: uppercase; letter-spacing: .12em; font-size: var(--fs-xs); color: var(--muted); margin: 0 0 .3em; font-weight: 700; }
 .big { font-size: 1.15rem; font-weight: 700; }
-.fine { font-size: .85rem; color: var(--muted); }
+.fine { font-size: var(--fs-xs); color: var(--muted); }
 .warn { color: var(--accent); font-weight: 700; }
-.src { font-size: .8rem; color: var(--muted); }
+.src { font-size: var(--fs-xs); color: var(--muted); }
 .tag { display: inline-block; font: 700 var(--fs-xs)/1.35 var(--font-text); text-transform: uppercase; letter-spacing: .05em; padding: 1px 7px; border-radius: 999px; background: var(--tag-bg); color: var(--tag-fg); vertical-align: middle; letter-spacing: .02em; }
 .tag.ok { background: var(--ok); color: #10130F; }
-kbd { font: 700 .85em var(--font-mono); border: 1px solid var(--line); border-bottom-width: 3px; border-radius: 4px; padding: 0 5px; background: var(--card); }
-code { font-size: .85em; }
+kbd { font: 700 max(var(--fs-xs), .85em) var(--font-text); border: 1px solid var(--line); border-bottom-width: 3px; border-radius: 4px; padding: 0 5px; background: var(--card); }
+code { font-size: max(var(--fs-xs), .85em); }
 
 .btn { min-height: 44px; padding: 10px 18px; border-radius: var(--radius-md); border: 2px solid var(--line); background: var(--card); color: var(--text); font-weight: 700; cursor: pointer; text-align: center; }
 .btn:hover { border-color: var(--primary); }
 .btn.primary { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
 .btn[disabled] { opacity: .5; cursor: not-allowed; }
-.btn small { display: block; font-weight: 600; font-size: .78rem; opacity: .9; }
+.btn small { display: block; font-weight: 600; font-size: var(--fs-xs); opacity: .9; }
 .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
 .row.end { justify-content: flex-end; }
 .menu { display: flex; flex-direction: column; gap: 8px; margin: 14px 0; }
@@ -246,7 +246,7 @@ b.w { color: var(--ok); } b.l { color: var(--accent); }
 .tbl.keys td:first-child { width: 45%; }
 .final-score { display: flex; justify-content: space-around; gap: 12px; margin: 8px 0 4px; }
 .final-score span { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.final-score em { font: 700 2.2rem/1 var(--font-mono); font-style: normal; }
+.final-score em { font: 700 2.4rem/1 var(--font-text); font-variant-numeric: tabular-nums; font-style: normal; }
 
 /* bracket */
 .bracket { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
@@ -274,7 +274,7 @@ b.w { color: var(--ok); } b.l { color: var(--accent); }
 .plain.bullets li, .plain.facts li { display: list-item; list-style: disc; margin-left: 1.2em; }
 .plain.kv li { display: block; }
 .champ-panel { text-align: center; border: 3px solid var(--tc2); }
-.pennant { margin: 0 auto 10px; width: 170px; height: 112px; background: var(--tc); clip-path: polygon(0 0, 100% 0, 100% 72%, 50% 100%, 0 72%); display: flex; flex-direction: column; align-items: center; padding-top: 14px; color: var(--tc2); font: 900 1.15rem/1.15 var(--font-neon); letter-spacing: .04em; }
+.pennant { margin: 0 auto 10px; width: 170px; height: 112px; background: var(--tc); clip-path: polygon(0 0, 100% 0, 100% 72%, 50% 100%, 0 72%); display: flex; flex-direction: column; align-items: center; padding-top: 14px; color: var(--tc2); font: 400 1.6rem/1 var(--font-display); letter-spacing: .06em; }
 
 /* help tabs */
 .tabs { display: flex; gap: 6px; flex-wrap: wrap; border-bottom: 2px solid var(--line); margin-bottom: 10px; }
@@ -282,7 +282,7 @@ b.w { color: var(--ok); } b.l { color: var(--accent); }
 .tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--primary); }
 
 @media (max-width: 600px) {
-  #screen { padding: 12px 10px 30px; }
+  #screen { padding: 12px 16px 30px; }
   .panel { padding: 16px 14px; }
   h2 { font-size: 1.8rem; }
   .bracket { grid-template-columns: 1fr; }
@@ -294,7 +294,7 @@ b.w { color: var(--ok); } b.l { color: var(--accent); }
   #sb { gap: 4px; padding: 4px 6px; }
   .sb-team { padding: 3px 6px; gap: 4px; }
   .sb-team .crest { display: none; }
-  .sb-name { font-size: .85rem; }
+  .sb-name { font-size: var(--fs-xs); }
   .sb-score { font-size: 1.4rem; }
   .sb-mid { min-width: 78px; padding: 2px 6px; }
   .sb-clock { font-size: 1.25rem; }

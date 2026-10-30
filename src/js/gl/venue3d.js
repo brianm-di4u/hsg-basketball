@@ -696,7 +696,7 @@ export function buildVenue(v, opts) {
     : pal([home.colors.primary, home.colors.primary, home.colors.secondary, '#F4F1EA', home.colors.primary, '#3A3F4A', '#2B3A5C', away.colors.primary]);
   if (shell) addShell(g, shell, home, floor.mat, wallTex, C);
   const crowd = makeCrowd(seats, atlas, palette, rng);
-  crowd.material.uniforms.uLight.value = arena ? 0.36 : 0.54; // the house sits darker than the floor
+  crowd.material.uniforms.uLight.value = arena ? 0.34 : 0.46; // the house sits darker than the floor
   g.add(crowd);
   mergeStatic(g);
   // the camera side: stands, crowd and a back wall that only reverse angles see (replays, close-ups, the title

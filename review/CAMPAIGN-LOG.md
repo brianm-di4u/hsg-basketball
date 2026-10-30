@@ -185,3 +185,55 @@ Also found and fixed: an M2r1 edit had commented out the end-wall wainscot mid-l
   - Exposure is calibrated by probe: floorY about 0.27, against 0.21 lite.
   - `scene3d.ensureVenue` swaps lite → HQ at a dead ball.
 - **Perf** (v3-m3-r1, uncapped): desktop 552-632 fps, mobile 920 fps.
+
+## M3 round 1 → round 2 (2026-10-30)
+- **v3-m3-r1 Arbiter: 6.7, 4 blockers.**
+  1. the mobile card margin and the desktop "+3"
+  2. menu footers
+  3. replay beats
+  4. appearance mix: the color fix changed the look of players' skin and hair families
+
+  None of the M3 targets was met (Lighting 7.0/7.5, Art 6.5/7.2, Authenticity 6.5/7.2, overall 6.7/7.4).
+- **Round 2:**
+  - **Venue:** 8 bleacher rows, so the banner wall shows in desktop play; banners just above the stands.
+  - **Light:** lamps on drops at 46 ft give the bake real pools; neutral light; paint keeps every channel.
+  - **Walls:** the wall texture is back on the shell; the arena is baked too (`--kind arena`); double-sided
+    enclosing planes.
+  - **Players:** skin and hair keep their families (half-way tone mapping); the faint rim light is back.
+  - **Replay:** occluders between the camera and the shooter are culled.
+  - **Card:** shrinks and re-places itself when no slot is clear.
+  - **Menus:** opaque setup footer; the cue only on setup screens.
+  - **Glass:** clearcoat.
+- **Gates 51/52.** The remaining miss is mobile c09 voids at 5.4%: the arena's dark apron beyond the far
+  baseline, house lights down by design. Left for the panel.
+- **M4 prep:** MPFB 2.0.18 (GPL tool, CC0 output) was downloaded from extensions.blender.org; the sha256
+  matches. It's in `tools/dev/mpfb` (ignored). It loads headless as a session-only extension repo
+  (`tools/dev/mpfb/test_load.py`), and nothing is saved to the user's Blender prefs. It bundles `base.obj`,
+  1,258 targets and the game_engine rig; eyes, hair and clothes will be our own meshes (stylized, toward the
+  user's reference).
+
+## M3 result: closed on the plateau rule (r1 6.7, r2 6.5, a -0.19 change)
+Most of r2's loss was two regressions, both fixed after the verdict:
+- **Skin:** `colLook` read `new THREE.Color(hex)` components, which are already linear, and converted them again.
+  It now reads the sRGB components (`getRGB(..., SRGBColorSpace)`). Skin takes its true tone; hair goes half way
+  toward the old look, so black hair stays black. Player fill rose 0.18 → 0.3. Verified on the c15 referee:
+  features visible, warm brown.
+- **Crowd exposure:** gyms 0.54 → 0.46, arena 0.36 → 0.34. Floor/crowd is back to 2.8-3.4.
+
+**Carried forward from M3** (the M3 verdicts list them with pass tests):
+- light pools that read as pools, not a vignette, and bloom on emitters
+- an arena roof with a lamp ring and a brighter court
+- the wall over at least 15% of the live frame; girls'-program banners
+- replay walls; blue-channel clipping on saturated paint (ACES)
+- the mobile card margin (7.5 px of 16) and the mobile Select footer
+- replay beats: c17 fires late; c08 draws the ball in front of the rim
+
+**Where the campaign stands after M0-M3:**
+| Point | Overall |
+|---|---|
+| Baseline | 6.1 |
+| M2 best | 6.6 |
+| M3 r1 | 6.7 |
+
+Every verdict ranks the same gap as the largest: the players (mannequins) and their animation, then the photo
+crowd's style clash. Those are M4-M6.

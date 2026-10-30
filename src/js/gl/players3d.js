@@ -90,7 +90,7 @@ function kitMaterial() {
       .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
         { vec3 V = normalize(vViewPosition);
           float fr = pow(1.0 - saturate(dot(normal, V)), 2.5);
-          reflectedLight.indirectDiffuse += diffuseColor.rgb * (0.18 + fr * 0.45);
+          reflectedLight.indirectDiffuse += diffuseColor.rgb * (0.3 + fr * 0.45); // fill, so the shadow side of dark skin keeps its features
           float rim = pow(1.0 - saturate(dot(normal, V)), 3.0) * saturate(dot(normal, normalize(vec3(0.3, 0.6, -0.75))) + 0.3);
           // gated by the light this point receives (none for a body in the unlit apron), tinted by the surface and
           // capped, so a dark kit gets a cool edge and never a white glow
@@ -106,11 +106,14 @@ const col = (c, hex) => c.set(hex);
 // skin and hair: the roster's tones were authored against that crushed look, so keep each player's family by
 // setting halfway between the hex and its linear value (deep tones stay deep, never black)
 const lin = (v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
-const colLook = (c, hex) => { const t = new THREE.Color(hex), k = (v) => (v + lin(v)) / 2; c.setRGB(k(t.r), k(t.g), k(t.b), THREE.SRGBColorSpace); return c; };
+// skin takes its true color (each player keeps the same tone; deep tones stay lit and modelled); hair goes half
+// way, so dark hair stays dark and grey reads as grey-black
+const _srgb = { r: 0, g: 0, b: 0 };
+const colLook = (c, hex, w = 0) => { new THREE.Color(hex).getRGB(_srgb, THREE.SRGBColorSpace); const k = (v) => v * (1 - w) + lin(v) * w; c.setRGB(k(_srgb.r), k(_srgb.g), k(_srgb.b), THREE.SRGBColorSpace); return c; };
 
 function setKit(pm, kit, look) {
   const u = pm.mat.userData.u;
-  colLook(u.uSkin.value, look.skin); colLook(u.uHair.value, look.hairC);
+  colLook(u.uSkin.value, look.skin); colLook(u.uHair.value, look.hairC, 0.5);
   col(u.uJersey.value, kit.jersey); col(u.uShorts.value, kit.shorts); col(u.uTrim.value, kit.trim);
   col(u.uStripe.value, kit.light ? kit.trim : kit.band || kit.trim);
   col(u.uSock.value, kit.light ? '#F4F1EA' : '#F4F1EA');
@@ -222,7 +225,7 @@ export function dressPlayer(pm, r, kit) {
   // attachments are placed in the rest pose (a pooled rig may still hold its last pose)
   for (const n of BONES) pm.bones[n].b.quaternion.copy(pm.bones[n].rest);
   setKit(pm, kit, r.look);
-  colLook(pm.hairMat.color, r.look.hairC);
+  colLook(pm.hairMat.color, r.look.hairC, 0.5);
   if (pm.hair) pm.hair.parent.remove(pm.hair);
   const hg = hairGeometry(r.look.hair);
   pm.hair = new THREE.Group();

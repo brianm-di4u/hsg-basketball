@@ -75,5 +75,36 @@
     "overall": 6.6,
     "blockers": 4,
     "note": "plateau (+0.06): M2 closed; its blockers fixed in v3-m3-r1"
+  },
+  {
+    "round": "v3-m3-r1",
+    "scores": {
+      "art": 6.5,
+      "lighting": 7,
+      "animation": 6.5,
+      "ui": 6.5,
+      "typography": 6.5,
+      "readability": 7,
+      "mobile": 7,
+      "authenticity": 6.5
+    },
+    "overall": 6.7,
+    "blockers": 4
+  },
+  {
+    "round": "v3-m3-r2",
+    "scores": {
+      "art": 6,
+      "lighting": 6,
+      "animation": 6.5,
+      "ui": 7,
+      "typography": 6.5,
+      "readability": 6.5,
+      "mobile": 7,
+      "authenticity": 6.5
+    },
+    "overall": 6.5,
+    "blockers": 5,
+    "note": "plateau (-0.19): M3 closed; skin and crowd regressions fixed after"
   }
 ]

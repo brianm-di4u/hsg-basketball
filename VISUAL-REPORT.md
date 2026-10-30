@@ -1,5 +1,48 @@
 # VISUAL-REPORT: Spa City Hoops visual overhaul
 
+## v3 campaign (October 2026): 6.1 → 7.3
+
+The v3 campaign rebuilt the look in seven milestones, each scored by an adversarial review panel on real-GPU
+captures: two prosecutors (one of them GPT-6.1 via Codex), a defender and a binding arbiter
+(`review/REVIEWER.md`, `review/RUBRIC.md`). Every verdict, brief and score is in `review/`; the round-by-round log
+is `review/CAMPAIGN-LOG.md` and the numbers are `review/scores.json`.
+
+**Result:** the panel's overall score went from **6.1 to 7.3**. The stop rule's target (8.5, with UI, Typography and
+Mobile at 8) was not met; the campaign closed on its plateau clause (two rounds in a row gaining under 0.2).
+Typography reached 8; every category is at 7 or better. Gameplay files (`sim.js`, `ai.js`, `rules.js`,
+`season.js`) are byte-identical, enforced by a hash test.
+
+| | Overall | Art | Lighting | Animation | UI | Typography | Readability | Mobile | Authenticity |
+|---|---|---|---|---|---|---|---|---|---|
+| Before v3 | 6.1 | | | | | | | | |
+| After v3 | **7.3** | 7 | 7 | 7 | 7.5 | 8 | 7 | 7.5 | 7.5 |
+
+**What v3 built:**
+- **Platform (M1):** three.js r186 bundled by esbuild, content-hashed files, a 3.0 MB core with high-quality art
+  (about 4 MB) streamed in the background on the hosted site; lite 3D and the 2D court remain the fallbacks.
+- **Broadcast pass (M2):** a light hierarchy, a clear-coat floor with a box-projected reflection probe, a cloth net,
+  a ball trail, bloom on emitters, a tighter camera and a dark broadcast menu style.
+- **Venues (M3):** Blender-built gym and arena shells with Cycles-baked lightmaps.
+- **Players (M4):** MPFB / MakeHuman bodies (CC0) with faces, eyes, five-finger hands and a per-pixel kit shader.
+- **Animation (M5):** CMU motion capture retargeted onto the rig, hand-keyed basketball clips, a blend tree, leg and
+  arm IK, replay depth of field and camera blur.
+- **Crowd (M6):** an animated low-poly 3D crowd that reacts to makes, benches in the team's kit, coaches, a cheer
+  squad; three levels of detail inside the triangle budget.
+- **Presentation (M7):** a two-face type system with a 13 px floor (tested), menus over posed players in their kits,
+  HUD fixes for phones, a finer quality governor, and full credits (`CREDITS.md`).
+
+**Performance (RTX 5060, uncapped):** desktop live play about 560 fps and the arena about 510 (1.0M and 1.37M
+triangles, budget 1.5M); phone 790 and 690 fps (0.43M and 0.59M triangles, budget 0.6M).
+
+**Open, in the final verdict's order of impact** (`review/v3-m7-r2.md`): the player model (armhole flaps, slipper
+shoes, plain heads up close), the motion (the dunk's landing, the jumper's held arms), bloom and the phone's light
+hierarchy, phone-first menus with a staged player, and body separation in crowded plays. The arena's dark-area gate
+(c09) also still fails: 5.9% desktop, 7.2% phone, against 3%.
+
+---
+
+## v2 (earlier): 4.1 → 6.1
+
 **Result:** the game now plays in a 3D high-school gym (three.js r160.1) with rigged players, a painted crowd, a lit
 state-finals arena, a broadcast camera, highlight replays and a big-play payoff. The original 2D court remains as the
 fallback. Rules, AI, the shot meter, the season and the bracket are unchanged: `sim.js`, `ai.js`, `rules.js` and

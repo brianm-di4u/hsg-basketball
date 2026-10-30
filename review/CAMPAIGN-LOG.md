@@ -354,3 +354,32 @@ crowd's style clash. Those are M4-M6.
 | M4 | 6.6 |
 | M5 | 6.8 |
 | M6 | 7.0 |
+
+## M7 result: closed on the plateau rule (r1 7.2, +0.19; r2 7.3, +0.125). The campaign ends here.
+- **Built:** Barlow Condensed (OFL) as the text face beside Bebas Neue, a type scale with a 13 px floor that
+  `tests/type.test.mjs` enforces on every menu and the HUD (desktop and phone), scoreboard figures with tabular
+  numerals; menus on wide screens drawn over posed players in tonight's kits (Select shows the home and away
+  picks; the champion screen shows them celebrating in front of the standing bowl); make-card placement that
+  looks ahead 0.7 s; no "+N" pop on phones; 16 px phone menu margins; a governor that drops bloom resolution,
+  then the pixel ratio, then the tier; `CREDITS.md`, licence notes and in-game credits brought up to date.
+- **Also closed in M7:** the replay foreground prop (crowd culled within 14 ft of the lens), bench lockstep
+  (seated variants), officials in slacks, the mobile Select footer, desktop c14 voids (4.4%).
+- **Scores:** Typography 6.5 → 8, UI 7 → 7.5, Mobile 7 → 7.5; overall 7.0 → 7.3.
+- **Stop rule:** not met (overall 7.3 against 8.5; UI and Mobile 7.5 against 8). The campaign closes on the plateau
+  clause.
+
+## Campaign result
+| Point | Overall | Art | Light | Anim | UI | Type | Read | Mobile | Auth |
+|---|---|---|---|---|---|---|---|---|---|
+| v2 baseline (M0) | 6.1 | | | | | | | | |
+| M2 | 6.6 | | | | | | | | |
+| M4 | 6.6 | 6.5 | 6.5 | 6.5 | 7 | 6.5 | 6.5 | 7 | 6.5 |
+| M5 | 6.8 | 6.5 | 6.5 | 7 | 7 | 6.5 | 7 | 7 | 6.5 |
+| M6 | 7.0 | 7 | 7 | 7 | 7 | 6.5 | 7 | 7 | 7.5 |
+| **M7 (final)** | **7.3** | 7 | 7 | 7 | 7.5 | 8 | 7 | 7.5 | 7.5 |
+
+**What would most move the score next** (the final verdict's ranking, `review/v3-m7-r2.md` §5): the player model
+(Art, Authenticity, and through them UI and Mobile); the motion (the only lever for Animation); bloom and the
+phone's light hierarchy (Lighting); phone-first menus (Mobile and UI to 8); body separation (Readability). The
+verdict judges that all five done well would land near 8, and that 8.5 needs the 3D world at Hoop Land's authored
+level.

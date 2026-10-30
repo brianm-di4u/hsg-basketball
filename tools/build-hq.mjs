@@ -98,7 +98,7 @@ for (const kind of ['gym', 'arena']) {
 
 await browser.close();
 // delete orphans, write the manifest
-for (const f of fs.readdirSync(HQ)) if (f !== 'manifest.json' && !files[f]) fs.rmSync(path.join(HQ, f));
+for (const f of fs.readdirSync(HQ)) if (f !== 'manifest.json' && f !== 'LICENSES.txt' && !files[f]) fs.rmSync(path.join(HQ, f));
 const manifest = { schema: SCHEMA, build: new Date().toISOString(), packages, files };
 fs.writeFileSync(path.join(HQ, 'manifest.json'), JSON.stringify(manifest, null, 1) + '\n');
 const total = Object.values(files).reduce((n, f) => n + f.bytes, 0);

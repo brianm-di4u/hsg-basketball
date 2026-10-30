@@ -1,0 +1,5 @@
+Streamed art in this folder (see CREDITS.md at the repository root for the full list):
+- players-hq.*.glb, fans.*.glb: bodies built from MakeHuman system assets through MPFB 2 (CC0 output).
+- anims.*.json/.bin: motion capture from the CMU Graphics Lab Motion Capture Database (mocap.cs.cmu.edu; created
+  with funding from NSF EIA-0196217; BVH conversion by Bruce Hahne), retargeted, plus original keyed clips (MIT).
+- gym.*, arena.*, *-lm-*.webp: original venue models and baked lighting (MIT, with the game).

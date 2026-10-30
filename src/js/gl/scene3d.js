@@ -70,7 +70,7 @@ export async function load3d(stage, tier) {
     const bin = Uint8Array.from(atob(assets.players), (ch) => ch.charCodeAt(0)).buffer;
     const gltf = await new Promise((res, rej) => new THREE.GLTFLoader().parse(bin, '', res, rej));
     initPlayers(gltf);
-    try { await document.fonts.load('40px "Bebas Neue"'); } catch (e) { /* canvas text falls back */ }
+    try { await Promise.all([document.fonts.load('40px "Bebas Neue"'), document.fonts.load('700 20px "Barlow Condensed"'), document.fonts.load('500 20px "Barlow Condensed"')]); } catch (e) { /* canvas text falls back */ }
     G3.images = await loadImages(assets.tex);
     init(stage);
     G3.state = 'ready';
@@ -159,7 +159,7 @@ function ballTexture() {
 // ---------------------------------------------------------------- sizing and camera
 export function resize3d(w, h, dpr) {
   if (G3.state !== 'ready') return;
-  const cap = G3.tier === 'high' ? 2 : G3.tier === 'medium' ? 1.5 : 1;
+  const cap = Math.min(G3.tier === 'high' ? 2 : G3.tier === 'medium' ? 1.5 : 1, G3.dprCap || 9);
   G3.dpr = Math.min(cap, dpr);
   G3.W = w; G3.H = h;
   G3.renderer.setPixelRatio(G3.dpr);
@@ -372,6 +372,7 @@ export function draw3d(scene, fx) {
     let faceX = ball ? ball.x : HL, faceZ = ball ? ball.z : HW;
     if (hasBall || pl.act === 'shoot' || pl.act === 'layup') { faceX = atk; faceZ = COURT.rimZ; }
     if (m && m.phase === 'ft' && m.ft) { faceX = rimFor(m.dir[m.ft.team]); faceZ = COURT.rimZ; }
+    if (pl.lookAt) { faceX = pl.lookAt[0]; faceZ = pl.lookAt[1]; } // menu players face the camera
     const chasing = it.pl.defending && Math.hypot(pl.vx || 0, pl.vz || 0) > 10;
     const ctx = {
       pl, r: it.r, dt, snap: G3.snap, hasBall, defending: !!pl.defending, chasing, faceX, faceZ,
@@ -569,7 +570,9 @@ function drawShotClock3(dg, txt) {
 
 // Adaptive quality: if frames run slow for a couple of seconds of play, step down a tier
 // (high → medium drops real-time shadows; medium → low drops the floor reflection). Never steps back up.
-const GOV = { t: 0, slow: 0, frames: 0 };
+// Frame-time governor: half of 2.5 s worth of frames over 25 ms steps quality down one notch, cheapest first:
+// bloom to a quarter of the resolution, then the pixel ratio to 1, then the tier (high → medium → low).
+const GOV = { t: 0, slow: 0, frames: 0, steps: [] };
 function govern(ms, dt) {
   // test hooks (step(n)) draw frames whose dt is not a frame time at all
   if (!dt || dt > 0.2 || G3.hooked || G3.tier === 'low' || G3.camOverride) return;
@@ -579,7 +582,10 @@ function govern(ms, dt) {
   const slowShare = GOV.slow / GOV.frames;
   GOV.t = GOV.slow = GOV.frames = 0;
   if (slowShare < 0.5) return;
+  if (G3.post && G3.post.bloomScale && !G3.post.bloomLow) { G3.post.setBloomScale(0.25); GOV.steps.push('bloom'); return; }
+  if ((G3.dpr || 1) > 1.01) { G3.dprCap = 1; GOV.steps.push('dpr'); resize3d(G3.W, G3.H, window.devicePixelRatio || 1); return; }
   G3.pendingTier = G3.tier === 'high' ? 'medium' : 'low'; // applied before the next frame renders (a resize clears the canvas)
+  GOV.steps.push(G3.pendingTier);
 }
 export function setTier(t) {
   if (G3.state !== 'ready') return;
@@ -600,7 +606,7 @@ export function info3d() {
   if (G3.state !== 'ready') return { state: G3.state, err: G3.err };
   const i = G3.renderer.info;
   return { state: G3.state, tier: G3.tier, prof: G3.prof ? { ...G3.prof } : null, calls: i.render.calls, tris: i.render.triangles, geos: i.memory.geometries, texs: i.memory.textures, venue: G3.venueKey, frames: G3.frames,
-    hqVenue: !!(G3.venue && G3.venue.hq), hqPlayers: !!G3.hqPlayers, crowd3d: G3.venue && G3.venue.crowd3d ? G3.venue.crowd3d.count : 0,
+    hqVenue: !!(G3.venue && G3.venue.hq), hqPlayers: !!G3.hqPlayers, gov: GOV.steps.slice(), crowd3d: G3.venue && G3.venue.crowd3d ? G3.venue.crowd3d.count : 0,
     anim: { mode: ANIM.clips ? ANIM.mode : 'proc', clips: ANIM.clips ? Object.keys(ANIM.clips).length : 0, msPer: ANIM.stats.players ? +(ANIM.stats.ms / ANIM.stats.players).toFixed(4) : 0, footResidCm: +(IK.maxResid * 100).toFixed(2), slips: IK.slips, locked: IK.locked, worst: IK.worst, seen: [...ANIM.seen], ballErrCm: +((G3.ballErr || 0) * 100).toFixed(2), frames: ANIM.stats.frames || 0 },
     cam: { x: +G3.camera.position.x.toFixed(1), y: +G3.camera.position.y.toFixed(1), z: +G3.camera.position.z.toFixed(1), fov: G3.camera.fov } };
 }

@@ -306,8 +306,13 @@ export function helpScreen(st, tab = 'controls') {
     <li>Gyms are generic game art in each school's colors. Title-year pennants hang only for real state titles.</li>
     <li>Out-of-county opponents (Cinderbrook, Quartz Hollow and others) are fictional towns.</li></ul>
     <h3>Fact cards</h3><ul class="plain facts">${FACTS_LIST.map((f) => `<li>${esc(f.text)} <span class="src">(${esc(f.source)})</span></li>`).join('')}</ul>
-    <h3>Credits</h3><p>Spa City Hoops is part of the open-source Hot Springs Games collection (MIT license). Player bodies were modeled in Blender; the crowd, band, cheer squad, maple floor and block-wall images were painted for this game with AI image generation; everything else is drawn in code, and all sound is synthesized in the browser. No network connection is used.</p>
-    <p class="fine">Includes three.js r160.1 (MIT license, © 2010–2023 three.js authors) and the Bebas Neue typeface by Dharma Type (SIL Open Font License 1.1). Classic 2D court available in Settings → Graphics.</p>`;
+    <h3>Credits</h3><p>Spa City Hoops is part of the open-source Hot Springs Games collection (MIT license). Gyms, the arena and their lighting were built in Blender; the photo crowd cards (on the classic and lite views only), maple floor and block-wall images were painted for this game with AI image generation; everything else is drawn in code, and all sound is synthesized in the browser. The only network use is loading the game's own high-quality art from the same site after it starts: no ads, analytics or accounts.</p>
+    <ul class="plain bullets fine">
+    <li>Player and fan bodies: built from MakeHuman system assets with MPFB 2 (CC0).</li>
+    <li>Motion capture: the CMU Graphics Lab Motion Capture Database (mocap.cs.cmu.edu; created with funding from NSF EIA-0196217), BVH conversion by Bruce Hahne. Other animation is keyed for this game.</li>
+    <li>three.js r186 (MIT), postprocessing by pmndrs (Zlib), N8AO (ISC), the Basis Universal transcoder (Apache-2.0).</li>
+    <li>Typefaces: Bebas Neue by Dharma Type and Barlow Condensed by Jeremy Tribby (both SIL Open Font License 1.1).</li>
+    <li>Classic 2D court available in Settings → Graphics.</li></ul>`;
   return `<div class="panel wide">
     <h2>How to play</h2>
     <div class="tabs" role="tablist">${tabs.map(([k, l]) => `<button class="tab" role="tab" aria-selected="${k === tab}" data-act="helpTab" data-arg="${k}">${l}</button>`).join('')}</div>

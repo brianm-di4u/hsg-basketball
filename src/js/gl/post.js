@@ -67,7 +67,9 @@ export function makePost(renderer, scene, camera, tier) {
   let primed = false;
   const lastPos = new THREE.Vector3();
   return {
-    tier, composer,
+    tier, composer, bloomScale: cfg.bloomScale, bloomLow: false,
+    // the governor's first, cheapest step
+    setBloomScale(k) { bloom.resolution.scale = k; this.bloomLow = true; composer.setSize(renderer.domElement.width / renderer.getPixelRatio(), renderer.domElement.height / renderer.getPixelRatio(), false); },
     // on: a replay or close-up camera; focus: the subject's world position
     setCinema(on, focus) {
       cine.enabled = !!on;

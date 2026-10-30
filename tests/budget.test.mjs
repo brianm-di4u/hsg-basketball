@@ -62,7 +62,7 @@ export const tests = [
           if (tier in tierBytes) tierBytes[tier] += b.length;
         }
       }
-      const onDisk = fs.readdirSync(dir).filter((f) => f !== 'manifest.json' && !fs.statSync(path.join(dir, f)).isDirectory());
+      const onDisk = fs.readdirSync(dir).filter((f) => f !== 'manifest.json' && f !== 'LICENSES.txt' && !fs.statSync(path.join(dir, f)).isDirectory());
       for (const f of onDisk) t.expect(listed.has(f), `no orphan HQ file: ${f}`);
       const union = onDisk.reduce((n, f) => n + fs.statSync(path.join(dir, f)).size, 0);
       t.log(`HQ: high ${(tierBytes.high / MB).toFixed(1)} MB, medium ${(tierBytes.medium / MB).toFixed(1)} MB, on disk ${(union / MB).toFixed(1)} MB, ${Object.keys(man.packages || {}).length} packages`);

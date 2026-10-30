@@ -157,6 +157,23 @@ export const tests = [
     },
   },
   {
+    name: '3D: the governor steps down cheapest first under a slow CPU',
+    viewports: ['desktop'],
+    initScript: FORCE_3D,
+    async run(t) {
+      if (!t.gpu) { t.log('software GL already runs at the lowest step it reaches; run with --gpu'); return; }
+      await ready3d(t);
+      await exhibition(t, { seed: 9, paused: false });
+      await t.cpuThrottle(10); // far below a real device: frames land between 25 ms and 200 ms (slower ones are hitches it ignores)
+      await t.page.waitForFunction(() => (window.__game.getState().gfx.gov || []).length >= 2, null, { timeout: 30000 }).catch(() => {});
+      await t.cpuThrottle(1);
+      const gov = (await t.state()).gfx.gov || [];
+      t.log('governor steps: ' + gov.join(' → '));
+      t.expect(gov.length >= 2, `the governor stepped down (${gov.join(', ')})`);
+      t.expect(gov[0] === 'bloom' || gov[0] === 'dpr', `the first step is a cheap one, not a tier (${gov[0]})`);
+    },
+  },
+  {
     name: 'fallback: ?gl=0 keeps the classic 2D court',
     url: 'index.html?gl=0',
     async run(t) {

@@ -503,8 +503,35 @@ function drawFrame(dt) {
     const tt = performance.now() / 1000, ang = Math.sin(tt * 0.08) * 0.7, port = R.v && R.v.portrait;
     G3.camOverride = { attract: true, p: [47 + Math.sin(ang) * (port ? 48 : 60), port ? 26 : 22, 25 + Math.cos(ang) * (port ? 48 : 60)], t: [47, port ? 3 : 5, 4], fov: port ? 62 : 40 };
   } else if (G3.camOverride && G3.camOverride.attract) { G3.camOverride = null; R.snap = true; }
-  draw({ venue, dt, camX: 47, camZ: 25, players: [], cheer: sc === 'champion' ? 1 : 0 });
+  const heroes = menuHeroes(sc, key);
+  draw({ venue, dt, camX: 47, camZ: 25, players: heroes, cheer: sc === 'champion' ? 1 : 0 });
   updateScoreboard();
+}
+
+// Menus on a wide screen: a fixed camera at centre court and two players in their kits either side of the panel
+// (on Select: the home pick left, the away pick right, so the choice shows; at the title: champions celebrating).
+// Phones keep the empty court: the panel fills the width there.
+const HERO_ROSTERS = new Map();
+function heroRoster(key, program) {
+  const k = key + '|' + program;
+  if (!HERO_ROSTERS.has(k)) HERO_ROSTERS.set(k, makeRoster(key, program, team(key).cls, 1));
+  return HERO_ROSTERS.get(k);
+}
+function menuHeroes(sc, key) {
+  if (!is3d() || R.reduced || (R.v && R.v.portrait) || !['select', 'hub', 'roster', 'champion', 'seasonSetup', 'challenges', 'trophies'].includes(sc)) return [];
+  const program = (state.season && state.season.program) || state.pick.program || 'boys';
+  const sides = sc === 'select' ? [[state.pick.home || key, 'home'], [state.pick.away || 'lakeside', 'away']] : [[key, 'home'], [key, 'home']];
+  // (the title moment looks a little up, so the arena's standing crowd fills the frame behind the champions)
+  const cam = sc === 'champion' ? { p: [47, 5.6, 42.5], t: [47, 5.6, 22], fov: 46 } : { p: [47, 5.4, 41.5], t: [47, 4.6, 25], fov: 40 };
+  G3.camOverride = { attract: true, ...cam };
+  const out = [];
+  sides.forEach(([k, side], i) => {
+    const T = team(k), roster = heroRoster(k, program), r = roster[i === 0 ? 0 : 2] || roster[0];
+    const x = 47 + (i === 0 ? -7.6 : 7.6), z = 26.5;
+    out.push({ pl: { idx: 300 + i, t: i, x, z, y: 0, vx: 0, vz: 0, act: sc === 'champion' ? 'celebrate' : 'idle', actT: 0, meter: 0, lookAt: [47 + (i === 0 ? 2 : -2), 41.5] },
+      r, kit: kitFor(T, side), home: side === 'home', user: false });
+  });
+  return out;
 }
 
 function drawMatch(m, dt) {

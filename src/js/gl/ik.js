@@ -53,7 +53,7 @@ export function solveLegs(pm, st, ctx) {
   // a jump in position (a replay cut, a sim placement) drops the old locks: they belong to another place
   if (!k.seen || k.at.distanceToSquared(pm.root.position) > 9) { for (const s of ['L', 'R']) { k[s].lock = null; k[s].w = 0; } }
   k.at.copy(pm.root.position); k.seen = true;
-  const sc = pm.root.scale.x, ankH = pm.ankH * sc, air = (ctx.pl.y || 0) > 0.05, dt = ctx.dt || 1 / 60;
+  const sc = pm.root.scale.x, ankH = pm.ankH * sc, air = (ctx.airY ?? ctx.pl.y ?? 0) > 0.05, dt = ctx.dt || 1 / 60;
   const slideMax = 0.7; // feet: past this the foot lets go and re-plants (a turn, a sim teleport)
   pm.root.getWorldQuaternion(T.rq);
   const left = new THREE.Vector3(1, 0, 0).applyQuaternion(T.rq); // straight leg: bend about the character's left

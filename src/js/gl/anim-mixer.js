@@ -123,12 +123,14 @@ export function mix(st, ctx, scale) {
   const t0 = performance.now();
   if (!st.mx) st.mx = { phase: Math.random(), base: makePose(), tmp: makePose(), up: makePose(), oneW: 0, oneName: '', oneTime: 0, relT: null, prevLat: 0, xo: false, xoT: 0 };
   const M = st.mx, pl = ctx.pl, dt = ctx.dt;
+  // each player keeps their own rhythm: no two defenders bounce in step
+  if (M.rate == null) { const h = ((ctx.hash || 0) * 0.6180339) % 1; M.rate = 0.86 + 0.28 * h; M.phase = h; }
   // velocity in the body frame (forward along the heading, lateral to its left)
   const vx = pl.vx || 0, vz = pl.vz || 0, sp = Math.hypot(vx, vz);
   const fwd = vx * Math.sin(st.head) + vz * Math.cos(st.head), lat = vx * Math.cos(st.head) - vz * Math.sin(st.head);
   // game feet → model metres for this player
   const spM = sp / scale;
-  const air = (pl.y || 0) > 0.05;
+  const air = (ctx.airY ?? pl.y ?? 0) > 0.05; // the drawn height (a jumper's load keeps the feet down a moment)
   const base = M.base, tmp = M.tmp;
   // the pose lab (tools/anim-lab.mjs): every player holds one clip frame
   if (A.lab && C[A.lab.clip]) { sampleClip(C[A.lab.clip], A.lab.t, base, !!A.lab.mirror); if (air) base.dy = Math.min(0, base.dy); return base; }
@@ -139,7 +141,7 @@ export function mix(st, ctx, scale) {
     M.phase += rate * dt / s.dur;
     // the take's performer steps to their right (mirror for a slide to the left)
     sampleClip(s, M.phase * s.dur, base, lat > 0);
-    sampleClip(C.dstance || C.stance, st.t, tmp);
+    sampleClip(C.dstance || C.stance, st.t * M.rate, tmp);
     blendPose(base, tmp, 1 - smooth(clamp(Math.abs(lat) / 4, 0, 1)), LOWER);
   } else {
     const jog = C.jog, run = C.run;
@@ -153,7 +155,7 @@ export function mix(st, ctx, scale) {
     const wStand = 1 - smooth(clamp((spM - 0.25) / 1.2, 0, 1));
     // standing: the keyed idle, or the defender's low stance
     const still = ctx.defending && !ctx.chasing && C.dstance ? C.dstance : C.idle || C.stance;
-    if (wStand > 0) { sampleClip(still, st.t, tmp); blendPose(base, tmp, wStand); }
+    if (wStand > 0) { sampleClip(still, st.t * M.rate, tmp); blendPose(base, tmp, wStand); }
   }
   // ---- the dribble, on the upper body, in time with the ball's bounce (sim: ball height = |sin(dp)|)
   if (ctx.hasBall && !ctx.holdBall && C.dribble) {
@@ -199,7 +201,7 @@ export function mix(st, ctx, scale) {
         M.post += dt;
         // an early release still reaches the set point (in 0.08 s) before the follow-through
         const rr = Math.max(M.relT, r), q = Math.min(1, M.post / 0.08);
-        t = q < 1 ? M.relT + (rr - M.relT) * q : rr + Math.min(M.post - 0.08, 0.06) + Math.max(0, M.post - 0.14) * 0.55;
+        t = q < 1 ? M.relT + (rr - M.relT) * q : rr + Math.min(M.post - 0.08, 0.06) + Math.max(0, M.post - 0.14) * 0.85;
       }
     } else t = (mk.start || 0) + M.oneTime;
     sampleClip(clip, t, tmp);

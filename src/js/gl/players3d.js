@@ -545,8 +545,16 @@ export function updatePlayer(pm, ctx) {
   ctx.lookYaw = Math.max(-0.9, Math.min(0.9, angDiff(st.head, toBall)));
   const sc = (ctx.r.height / 12) / MODEL_H;
   // the sim leaves the floor the tick a jumper starts: show the knee load first (the first 0.13 s rise eases in)
-  const lift = pl.act === 'shoot' ? smooth(Math.min(1, (pl.actT || 0) / 0.13)) : 1;
-  pm.root.position.set(pl.x - COURT.L / 2, (pl.y || 0) * lift, pl.z - COURT.W / 2);
+  // (the feet stay down 0.08 s, then the body catches the sim up by 0.22 s)
+  const lift = pl.act === 'shoot' ? smooth(Math.max(0, Math.min(1, ((pl.actT || 0) - 0.08) / 0.14))) : 1;
+  let y = (pl.y || 0) * lift;
+  // a dunk hangs on the rim a moment after the throw-down, then drops
+  if (pl.act === 'layup' && pl.stype === 'dunk') {
+    if (!ctx.released) st.hangY = Math.max(st.hangY || 0, y);
+    else { const h = st.rimPost || 0; if (h < 0.16) y = Math.max(y, st.hangY || 0); else if (h < 0.3) y = Math.max(y, (st.hangY || 0) * (1 - (h - 0.16) / 0.14)); }
+  } else st.hangY = 0;
+  ctx.airY = y;
+  pm.root.position.set(pl.x - COURT.L / 2, y, pl.z - COURT.W / 2);
   pm.root.rotation.y = st.head;
   pm.root.scale.setScalar(sc);
   const P = poseFor(pm, ctx);

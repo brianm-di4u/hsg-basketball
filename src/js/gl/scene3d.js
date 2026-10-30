@@ -14,6 +14,7 @@ import { CORE } from './build-info.js';
 import { makePost } from './post.js';
 import { A as ANIM, loadAnims } from './anim-mixer.js';
 import { IK } from './ik.js';
+import { initCrowd3d, crowd3dReady, buildCrowd3d, C3 } from './crowd3d.js';
 
 const HL = COURT.L / 2, HW = COURT.W / 2;
 export const G3 = {
@@ -139,7 +140,7 @@ function init(stage) {
   G3.probe = makeProbe(r, G3.tier === 'high' ? 256 : G3.tier === 'medium' ? 128 : 64);
   G3.post = makePost(r, G3.scene, G3.camera, G3.tier);
   G3.P = project;
-  if (window.__TEST__) { window.__G3 = G3; window.__ANIM = ANIM; } // test and debug access
+  if (window.__TEST__) { window.__G3 = G3; window.__ANIM = ANIM; window.__C3 = C3; } // test and debug access
 }
 
 function ballTexture() {
@@ -288,6 +289,13 @@ function ensureVenue(v, canSwap) {
   captureProbe();
 }
 // the room's own light for players, the ball and the floor's clear coat; people and effects stay out of it
+function attachCrowd3d(v) {
+  const V = G3.venue, girls = !!(v && v.home && v.home.roster && String(v.home.roster[0] && v.home.roster[0].id).includes('girls'));
+  const o = { tier: G3.tier, palette: V.palette, girls, dim: V.arena ? 0.58 : 0.62 };
+  V.crowd3d = buildCrowd3d([...V.seats, ...(V.bench || [])], { ...o, seed: 11 });
+  V.g.add(V.crowd3d.g); V.crowd.visible = false;
+  if (V.near && V.near.seats) { V.near3d = buildCrowd3d(V.near.seats, { ...o, seed: 23 }); V.near.g.add(V.near3d.g); V.near.crowd.visible = false; }
+}
 function captureProbe() {
   const hide = [G3.ball, G3.blobs, G3.userRing, G3.trailFx.mesh, ...[...G3.players.values()].map((pm) => pm.root)];
   G3.envTex = G3.probe.capture(G3.scene, hide);
@@ -327,6 +335,9 @@ export function draw3d(scene, fx) {
   const canSwap = !scene.m || scene.m.phase !== 'live' || !!G3.camOverride || !!scene.reduced;
   ensureVenue(scene.venue, canSwap);
   if (ANIM.clips) ANIM.stats.frames = (ANIM.stats.frames || 0) + 1;
+  // the 3D crowd: bake once when its package is in, then seat it in the venue at a dead ball
+  if (!crowd3dReady() && HQ.packages.crowd && HQ.packages.crowd['fans.glb']) { try { initCrowd3d(HQ.packages.crowd['fans.glb']); } catch (e) { console.info('[hq] crowd:', e.message); HQ.packages.crowd = null; } }
+  if (crowd3dReady() && G3.venue && !G3.venue.crowd3d && canSwap && G3.venue.seats) attachCrowd3d(scene.venue);
   if (!ANIM.clips && HQ.packages.anims && HQ.packages.anims['anims.json']) { try { loadAnims(HQ.packages.anims); } catch (e) { console.info('[hq] anims:', e.message); HQ.packages.anims = null; } }
   if (canSwap && !G3.hqPlayers && HQ.packages['players-hq'] && HQ.packages['players-hq']['players-hq.glb']) swapPlayersHQ();
   // the nearest player to the camera sets the bottom of the broadcast frame (no empty wood under the play)
@@ -440,9 +451,12 @@ export function draw3d(scene, fx) {
     } else B.position.set(ball.x - HL, Math.max(0.4, ball.y), ball.z - HW);
     // a dunk's ball stays in the hand until it is through the ring
     const sh = ball.state === 'shot' && ball.shot;
-    if (sh && sh.type === 'dunk' && G3.dunkHand && G3.time - G3.dunkHand.at < 0.2) {
-      const u = Math.min(1, sh.t / sh.T), k = u < 0.55 ? 0 : (u - 0.55) / 0.45;
-      B.position.lerpVectors(G3.dunkHand.p, B.position, k * k * (3 - 2 * k));
+    // a dunk: from the hand straight down through the ring over the sim's flight time (no arc over the rim)
+    if (sh && sh.type === 'dunk' && G3.dunkHand && G3.time - G3.dunkHand.at < 0.3) {
+      const u = Math.min(1, sh.t / sh.T), rx = rimFor(m.dir[sh.team]) - HL, rz = COURT.rimZ - HW;
+      G3._rt = G3._rt || new THREE.Vector3();
+      if (u < 0.4) B.position.lerpVectors(G3.dunkHand.p, G3._rt.set(rx, Math.max(10.55, G3.dunkHand.p.y - 0.1), rz), u / 0.4);
+      else B.position.set(rx, 10.55 + (9.3 - 10.55) * ((u - 0.4) / 0.6), rz);
     }
     const d = B.position.distanceTo(prev);
     if (d < 6) { G3.ballSpin += d / 0.4; B.rotation.set(G3.ballSpin * 0.7, 0, -G3.ballSpin); }
@@ -507,6 +521,13 @@ export function draw3d(scene, fx) {
   const cu = V3.crowd.material.uniforms;
   if (scene.cheer) cu.uCheerTeam.value = V3.arena || scene.cheerTeam == null ? -1 : scene.cheerTeam;
   cu.uTime.value = G3.time; cu.uCheer.value = scene.reduced ? 0 : Math.min(1, G3.cheer + (m ? (m.crowd || 0) * 0.25 : 0));
+  // a make (the cheer jumps): the 3D crowd's stand-and-cheer starts now, rippling from the nearer basket
+  if ((scene.cheer || 0) > (G3.lastCheer || 0) + 0.3) { G3.cheerAt = G3.time; G3.cheerX = (scene.ball && scene.ball.x < HL ? COURT.rimX[0] : COURT.rimX[1]) - HL; }
+  G3.lastCheer = scene.cheer || 0;
+  // (a match passes the sim time since the make, exact under the test hooks; menus fall back to the render clock)
+  const age = scene.cheerAge !== undefined ? scene.cheerAge : G3.cheerAt == null ? null : G3.time - G3.cheerAt;
+  const bx = scene.cheerX != null ? scene.cheerX - HL : G3.cheerX || 0;
+  for (const c3 of [V3.crowd3d, V3.near3d]) if (c3) c3.update(G3.time, scene.reduced ? null : age, scene.cheerAge !== undefined ? (V3.arena || scene.cheerTeam == null ? -1 : scene.cheerTeam) : cu.uCheerTeam.value, cu.uCheer.value, bx);
   cu.uRight.value.setFromMatrixColumn(G3.camera.matrixWorld, 0);
   if (V3.near && V3.near.g.visible) { const nu = V3.near.crowd.material.uniforms; nu.uTime.value = cu.uTime.value; nu.uCheer.value = cu.uCheer.value; nu.uCheerTeam.value = cu.uCheerTeam.value; nu.uRight.value.copy(cu.uRight.value); }
   // shadow camera follows the action
@@ -575,7 +596,7 @@ export function info3d() {
   if (G3.state !== 'ready') return { state: G3.state, err: G3.err };
   const i = G3.renderer.info;
   return { state: G3.state, tier: G3.tier, prof: G3.prof ? { ...G3.prof } : null, calls: i.render.calls, tris: i.render.triangles, geos: i.memory.geometries, texs: i.memory.textures, venue: G3.venueKey, frames: G3.frames,
-    hqVenue: !!(G3.venue && G3.venue.hq), hqPlayers: !!G3.hqPlayers,
+    hqVenue: !!(G3.venue && G3.venue.hq), hqPlayers: !!G3.hqPlayers, crowd3d: G3.venue && G3.venue.crowd3d ? G3.venue.crowd3d.count : 0,
     anim: { mode: ANIM.clips ? ANIM.mode : 'proc', clips: ANIM.clips ? Object.keys(ANIM.clips).length : 0, msPer: ANIM.stats.players ? +(ANIM.stats.ms / ANIM.stats.players).toFixed(4) : 0, footResidCm: +(IK.maxResid * 100).toFixed(2), slips: IK.slips, locked: IK.locked, worst: IK.worst, seen: [...ANIM.seen], ballErrCm: +((G3.ballErr || 0) * 100).toFixed(2), frames: ANIM.stats.frames || 0 },
     cam: { x: +G3.camera.position.x.toFixed(1), y: +G3.camera.position.y.toFixed(1), z: +G3.camera.position.z.toFixed(1), fov: G3.camera.fov } };
 }

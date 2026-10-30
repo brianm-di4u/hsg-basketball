@@ -1,6 +1,6 @@
 {
  "schema": 3,
- "build": "2026-10-30T13:21:27.717Z",
+ "build": "2026-10-30T14:58:40.304Z",
  "packages": {
   "venue-gym": {
    "prio": 1,
@@ -51,6 +51,17 @@
     ]
    }
   },
+  "crowd": {
+   "prio": 5,
+   "tiers": {
+    "high": [
+     "fans.3cfb2d2d.glb"
+    ],
+    "medium": [
+     "fans.3cfb2d2d.glb"
+    ]
+   }
+  },
   "anims": {
    "prio": 4,
    "tiers": {
@@ -98,6 +109,9 @@
   },
   "players-hq.1ccd0a14.glb": {
    "bytes": 2258008
+  },
+  "fans.3cfb2d2d.glb": {
+   "bytes": 155852
   },
   "anims.511ae593.json": {
    "bytes": 12949

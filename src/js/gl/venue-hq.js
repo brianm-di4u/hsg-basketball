@@ -59,6 +59,12 @@ export function addShell(g, shell, home, floorMat, wallTex, C) {
     if (name === 'wall' && wallTex) { const t = wallTex.clone(); t.repeat.set(4 / 5.33, 4 / 5.33); t.needsUpdate = true; m.map = t; } // shell UVs run one per 4 ft
     if (name === 'lamp') { m.lightMap = null; m.color = new THREE.Color(GLOW * 1.4, GLOW * 1.35, GLOW * 1.2); }
     if (name === 'ceiling' || name === 'wall') m.side = THREE.DoubleSide; // big enclosing planes: never culled to a void
+    // the arena's stands are lit only by spill, so the bake leaves the upper rows black; the house lights' floor
+    // keeps the gaps between fans a dim blue, not a void
+    if (shell.kind === 'arena' && (name === 'seat' || name === 'step' || name === 'wall')) {
+      m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('reflectedLight.indirectDiffuse += lightMapTexel.rgb * lightMapIntensity * RECIPROCAL_PI;', 'reflectedLight.indirectDiffuse += lightMapTexel.rgb * lightMapIntensity * RECIPROCAL_PI + vec3(0.09);'); };
+      m.customProgramCacheKey = () => 'arenaFloorLit';
+    }
     o.material = m;
     o.userData.hq = true;
   });

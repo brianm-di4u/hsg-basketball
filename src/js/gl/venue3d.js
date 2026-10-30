@@ -494,7 +494,7 @@ function nearSide(arena, home, away, atlas, palette, rng) {
     const z = z0 + r * rd, y = r * rh;
     const step = new THREE.Mesh(new THREE.BoxGeometry(len, 0.35, rd), stepM); step.position.set(0, y + rh - 0.17, z + rd / 2 - 0.05); g.add(step);
     const riser = new THREE.Mesh(new THREE.BoxGeometry(len, rh, 0.2), riserM); riser.position.set(0, y + rh / 2, z); g.add(riser);
-    for (let x = -len / 2 + 1.2; x < len / 2 - 1; x += 1.75 + rng() * 0.5) if (rng() > 0.18) seats.push({ x, y: y + rh * 0.55 - 1.0, z: z + 0.9, g: rng() < 0.15 ? 'stand' : 'seat', row: r, team: arena ? 0 : x > len / 2 - 26 ? 1 : 0, tint: !arena && x > len / 2 - 26 ? CL(away.colors.primary) : null });
+    for (let x = -len / 2 + 1.2; x < len / 2 - 1; x += 1.75 + rng() * 0.5) if (rng() > 0.18) { const gr = rng() < 0.15 ? 'stand' : 'seat'; seats.push({ x, y: y + rh * 0.55 - 1.0, z: z + 0.9, g: gr, row: r, f: gr === 'stand' ? [x, y + rh, z + rd / 2, Math.PI] : [x, y, z + rd / 2 + 0.1, Math.PI], k: gr === 'stand' ? 1 : 0, team: arena ? 0 : x > len / 2 - 26 ? 1 : 0, tint: !arena && x > len / 2 - 26 ? CL(away.colors.primary) : null }); }
   }
   const wall = new THREE.Mesh(new THREE.PlaneGeometry(160, 90), new THREE.MeshStandardMaterial({ color: arena ? C('#1A1E2C') : C('#9A8E7C'), roughness: 0.8 })); // darker than the floor, so a replay keeps the court brightest
   wall.position.set(0, 45, z0 + rows * rd + 1); wall.rotation.y = Math.PI; g.add(wall);
@@ -502,7 +502,7 @@ function nearSide(arena, home, away, atlas, palette, rng) {
   const crowd = makeCrowd(seats, atlas, palette, rng);
   crowd.material.uniforms.uLight.value = arena ? 0.36 : 0.54;
   g.add(crowd);
-  return { g, crowd };
+  return { g, crowd, seats };
 }
 
 // ---------------------------------------------------------------- textures from the painted pack
@@ -556,7 +556,10 @@ export function buildVenue(v, opts) {
         const band = r < 3 && x < -LEN / 2 + 14;
         // the visitors' section sits at the far right end; everyone else wears home colors or plain clothes
         const visitors = x > LEN / 2 - 26;
-        seats.push({ x: x + (rng() - 0.5) * 0.3, y: y + RH * 0.55 - 1.0, z: z - 0.9, g: band ? 'band' : (r > 5 && rng() < 0.35 ? 'stand' : 'seat'), row: r,
+        const gr = band ? 'band' : (r > 5 && rng() < 0.35 ? 'stand' : 'seat'), xx = x + (rng() - 0.5) * 0.3;
+        // (3D crowd: f = [x, y of the floor under the feet, z, facing], k = kind; a seated body's origin is its seat)
+        seats.push({ x: xx, y: y + RH * 0.55 - 1.0, z: z - 0.9, g: gr, row: r, f: gr === 'stand' ? [xx, y + RH, z - 1.15, 0] : [xx, y, z - 1.15, 0], k: gr === 'stand' ? 1 : 0,
+          style: band ? [1, 1, 3, 1] : null,
           tint: band ? CL(home.colors.primary) : visitors ? CL(rng() < 0.6 ? away.colors.primary : rng() < 0.5 ? away.colors.secondary : '#3A3F4A') : null, team: visitors ? 1 : 0 });
       }
     }
@@ -617,14 +620,15 @@ export function buildVenue(v, opts) {
     // students stand three deep behind each baseline (clear of the stanchion)
     for (const s of [-1, 1]) for (let r = 0; r < 3; r++) for (let z = -HW + 2; z <= HW - 2; z += 1.9 + rng() * 0.4) {
       if (Math.abs(z) < 5.5 || rng() < 0.12) continue;
-      seats.push({ x: s * (HL + 9.5 + r * 1.6), y: r * 0.9, z: z + (rng() - 0.5) * 0.5, g: 'stand', row: r });
+      const zz = z + (rng() - 0.5) * 0.5;
+      seats.push({ x: s * (HL + 9.5 + r * 1.6), y: r * 0.9, z: zz, g: 'stand', row: r, f: [s * (HL + 9.5 + r * 1.6), r * 0.9, zz, -s * Math.PI / 2], k: 1 });
     }
     const riserEnd = new THREE.MeshStandardMaterial({ color: C('#8E6640'), roughness: 0.6 }); // wood, like the bleachers: the students stand on steps, not a dark ledge
     for (const s of [-1, 1]) for (let r = 1; r < 3; r++) { const st = new THREE.Mesh(new THREE.BoxGeometry(1.6, r * 0.9, HW * 2 - 2), riserEnd); st.position.set(s * (HL + 9.5 + r * 1.6), r * 0.45, 0); A(st); }
     // team benches: substitutes in team colors
     // (the team chairs stay empty until the benches get real players; spectators in them read wrong)
     // cheer squad on the baseline corners (standing sprites)
-    for (const s of [-1, 1]) for (let k = 0; k < 3; k++) seats.push({ x: s * (HL - 9 + k * 2.4), y: 0, z: -(HW + 2.6) - (k % 2) * 0.6, g: 'cheer', tint: CL(home.colors.primary) });
+    for (const s of [-1, 1]) for (let k = 0; k < 3; k++) seats.push({ x: s * (HL - 9 + k * 2.4), y: 0, z: -(HW + 2.6) - (k % 2) * 0.6, g: 'cheer', tint: CL(home.colors.primary), f: [s * (HL - 9 + k * 2.4), 0, -(HW + 2.6) - (k % 2) * 0.6, 0], k: 2, style: [0, 0, 1, 1] });
     // ceiling: dark deck, steel trusses and round high-bay lamps
     const ceil = new THREE.Mesh(new THREE.PlaneGeometry(160, 140), new THREE.MeshStandardMaterial({ color: C('#2B2A2E'), roughness: 0.95 })); ceil.rotation.x = Math.PI / 2; ceil.position.y = 82; A(ceil);
     const trussM = new THREE.MeshStandardMaterial({ color: C('#3C3F47'), roughness: 0.5, metalness: 0.5 });
@@ -643,7 +647,7 @@ export function buildVenue(v, opts) {
         const y = tierY + r * 1.5, d = tierZ + r * 2.6;
         const step = new THREE.Mesh(new THREE.BoxGeometry(SIDE, 1.5, 2.6), stepM); step.position.set(0, y + 0.75, zSign * d); A(step);
         const chairs = new THREE.Mesh(new THREE.BoxGeometry(SIDE, 1.1, 0.7), seatM); chairs.position.set(0, y + 2.0, zSign * (d + 0.6)); A(chairs);
-        for (let x = -SIDE / 2 + 2; x < SIDE / 2 - 2; x += 1.8 + rng() * 0.3) if (rng() < 0.82) seats.push({ x, y: y + 1.5, z: zSign * (d - 0.2), g: rng() < 0.12 ? 'stand' : 'seat', row: r });
+        for (let x = -SIDE / 2 + 2; x < SIDE / 2 - 2; x += 1.8 + rng() * 0.3) if (rng() < 0.82) { const gr = rng() < 0.12 ? 'stand' : 'seat'; seats.push({ x, y: y + 1.5, z: zSign * (d - 0.2), g: gr, row: r, f: gr === 'stand' ? [x, y + 1.5, zSign * (d + 0.1), zSign < 0 ? 0 : Math.PI] : [x, y + 1.0, zSign * (d + 1.2), zSign < 0 ? 0 : Math.PI], k: gr === 'stand' ? 1 : 0 }); }
       }
     };
     const endRows = (xSign, tierY, tierX, rows, width) => {
@@ -651,7 +655,7 @@ export function buildVenue(v, opts) {
         const y = tierY + r * 1.5, d = tierX + r * 2.6;
         const step = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.5, width), stepM); step.position.set(xSign * d, y + 0.75, 0); A(step);
         const chairs = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.1, width), seatM); chairs.position.set(xSign * (d + 0.6), y + 2.0, 0); A(chairs);
-        for (let z = -width / 2 + 1; z < width / 2 - 1; z += 1.8 + rng() * 0.3) if (rng() < 0.8) seats.push({ x: xSign * (d - 0.2), y: y + 1.5, z, g: 'seat', row: r });
+        for (let z = -width / 2 + 1; z < width / 2 - 1; z += 1.8 + rng() * 0.3) if (rng() < 0.8) seats.push({ x: xSign * (d - 0.2), y: y + 1.5, z, g: 'seat', row: r, f: [xSign * (d + 1.2), y + 1.0, z, -xSign * Math.PI / 2], k: 0 });
       }
     };
     sideRows(-1, 0, HW + 12, 16); // far side lower tier
@@ -671,7 +675,14 @@ export function buildVenue(v, opts) {
     const rt2 = rt.clone(); rt2.needsUpdate = true; rt2.repeat.set(3, 1);
     const ribbon2 = new THREE.Mesh(new THREE.PlaneGeometry(SIDE, 2.6), new THREE.MeshBasicMaterial({ map: rt2, toneMapped: false, color: glow(0.6) }));
     ribbon2.position.set(0, 2.2, -(HW + 11.6)); ribbon2.userData.dyn = true; g.add(ribbon2);
+    // a lit navy kick board from the floor to the ribbon (the step face under it read as a black band)
+    const kick = new THREE.Mesh(new THREE.PlaneGeometry(SIDE, 0.95), new THREE.MeshBasicMaterial({ color: C('#1E2C5C') }));
+    kick.position.set(0, 0.46, -(HW + 11.55)); kick.userData.dyn = true; g.add(kick);
     ribbon.userData.twin = ribbon2;
+    // the far-side apron between the court and the stands: painted navy, lit by the court's spill (it read as a
+    // black band behind the benches)
+    const apron = new THREE.Mesh(new THREE.PlaneGeometry(SIDE, 9.6).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: C('#33406A'), roughness: 0.7, emissive: C('#1C2440') }));
+    apron.position.set(0, 0.03, -(HW + 6.8)); apron.receiveShadow = true; apron.userData.dyn = true; g.add(apron);
     // house lights down, court lit: a pool of light over the floor
     const spot = new THREE.SpotLight(0xfff4e2, 900, 160, 0.62, 0.55, 1.6);
     spot.position.set(0, 95, 0); spot.target.position.set(0, 0, 0);
@@ -689,6 +700,15 @@ export function buildVenue(v, opts) {
     g.add(reflect(scorerTable(40, home, away, true)));
     for (const s of [-1, 1]) g.add(chairRow(s < 0 ? home : away, s, 9));
   }
+  // benches (3D crowd only): five substitutes on each team's chairs, a seated assistant, the head coach standing
+  const bench = [];
+  for (const s of [-1, 1]) {
+    const team = s < 0 ? home : away, ti = s < 0 ? 0 : 1;
+    const jc = CL(team.colors.primary), sc2 = CL(contrast(team.colors.primary, '#111111') < 2.2 ? team.colors.secondary : team.colors.primary);
+    for (let k = 1; k <= 6; k++) bench.push({ f: [s * (15 + k * 2.0), 0, -(HW + 5.6), 0], k: 3, team: ti, shirt: jc, pants: sc2, style: [0, 0, rng() < 0.5 ? 0 : 2, 1], row: 0 });
+    bench.push({ f: [s * 15, 0, -(HW + 5.6), 0], k: 3, team: ti, shirt: CL('#2B2F3A'), pants: CL('#1C1D22'), style: [1, 1, 2, 0], row: 0 });
+    bench.push({ f: [s * 12.6, 0, -(HW + 3.6), 0.25 * s], k: 4, team: ti, shirt: jc, pants: CL(rng() < 0.5 ? '#8C7A5C' : '#1C1D22'), style: [1, 1, rng() < 0.5 ? 0 : 2, 0], row: 0 });
+  }
   // crowd
   const atlas = opts.images.crowd ? { tex: texOf(opts.images.crowd), meta: opts.images.crowdMeta } : fallbackAtlas();
   const palette = arena
@@ -703,5 +723,5 @@ export function buildVenue(v, opts) {
   // sweep). The broadcast camera sits where these stands would be, so they are shown only for those cameras.
   const near = nearSide(arena, home, away, atlas, palette, rng);
   near.g.visible = false; g.add(near.g);
-  return { g, floor, hoops, crowd, near, sbCanvas, sbTex, ribbon, arena, room, hq: !!shell, sbLast: '' };
+  return { g, floor, hoops, crowd, near, sbCanvas, sbTex, ribbon, arena, room, hq: !!shell, sbLast: '', seats, bench, palette };
 }

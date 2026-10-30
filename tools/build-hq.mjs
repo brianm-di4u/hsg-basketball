@@ -81,6 +81,13 @@ for (const kind of ['gym', 'arena']) {
   packages['players-hq'] = { prio: 3, tiers: { high: [glb], medium: [glb] } };
 }
 
+// ---- crowd: the low-poly fan bodies (art-src/blender/crowd/build_fans.py)
+{
+  if (args.includes('--bake')) execFileSync(BLENDER, ['-b', path.join(ART, 'blender', 'players', 'players-hq.blend'), '--python', path.join(ART, 'blender', 'crowd', 'build_fans.py')], { stdio: 'inherit' });
+  const glb = put('fans', '.glb', fs.readFileSync(path.join(ART, 'fans.glb')));
+  packages.crowd = { prio: 5, tiers: { high: [glb], medium: [glb] } };
+}
+
 // ---- anims (tools/build-anims.mjs: retargeted CMU clips + keyed clips)
 {
   const { buildAnims } = await import('./build-anims.mjs');

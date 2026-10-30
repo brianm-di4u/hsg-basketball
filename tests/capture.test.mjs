@@ -87,7 +87,7 @@ export const tests = [
       await liveGame(t, { seed: 3, home: 'fountain-lake', away: 'mountain-pine' });
       await G(t, () => { const g = window.__game; g.act('give', 0, 0); g.act('place', 0, 0, 80, 6); g.step(1); g.act('shootAt', 1); g.step(90); g.act('replay', 'THREE', 1, 0.93); g.act('freeze', true); });
       await cshot(t, 'c08-replay'); // late beat: the ball at the rim
-      await G(t, () => { const g = window.__game; g.act('replay', 'THREE', 1, { release: -4 }); g.act('freeze', true); });
+      await G(t, () => { const g = window.__game; g.act('replay', 'THREE', 1, { release: -1 }); g.act('freeze', true); });
       await cshot(t, 'c17-replay-early'); // early beat: the release
       await G(t, () => { const g = window.__game; g.act('freeze', false); g.act('endReplay'); });
 

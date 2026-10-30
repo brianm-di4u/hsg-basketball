@@ -266,7 +266,7 @@ crowd's style clash. Those are M4-M6.
   - the close-camera foreground hand; the mobile card margin (12 of 32 device px)
   - spacing in player clumps
 
-## M5: animation (in progress)
+## M5: animation
 - **Sources:** 20 CMU mocap takes (BVH, Hahne 2010 conversion; free for any use, credited in
   `art-src/anim/SOURCES.md`), fetched into the ignored `art-src/anim/cmu/`.
 - **Retarget** (`art-src/blender/anim/retarget_cmu.py`, Blender headless on `players-hq.blend`): per bone and
@@ -290,3 +290,35 @@ crowd's style clash. Those are M4-M6.
   12 players at 4× CPU throttle (≤ 1.5).
 - **Tools:** `tools/build-anims.mjs` (also run by build-hq), `tests/animlab.test.mjs` (pose sheets per clip),
   `tools/strip.mjs` (burst strips cropped to one player).
+
+## M5 result: closed on the plateau rule (r1 6.8, +0.125; r2 6.8, +0.06)
+- **r1** (verdict ): Animation 6.5 → 7, the first category move since M2. The jumper (gather,
+  set point, release, held follow-through, landing) and the run cycle with a floor dribble cleared the 7 anchor.
+  10 blockers, mostly new: the dunk through the rim, a rigid net, officials in a bind pose, the dribble hiding
+  the ball, shoulder piping wings, floating buns, replay blur on the subject, c14/c21 cameras, a SLAM DUNK
+  callout on a three, the mobile dunk camera.
+- **r2** (verdict ): five blockers closed (dribble, officials, buns, callout, mobile dunk
+  camera); Readability 6.5 → 7. Found and fixed in the round: the mocap heading was read from the hip bone's
+  own axis (up), so the clips turned the whole body (c21 showed backs of heads); replay IK kept old foot locks
+  across cuts (a shooter drawn sitting).
+- **After the r2 verdict (not yet scored):** the net's stretch spring raised (+33% impulse) with a hem flare.
+- **Carried forward** (the r2 verdict has the pass tests):
+  - the dunk: the ball hovers above the ring 3 frames; a rim hang and a landing in the burst
+  - the net stretch at 15% with a hem flare (raised after the verdict, unverified)
+  - piping off the body in close cameras (c21, c17, mobile c21)
+  - the c17 beat (now at the gather, wanted 3-4 ticks before release); c14 voidPct 15 (< 5)
+  - the jumper's ground load and a landing compression; follow-through holds 18-24 ticks
+  - lockstep off-ball defenders (c19); YOU's hand on the handler's forehead (c19)
+  - the mobile c06 card margin (now about 4 device px); mobile jumper ball contrast 1.99 (gate 2.0)
+  - all M4 and M3 carried items
+- **Perf:** desktop live about 305 fps uncapped (was about 570 before M5; the mixer and IK cost about 1 ms of
+  script per frame), mobile 475; inside the budgets (≥ 180 / ≥ 300). Mixer 0.75 ms per frame for 12 players
+  at 4× CPU throttle.
+
+| Point | Overall |
+|---|---|
+| Baseline | 6.1 |
+| M2 best | 6.6 |
+| M3 r1 | 6.7 |
+| M4 | 6.6 |
+| M5 | 6.8 |

@@ -34,8 +34,8 @@ export function makeNetSim(mesh) {
     const a = idx(row, k);
     // [a, b, rest, stretch per unit of the make spring]: the cords lengthen toward the hem, the rings flare
     const f = (row + 1) / ROWS;
-    cons.push([a, idx(row, k + 1), 0, 0.3 * (row / ROWS)]);
-    if (row < ROWS) { cons.push([a, idx(row + 1, k), 0, 0.4 * f]); cons.push([a, idx(row + 1, k + 1), 0, 0.4 * f]); cons.push([a, idx(row + 1, k - 1), 0, 0.4 * f]); }
+    cons.push([a, idx(row, k + 1), 0, 0.55 * (row / ROWS) ** 1.5]); // the hem flares most
+    if (row < ROWS) { cons.push([a, idx(row + 1, k), 0, 0.5 * f]); cons.push([a, idx(row + 1, k + 1), 0, 0.5 * f]); cons.push([a, idx(row + 1, k - 1), 0, 0.5 * f]); }
   }
   for (const c of cons) c[2] = len(c[0], c[1]);
   const pos = mesh.geometry.attributes.position;
@@ -79,7 +79,7 @@ export function makeNetSim(mesh) {
         if (side) q[j] -= side * 0.05 * strength * (1 - f);
       }
       energy = Math.max(energy, strength);
-      if (!side) sv += 9 * strength; // a swish: the stretch spring
+      if (!side) sv += 12 * strength; // a swish: the stretch spring
     },
     // dt in seconds; ballLocal = the ball centre in the net's frame, or null
     update(dt, ballLocal) {

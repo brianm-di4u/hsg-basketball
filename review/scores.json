@@ -137,5 +137,36 @@
     "overall": 6.6,
     "blockers": 5,
     "note": "plateau (+0.00): M4 closed; sneakers, socks and officials fixed after"
+  },
+  {
+    "round": "v3-m5-r1",
+    "scores": {
+      "art": 6.5,
+      "lighting": 6.5,
+      "animation": 7,
+      "ui": 7,
+      "typography": 6.5,
+      "readability": 6.5,
+      "mobile": 7,
+      "authenticity": 6.5
+    },
+    "overall": 6.8,
+    "blockers": 10
+  },
+  {
+    "round": "v3-m5-r2",
+    "scores": {
+      "art": 6.5,
+      "lighting": 6.5,
+      "animation": 7,
+      "ui": 7,
+      "typography": 6.5,
+      "readability": 7,
+      "mobile": 7,
+      "authenticity": 6.5
+    },
+    "overall": 6.8,
+    "blockers": 5,
+    "note": "plateau (+0.06 after +0.125): M5 closed; net stretch and hem flare raised after"
   }
 ]

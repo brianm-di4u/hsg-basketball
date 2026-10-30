@@ -81,7 +81,7 @@ const KIT3_FRAG = `
 varying vec3 vRest; varying vec3 vZone;
 uniform vec3 uSkin, uJersey, uTrim, uShorts, uSock, uShoe, uHair, uStripe;
 uniform float uRef, uHairMix, uBand;
-uniform vec4 uHead; uniform vec3 uEye;
+uniform vec4 uHead; uniform vec3 uEye, uMouth, uHand, uBrow;
 float kitRough;
 // painted hair: a hairline high at the brow, dropping toward the nape; clear of the ears
 bool scalp(vec3 p) {
@@ -102,10 +102,23 @@ vec3 kitColor(vec3 p) {
       kitRough = 0.9; return mix(uSkin, uHair, uHairMix);
     }
     // brows: a soft arch over each eye, thicker toward the nose
-    vec2 e = vec2(abs(p.x) - uEye.x, h - uEye.y - 0.025 - 0.0045 * pow((abs(p.x) - uEye.x) / 0.02, 2.0));
-    if (p.z > uEye.z - 0.02 && abs(e.x) < 0.022 && abs(e.y) < 0.0042 + 0.0025 * clamp(-e.x / 0.02, 0.0, 1.0)) { kitRough = 0.9; return mix(uSkin, uHair, 0.92); }
+    float bx = (abs(p.x) - uEye.x) / 0.022;
+    vec2 e = vec2(abs(p.x) - uEye.x, h - uEye.y - 0.03 + uBrow.x * bx * bx - uBrow.y * bx);
+    if (p.z > uEye.z - 0.02 && abs(e.x) < 0.024 && abs(e.y) < uBrow.z + 0.0025 * clamp(-e.x / 0.02, 0.0, 1.0)) { kitRough = 0.9; return mix(uSkin, uHair, 0.92); }
+    // upper lid line, and lips with a small colour shift
+    vec2 le = vec2(abs(p.x) - uEye.x, h - uEye.y);
+    if (p.z > uEye.z - 0.012 && abs(le.x) < 0.017 && le.y > 0.0095 - 0.012 * le.x * le.x / 0.0003 && le.y < 0.0125 - 0.012 * le.x * le.x / 0.0003) return uSkin * 0.35;
+    vec2 m = vec2(p.x / 0.02, (h - uMouth.y + 0.031) / 0.0062); // (MakeHuman's mouth joint sits at the upper lip line)
+    if (p.z > uMouth.z - 0.02 && dot(m, m) < 1.0) return uSkin * vec3(0.78, 0.6, 0.6) + vec3(0.03, 0.0, 0.01);
   }
-  if (z < 0.5) { if (uRef > 0.5 && h > 0.1 && h < 1.0 && abs(p.x) < 0.27) { kitRough = 0.7; return vec3(0.025); } return uSkin; } // officials: slacks
+  if (z < 0.5 || (z > 13.5 && uRef > 0.5)) {
+    float ax0 = abs(p.x);
+    if (uRef < 0.5) { float wd = length(vec3(ax0, h, p.z) - uHand); if (wd > 0.034 && wd < 0.085 && h > uHand.y - 0.004 && h < uHand.y + 0.11) { kitRough = 0.85; return uStripe; } }
+    if (uRef > 0.5 && h > 0.1 && h < 1.0 && ax0 < 0.27) { kitRough = 0.7; return vec3(0.025); }                 // officials: slacks
+    if (uRef > 0.5 && h > 1.22 && h < 1.5 && ax0 > 0.15 && ax0 < 0.34) { kitRough = 0.75; return mod(floor((p.x + 0.4) * 24.0), 2.0) < 1.0 ? vec3(0.02) : vec3(0.9); } // and short sleeves
+    kitRough = 0.48;
+    return uSkin * vec3(1.0, 0.985, 1.0) + vec3(0.0, 0.002, 0.012);
+  }
   if (z < 1.5 || (z > 2.5 && z < 3.5)) {                         // jersey or shorts
     kitRough = 0.8;
     bool shorts = z > 2.5;
@@ -128,12 +141,27 @@ vec3 kitColor(vec3 p) {
   if (z < 2.5 || z > 13.5) return uStripe;                        // trim, wristbands
   if (z < 4.5) return uStripe;
   if (z < 5.5) { kitRough = 0.85; return uSock; }
-  if (z < 6.5) { kitRough = 0.4; return uShoe; }
-  if (z < 7.5) { kitRough = 0.5; return vec3(0.9, 0.89, 0.86); }  // soles
-  if (z < 8.5) { kitRough = 0.9; return mix(uSkin, uHair, uHairMix); }
-  if (z < 9.5) { kitRough = 0.15; return vec3(0.86, 0.84, 0.8); } // eye whites
-  if (z < 10.5) { kitRough = 0.08; return uHair * 0.55 + vec3(0.06, 0.035, 0.02); } // irises
-  if (z < 11.5) { kitRough = 0.05; return vec3(0.01); }          // pupils
+  if (z < 7.5) {
+    if (h < 0.018) { kitRough = 0.7; return vec3(0.12); }                       // outsole
+    if (h < 0.034) { kitRough = 0.5; return vec3(0.9, 0.89, 0.86); }           // midsole
+    if (uRef > 0.5) { kitRough = 0.4; return vec3(0.02); }
+    kitRough = 0.4; return h < 0.042 ? uStripe : uShoe;
+  }
+  if (z < 8.5) {
+    if (uHairMix > 0.0 && !scalp(p)) discard;                       // the cap's edge is the painted hairline
+    if (uBand > 0.5 && h < uHead.y + 0.04 && h > uHead.y + 0.02) { kitRough = 0.9; return uStripe; }
+    kitRough = 0.7; return mix(uSkin, uHair, uHairMix) * (0.9 + 0.25 * smoothstep(0.6, 1.0, sin((h - uHead.y) * 160.0)));
+  }
+  if (z < 11.5) {
+    vec3 c = vec3(sign(p.x) * uEye.x, uEye.y, uEye.z - 0.012);
+    vec3 n = normalize(p - c);
+    float d = n.z;                                                  // 1 looking straight ahead
+    kitRough = 0.05;
+    if (dot(n, normalize(vec3(-0.35 * sign(p.x), 0.4, 1.0))) > 0.9965) return vec3(1.6);  // catchlight
+    if (d > 0.982) return vec3(0.008);                              // pupil
+    if (d > 0.9) return mix(uHair * 0.5 + vec3(0.07, 0.04, 0.02), vec3(0.02), smoothstep(0.915, 0.9, d)); // iris, darker ring
+    kitRough = 0.15; return vec3(0.86, 0.84, 0.8);                // eye white
+  }
   if (z < 12.5) { kitRough = 0.9; return mix(uSkin, uHair, 0.92); } // brows
   return uSkin * vec3(0.86, 0.72, 0.7);                           // lips
 }
@@ -146,6 +174,7 @@ function kitMaterial() {
     uSock: { value: new THREE.Color() }, uShoe: { value: new THREE.Color() }, uHair: { value: new THREE.Color() }, uStripe: { value: new THREE.Color() },
     uChest: { value: 0.19 }, uLight: { value: 0 }, uRef: { value: 0 }, uHairMix: { value: 1 }, uBand: { value: 0 },
     uHead: { value: new THREE.Vector4(0, 1.77, 0.03, 0.12) }, uEye: { value: new THREE.Vector3(0.032, 1.76, 0.1) },
+    uMouth: { value: new THREE.Vector3(0, 1.69, 0.1) }, uHand: { value: new THREE.Vector3(0.4, 0.95, 0) }, uBrow: { value: new THREE.Vector3(0.0028, 0.0018, 0.0042) },
   };
   mat.userData.u = u;
   const hq = P3.hq, V = hq ? KIT3_VERT : KIT_VERT;
@@ -181,9 +210,10 @@ const lin = (v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
 const _srgb = { r: 0, g: 0, b: 0 };
 const colLook = (c, hex, w = 0) => { new THREE.Color(hex).getRGB(_srgb, THREE.SRGBColorSpace); const k = (v) => v * (1 - w) + lin(v) * w; c.setRGB(k(_srgb.r), k(_srgb.g), k(_srgb.b), THREE.SRGBColorSpace); return c; };
 
+const SKIN3 = { '#F1C9A5': '#E9C3A6', '#E0AC86': '#C99B7E', '#C68863': '#9E6E54', '#A86B45': '#7A513C', '#7D4A2A': '#5A3A2B', '#5A3420': '#432A1F' };
 function setKit(pm, kit, look) {
   const u = pm.mat.userData.u;
-  colLook(u.uSkin.value, look.skin); colLook(u.uHair.value, look.hairC, 0.5);
+  if (pm.hq) colLook(u.uSkin.value, SKIN3[String(look.skin).toUpperCase()] || look.skin, 0); else colLook(u.uSkin.value, look.skin, 0.3); colLook(u.uHair.value, look.hairC, 0.5);
   col(u.uJersey.value, kit.jersey); col(u.uShorts.value, kit.shorts); col(u.uTrim.value, kit.trim);
   col(u.uStripe.value, kit.light ? kit.trim : kit.band || kit.trim);
   col(u.uSock.value, kit.light ? '#F4F1EA' : '#F4F1EA');
@@ -192,7 +222,16 @@ function setKit(pm, kit, look) {
   u.uRef.value = kit.ref ? 1 : 0;
   u.uHairMix.value = look.hair === 'buzz' ? 0.72 : 1;
   u.uBand.value = look.band ? 1 : 0;
-  if (pm.meta) { const c = pm.meta.headCenter; u.uHead.value.set(c[0], c[1], c[2], pm.meta.headRadius); if (pm.meta.eye) u.uEye.value.set(...pm.meta.eye); }
+  if (pm.meta) {
+    const c = pm.meta.headCenter; u.uHead.value.set(c[0], c[1], c[2], pm.meta.headRadius);
+    if (pm.meta.eye) u.uEye.value.set(...pm.meta.eye);
+    if (pm.meta.mouth) u.uMouth.value.set(...pm.meta.mouth);
+    if (pm.meta.hand) u.uHand.value.set(...pm.meta.hand);
+    // each character's own brows: arch, tilt toward the nose and weight from a stable hash of who they are
+    const hsh = [...String(look.id || look.skin + look.hair + look.hairC)].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7);
+    const f = (k) => ((hsh >>> k) & 255) / 255;
+    u.uBrow.value.set(0.0016 + 0.0026 * f(0), -0.0005 + 0.0032 * f(8), 0.0034 + 0.0018 * f(16));
+  }
 }
 
 // ---------------------------------------------------------------- numbers and hair
@@ -296,7 +335,7 @@ export function dressPlayer(pm, r, kit) {
   pm.key = k;
   // attachments are placed in the rest pose (a pooled rig may still hold its last pose)
   for (const n of BONES) pm.bones[n].b.quaternion.copy(pm.bones[n].rest);
-  setKit(pm, kit, r.look);
+  setKit(pm, kit, { ...r.look, id: r.id || r.num });
   colLook(pm.hairMat.color, r.look.hairC, 0.5);
   if (pm.hair) pm.hair.parent.remove(pm.hair);
   const hg = hairGeometry(r.look.hair);
@@ -304,7 +343,7 @@ export function dressPlayer(pm, r, kit) {
   if (hg) {
     const hm = new THREE.Mesh(hg, pm.hairMat); hm.castShadow = true;
     // the styles are modelled for the lite head (centre 1.73 m, radius 0.1): move and scale them onto an HQ head
-    if (pm.meta) { const c = pm.meta.headCenter, k = pm.meta.headRadius / 0.1; hm.position.set(c[0], c[1] - 1.73 * k, c[2]); hm.scale.setScalar(k); }
+    if (pm.meta) { const c = pm.meta.headCenter, k = 1.06; hm.position.set(c[0], c[1] - 1.73 * k, c[2] - 0.01); hm.scale.setScalar(k); }
     pm.hair.add(hm);
   }
   attach(pm.rig, 'head', pm.hair);

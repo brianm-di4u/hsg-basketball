@@ -1,6 +1,6 @@
 {
  "schema": 3,
- "build": "2026-10-30T05:33:43.361Z",
+ "build": "2026-10-30T05:55:23.446Z",
  "packages": {
   "venue-gym": {
    "prio": 1,
@@ -44,10 +44,10 @@
    "prio": 3,
    "tiers": {
     "high": [
-     "players-hq.e3a43741.glb"
+     "players-hq.6e601f3b.glb"
     ],
     "medium": [
-     "players-hq.e3a43741.glb"
+     "players-hq.6e601f3b.glb"
     ]
    }
   }
@@ -83,8 +83,8 @@
   "arena-lm-shell-m.013a9703.webp": {
    "bytes": 93242
   },
-  "players-hq.e3a43741.glb": {
-   "bytes": 2927000
+  "players-hq.6e601f3b.glb": {
+   "bytes": 2914744
   }
  }
 }

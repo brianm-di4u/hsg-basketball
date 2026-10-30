@@ -213,7 +213,7 @@ function slamCallout(c, v, P, scene) {
     }
     const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
     // first choice: the band over the crowd, under the score bug, where play rarely goes after a make
-    const ys = v.portrait ? [0.22, 0.34, 0.62, 0.8, 0.46, 0.14, 0.53, 0.72] : [0.23, 0.74, 0.84, 0.56, 0.14], xs = [0.5, 0.3, 0.7];
+    const ys = v.portrait ? [0.14, 0.22, 0.34, 0.62, 0.8, 0.46, 0.53, 0.72] : [0.23, 0.74, 0.84, 0.56, 0.14], xs = [0.5, 0.3, 0.7];
     let best = null;
     for (const fy of ys) for (const fx of xs) {
       const cx = clamp(v.W * fx, wPx / 2 + 8, v.W - wPx / 2 - 8), box = { x: cx - wPx / 2, y: v.H * fy - hPx / 2, w: wPx, h: hPx };

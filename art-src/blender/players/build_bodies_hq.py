@@ -58,7 +58,7 @@ def build(bid):
     human = HumanService.create_human(mask_helpers=False, detailed_helpers=True, extra_vertex_groups=True,
                                       feet_on_ground=True, scale=0.1, macro_detail_dict=macro)
     # the stylization: a slightly larger head, bigger eyes
-    for t, w in [('l-eye-scale-incr', 0.55), ('r-eye-scale-incr', 0.55), ('head-scale-vert-incr', 0.25),
+    for t, w in [('l-eye-scale-incr', 1.0), ('r-eye-scale-incr', 1.0), ('head-scale-vert-incr', 0.25),
                  ('head-scale-horiz-incr', 0.22), ('head-scale-depth-incr', 0.18)]:
         path = TargetService.target_full_path(t)
         if path: TargetService.load_target(human, path, weight=w)
@@ -155,15 +155,34 @@ def build(bid):
         lim = 0.24 if c.z < 1.36 else 0.24 - (c.z - 1.36) * 0.38
         neck = (1.46 + 1.1 * ax) if c.y < 0 else (1.51 + 0.6 * ax)
         return ax < lim and c.z < neck
+    hcen = (J['joint-head'] + J['joint-head-2']) / 2
+    def cap_face(f):
+        d = f.calc_center_median() - hcen
+        back = max(0.0, min(1.0, (d.y + 0.04) / 0.12))
+        return d.z > 0.03 - 0.115 * back and d.length < 0.2 and not (abs(d.x) > 0.078 and d.z < 0.0 and back < 0.75)
+    cap = shell(cap_face, lambda v: 0.007 + 0.006 * max(0.0, (v.co.z - hcen.z) / 0.1), 'cap')
+    capv = list({v for f in cap for v in f.verts})
+    for _ in range(2): bmesh.ops.smooth_vert(bm, verts=capv, factor=0.5, use_axis_x=True, use_axis_y=True, use_axis_z=True)
     jersey = shell(lambda f: in_jersey(f) and f.calc_center_median().z > 0.96, lambda v: 0.02 + 0.014 * max(0.0, (1.12 - v.co.z) / 0.14), 'jersey')
     jv = list({v for f in jersey for v in f.verts})
+    names = {g.index: g.name for g in human.vertex_groups}
+    clav = {s_: vg['clavicle_' + s_] for s_ in ('L', 'R')}
+    for v in jv:
+        d = v[dl]; moved = {'L': 0.0, 'R': 0.0}
+        for gi in list(d.keys()):
+            n = names.get(gi, '')
+            if n.startswith(('upperarm_', 'forearm_', 'hand_')):
+                moved[n[-1]] += d[gi]; del d[gi]
+        for s_, w in moved.items():
+            if w > 0: d[clav[s_]] = d.get(clav[s_], 0.0) + w
     for _ in range(3): bmesh.ops.smooth_vert(bm, verts=jv, factor=0.5, use_axis_x=True, use_axis_y=True, use_axis_z=False)  # cloth hangs over the body's detail
     shorts = shell(lambda f: 0.53 < zc(f) < 1.1 and all(wsum(v, arm_i) < 0.3 for v in f.verts),
                    lambda v: 0.014 + 0.032 * max(0.0, min(1.0, (0.95 - v.co.z) / 0.39)), 'shorts')
-    shoes = shell(lambda f: zc(f) < 0.112 and all(wsum(v, leg_lo_i) > 0.3 for v in f.verts), lambda v: 0.017, 'shoes')
+    shoes = shell(lambda f: zc(f) < 0.112 and all(wsum(v, leg_lo_i) > 0.3 for v in f.verts), lambda v: 0.024, 'shoes')
     sv = list({v for f in shoes for v in f.verts})
-    bmesh.ops.smooth_vert(bm, verts=sv, factor=0.5, use_axis_x=True, use_axis_y=True, use_axis_z=True)  # toes into a shoe
-    bmesh.ops.smooth_vert(bm, verts=sv, factor=0.5, use_axis_x=True, use_axis_y=True, use_axis_z=True)
+    for _ in range(8): bmesh.ops.smooth_vert(bm, verts=sv, factor=0.6, use_axis_x=True, use_axis_y=True, use_axis_z=True)  # toes into a rounded toe box
+    bm.normal_update()
+    for v in sv: v.co += v.normal * 0.008
     for v in sv:
         v.co.x *= 1.04
         if v.co.z < 0.02: v.co.z = 0.0   # a flat sole on the floor
@@ -185,8 +204,8 @@ def build(bid):
     side = {v: max(0.0, v.normal.x * (1 if v.co.x > 0 else -1)) for f in shorts for v in f.verts}  # outer sides only
     for f in jersey: f[zl] = ZONES['jersey']; done.add(f)
     for f in shorts: f[zl] = ZONES['shorts']; done.add(f)
-    for f in shoes:
-        f[zl] = ZONES['sole'] if f.calc_center_median().z < 0.03 else ZONES['shoe']; done.add(f)
+    for f in shoes: f[zl] = ZONES['shoe']; done.add(f)            # soles and midsole are cut per pixel
+    for f in cap: f[zl] = ZONES['hair']; done.add(f)
     le, re_, mo = J['joint-l-eye'], J['joint-r-eye'], J['joint-mouth']
     hl, hr = J['joint-l-hand'], J['joint-r-hand']
     fwd = Vector((0, -1, 0))
@@ -201,11 +220,9 @@ def build(bid):
         if f in done: continue
         c = f.calc_center_median()
         if is_eye(f):
-            eye = le if (c - le).length < (c - re_).length else re_
-            d = (c - eye).normalized().dot(fwd)
-            f[zl] = ZONES['pupil'] if d > 0.975 else ZONES['iris'] if d > 0.86 else ZONES['sclera']
+            f[zl] = ZONES['sclera']
+        elif c.z < 0.115 and abs(c.x) < 0.2: f[zl] = ZONES['shoe']                       # the foot inside the shoe
         elif 0.115 <= c.z < 0.30 and abs(c.x) < 0.2: f[zl] = ZONES['stripe'] if 0.255 < c.z < 0.275 else ZONES['sock']
-        elif min((c - hl).length, (c - hr).length) < 0.06 and min(hl.z, hr.z) - 0.02 < c.z < max(hl.z, hr.z) + 0.075: f[zl] = ZONES['wrist']
         else: f[zl] = ZONES['skin']
     bm.verts.index_update()
     EDGE = [edge_d.get(v, 1.0) for v in bm.verts]
@@ -239,7 +256,9 @@ def build(bid):
     # glTF: x stays, y_gltf = z_blender, z_gltf = -y_blender
     rig['hsg'] = json.dumps({'numFront': [0, 1.33, -front_y + 0.004], 'numBack': [0, 1.35, -back_y - 0.004],
                              'headCenter': [0, hc.z, -hc.y], 'headRadius': head_r, 'H': H,
-                             'eye': [abs(J['joint-l-eye'].x), J['joint-l-eye'].z, -J['joint-l-eye'].y]})
+                             'eye': [abs(J['joint-l-eye'].x), J['joint-l-eye'].z, -J['joint-l-eye'].y],
+                             'mouth': [0, J['joint-mouth'].z, -J['joint-mouth'].y],
+                             'hand': [abs(J['joint-l-hand'].x), J['joint-l-hand'].z, -J['joint-l-hand'].y]})
     rig.name = rig.data.name = 'Rig' + bid
     human.name = human.data.name = 'Body' + bid
     log(bid, 'faces', len(me.polygons), 'front', round(front_y, 3), 'back', round(back_y, 3), 'head r', round(head_r, 3))

@@ -36,7 +36,7 @@ os.makedirs(OUT, exist_ok=True)
 # ---- the gym, in game feet (src/js/gl/venue3d.js buildVenue: home gym)
 HL, HW = 47.0, 25.0
 FLOOR_X, FLOOR_Z = 57.0, 33.0
-ROWS, RD, RH, LEN = 12, 2.3, 1.3, 126.0
+ROWS, RD, RH, LEN = 8, 2.3, 1.3, 126.0  # keep in step with src/js/gl/venue3d.js
 Z0 = -(HW + 9.5)
 BACK_Z = Z0 - ROWS * RD - 1
 END_X = 66.0
@@ -165,13 +165,13 @@ if KIND == 'gym':
     plane('ceiling', 160, 140, (0, CEIL_Y, -10), M['ceiling'], rot=('X', math.pi))
     for x in range(-60, 61, 15):
         box(f'truss{x}', (0.8, 2.6, 140), (x, 80, -10), M['steel'])
-    lamp_pos = [(x, 76, z) for x in range(-45, 46, 15) for z in (-20, 0, 20)]
+    lamp_pos = [(x, 46, z) for x in range(-45, 46, 15) for z in (-20, 0, 20)]  # high-bays on drops: pools on the court
     for i, p in enumerate(lamp_pos):
         bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=1.45, depth=0.6, location=G(*p))
         o = bpy.context.active_object; o.name = f'lamp{i}'; o.data.materials.append(M['lamp'])
         PARTS.append((o, 'shell'))
         # an area light just under each lamp: warm high-bay LEDs pointing down
-        ld = bpy.data.lights.new(f'L{i}', 'AREA'); ld.shape = 'DISK'; ld.size = 2.8; ld.energy = 26000; ld.color = (1.0, 0.95, 0.86)
+        ld = bpy.data.lights.new(f'L{i}', 'AREA'); ld.shape = 'DISK'; ld.size = 1.6; ld.energy = 12000; ld.color = (1.0, 0.98, 0.94)
         lo = bpy.data.objects.new(f'L{i}', ld); lo.location = G(p[0], p[1] - 0.5, p[2]); scene.collection.objects.link(lo)
     # the camera side is open in the game: a dim bounce from there, nothing more
     world = bpy.data.worlds.new(KIND); scene.world = world; world.use_nodes = True

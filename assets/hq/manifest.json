@@ -1,24 +1,24 @@
 {
  "schema": 3,
- "build": "2026-10-30T04:30:51.779Z",
+ "build": "2026-10-30T04:51:20.250Z",
  "packages": {
   "venue-gym": {
    "prio": 1,
    "tiers": {
     "high": [
-     "gym.eeb659c1.glb",
-     "gym-lm-floor-h.285a08a7.webp",
-     "gym-lm-shell-h.596bfb0e.webp"
+     "gym.75428e8e.glb",
+     "gym-lm-floor-h.7bd5839d.webp",
+     "gym-lm-shell-h.60ea6079.webp"
     ],
     "medium": [
-     "gym.eeb659c1.glb",
-     "gym-lm-floor-m.21929daa.webp",
-     "gym-lm-shell-m.40e3ce5d.webp"
+     "gym.75428e8e.glb",
+     "gym-lm-floor-m.01cf99e4.webp",
+     "gym-lm-shell-m.36b9a653.webp"
     ]
    },
    "lmScale": {
-    "floor": 8.055625915527344,
-    "shell": 6.890482425689697
+    "floor": 6.4503326416015625,
+    "shell": 3.9768624305725098
    }
   },
   "venue-arena": {
@@ -26,45 +26,45 @@
    "tiers": {
     "high": [
      "arena.af5545b2.glb",
-     "arena-lm-floor-h.19f843e9.webp",
+     "arena-lm-floor-h.c247f02c.webp",
      "arena-lm-shell-h.b3e3615c.webp"
     ],
     "medium": [
      "arena.af5545b2.glb",
-     "arena-lm-floor-m.6a5cbec0.webp",
+     "arena-lm-floor-m.c5ad719c.webp",
      "arena-lm-shell-m.013a9703.webp"
     ]
    },
    "lmScale": {
-    "floor": 7.12630033493042,
+    "floor": 7.126298904418945,
     "shell": 1.7803549766540527
    }
   }
  },
  "files": {
-  "gym.eeb659c1.glb": {
-   "bytes": 143428
+  "gym.75428e8e.glb": {
+   "bytes": 135168
   },
-  "gym-lm-floor-h.285a08a7.webp": {
-   "bytes": 205066
+  "gym-lm-floor-h.7bd5839d.webp": {
+   "bytes": 164504
   },
-  "gym-lm-floor-m.21929daa.webp": {
-   "bytes": 10632
+  "gym-lm-floor-m.01cf99e4.webp": {
+   "bytes": 10424
   },
-  "gym-lm-shell-h.596bfb0e.webp": {
-   "bytes": 388682
+  "gym-lm-shell-h.60ea6079.webp": {
+   "bytes": 403044
   },
-  "gym-lm-shell-m.40e3ce5d.webp": {
-   "bytes": 69112
+  "gym-lm-shell-m.36b9a653.webp": {
+   "bytes": 69692
   },
   "arena.af5545b2.glb": {
    "bytes": 192844
   },
-  "arena-lm-floor-h.19f843e9.webp": {
-   "bytes": 129690
+  "arena-lm-floor-h.c247f02c.webp": {
+   "bytes": 129692
   },
-  "arena-lm-floor-m.6a5cbec0.webp": {
-   "bytes": 8262
+  "arena-lm-floor-m.c5ad719c.webp": {
+   "bytes": 8248
   },
   "arena-lm-shell-h.b3e3615c.webp": {
    "bytes": 521076

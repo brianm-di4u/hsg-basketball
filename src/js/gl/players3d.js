@@ -95,7 +95,7 @@ function kitMaterial() {
           // gated by the light this point receives (none for a body in the unlit apron), tinted by the surface and
           // capped, so a dark kit gets a cool edge and never a white glow
           float lit = clamp(dot(reflectedLight.directDiffuse, vec3(0.333)) / max(0.03, dot(diffuseColor.rgb, vec3(0.333))) * 0.6, 0.0, 1.0);
-          reflectedLight.directSpecular += min(vec3(0.62, 0.72, 1.0) * rim * 1.2 * lit * (0.3 + 0.7 * diffuseColor.rgb), vec3(0.35)); }`);
+          reflectedLight.directSpecular += min(vec3(0.62, 0.72, 1.0) * rim * 1.6 * lit * (0.35 + 0.65 * diffuseColor.rgb), vec3(0.3)); }`);
   };
   mat.customProgramCacheKey = () => 'kit2';
   return mat;
@@ -103,10 +103,14 @@ function kitMaterial() {
 
 // Color.set() already converts sRGB hex to linear (three's color management); converting again crushed dark skin to black
 const col = (c, hex) => c.set(hex);
+// skin and hair: the roster's tones were authored against that crushed look, so keep each player's family by
+// setting halfway between the hex and its linear value (deep tones stay deep, never black)
+const lin = (v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+const colLook = (c, hex) => { const t = new THREE.Color(hex), k = (v) => (v + lin(v)) / 2; c.setRGB(k(t.r), k(t.g), k(t.b), THREE.SRGBColorSpace); return c; };
 
 function setKit(pm, kit, look) {
   const u = pm.mat.userData.u;
-  col(u.uSkin.value, look.skin); col(u.uHair.value, look.hairC);
+  colLook(u.uSkin.value, look.skin); colLook(u.uHair.value, look.hairC);
   col(u.uJersey.value, kit.jersey); col(u.uShorts.value, kit.shorts); col(u.uTrim.value, kit.trim);
   col(u.uStripe.value, kit.light ? kit.trim : kit.band || kit.trim);
   col(u.uSock.value, kit.light ? '#F4F1EA' : '#F4F1EA');
@@ -218,7 +222,7 @@ export function dressPlayer(pm, r, kit) {
   // attachments are placed in the rest pose (a pooled rig may still hold its last pose)
   for (const n of BONES) pm.bones[n].b.quaternion.copy(pm.bones[n].rest);
   setKit(pm, kit, r.look);
-  col(pm.hairMat.color, r.look.hairC);
+  colLook(pm.hairMat.color, r.look.hairC);
   if (pm.hair) pm.hair.parent.remove(pm.hair);
   const hg = hairGeometry(r.look.hair);
   pm.hair = new THREE.Group();

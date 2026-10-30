@@ -158,6 +158,7 @@ function drawHud(c, v, P, scene) {
     else { c.fillStyle = p.c; c.globalAlpha = 1 - p.t / p.life; c.beginPath(); c.arc(X, Y, Math.max(1.5, s * 0.12), 0, TAU); c.fill(); c.globalAlpha = 1; }
   }
   for (const p of R.fx.pops) {
+    if (scene.slam && scene.slam.t < 0.12 && /^\+\d/.test(p.text)) continue; // the +3 follows the card's landing
     const q = P(p.x, p.z, p.y);
     if (q.X < 0 || q.X > v.W || q.Y < 0 || q.Y > v.H || q.vis === false) continue; // its rim or player is off screen
     const X = clamp(q.X, 70, v.W - 70), Y = clamp(q.Y - p.t * q.s * 2.2, 40, v.H - 30);
@@ -196,14 +197,14 @@ function ballHalo(c, P, b) {
 function slamCallout(c, v, P, scene) {
   const s = scene.slam;
   const t = s.t, inT = Math.min(1, t / 0.14), out = t > 0.75 ? 1 - (t - 0.75) / 0.25 : 1;
-  const size = Math.round(clamp(v.W * 0.085, 40, 92));
-  const hPx = size * 1.15 + 12 + size * 0.5, wPx = Math.min(v.W - 16, size * 5.4);
+  const size = Math.round(clamp(v.W * 0.085, 40, 92) * ((s.ref || s).scale || 1));
+  let hPx = size * 1.15 + 12 + size * 0.5, wPx = Math.min(v.W - 16, size * 5.4);
   // the slot is chosen once, when the card appears, and kept: clear of the rim it went through, the ball and
   // every player (plus a margin), scored over a grid of candidate places; the card never jumps
   const ref = s.ref || s;
   if (!ref.slot) {
     const pad = v.portrait ? 30 : 24, keep = [];
-    if (s.side != null) { const r = P(COURT.rimX[s.side], COURT.rimZ, COURT.rimY); keep.push({ x: r.X - 3.5 * r.s, y: r.Y - 5 * r.s, w: 7 * r.s, h: 11 * r.s, wt: 4 }); }
+    if (s.side != null) { const r = P(COURT.rimX[s.side], COURT.rimZ, COURT.rimY); keep.push({ x: r.X - 4 * r.s, y: r.Y - 9 * r.s, w: 8 * r.s, h: 15 * r.s, wt: 4 }); } // the rim, the board and the +3 above it
     if (scene.ball) { const b = P(scene.ball.x, scene.ball.z, Math.max(0.4, scene.ball.y)); keep.push({ x: b.X - 2 * b.s - pad, y: b.Y - 2 * b.s - pad, w: 4 * b.s + 2 * pad, h: 4 * b.s + 2 * pad, wt: 4 }); }
     for (const it of scene.players || []) {
       const f = P(it.pl.x, it.pl.z, it.pl.y || 0), hd = P(it.pl.x, it.pl.z, (it.pl.y || 0) + it.r.height / 12);
@@ -212,13 +213,15 @@ function slamCallout(c, v, P, scene) {
     }
     const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
     // first choice: the band over the crowd, under the score bug, where play rarely goes after a make
-    const ys = v.portrait ? [0.22, 0.34, 0.62, 0.8, 0.46] : [0.23, 0.74, 0.84, 0.56], xs = [0.5, 0.3, 0.7];
+    const ys = v.portrait ? [0.22, 0.34, 0.62, 0.8, 0.46, 0.14, 0.53, 0.72] : [0.23, 0.74, 0.84, 0.56, 0.14], xs = [0.5, 0.3, 0.7];
     let best = null;
     for (const fy of ys) for (const fx of xs) {
       const cx = clamp(v.W * fx, wPx / 2 + 8, v.W - wPx / 2 - 8), box = { x: cx - wPx / 2, y: v.H * fy - hPx / 2, w: wPx, h: hPx };
       const cost = keep.reduce((n, k) => n + (hit(box, k) ? k.wt : 0), 0) + (fx !== 0.5 ? 0.3 : 0) + ys.indexOf(fy) * 0.1;
       if (!best || cost < best.cost) best = { cost, x: cx, y: v.H * fy };
     }
+    // nothing clear at full size: a smaller card, placed again
+    if (best.cost > 0.5 && !ref.small) { ref.small = true; ref.scale = 0.72; }
     ref.slot = best;
   }
   const y = ref.slot.y, cx = ref.slot.x;

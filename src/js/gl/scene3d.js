@@ -97,9 +97,9 @@ function init(stage) {
   G3.camera = new THREE.PerspectiveCamera(30, 1, 2, 900);
   G3.camera.layers.enable(LAYER_REFLECT);
   // light: warm sky fill + an overhead key that casts the players' shadows
-  const hemi = new THREE.HemisphereLight(0xfff3e0, 0x6b4a2e, 1.35);
+  const hemi = new THREE.HemisphereLight(0xf7f4ef, 0x6b4a2e, 1.35);
   G3.scene.add(hemi); G3.hemi = hemi;
-  const sun = new THREE.DirectionalLight(0xfff1dc, 1.7);
+  const sun = new THREE.DirectionalLight(0xfff7ec, 1.7);
   sun.position.set(-12, 70, 30); sun.castShadow = G3.tier === 'high';
   const sz = G3.tier === 'high' ? 2048 : 1024;
   sun.shadow.mapSize.set(sz, sz);
@@ -277,7 +277,7 @@ function ensureVenue(v, canSwap) {
   const arena = v.kind === 'arena';
   G3.hemi.intensity = arena ? 0.5 : 0.8;
   G3.sun.intensity = arena ? 1.1 : 1.0;
-  G3.scene.background = new THREE.Color(arena ? 0x141826 : 0x1b1714);
+  G3.scene.background = new THREE.Color(arena ? 0x1c2134 : 0x1b1714);
   G3.scene.fog = arena ? new THREE.Fog(0x161b2b, 130, 300) : null;
   captureProbe();
 }
@@ -372,7 +372,19 @@ export function draw3d(scene, fx) {
   }
   for (const [idx, pm] of G3.players) if (!seen.has(idx)) pm.root.visible = false;
   // a cinematic camera never looks through someone standing at the lens (an official walking into the replay)
-  if (G3.camOverride && !G3.camOverride.attract) for (const pm of G3.players.values()) if (pm.root.visible && pm.root.position.distanceTo(G3.camera.position) < 7) pm.root.visible = false;
+  if (G3.camOverride && !G3.camOverride.attract) {
+    const f = G3.camOverride.focus, c = G3.camera.position;
+    for (const pm of G3.players.values()) {
+      if (!pm.root.visible) continue;
+      const p = pm.root.position;
+      if (p.distanceTo(c) < 7) { pm.root.visible = false; continue; }
+      if (!f) continue;
+      // and nobody stands between the camera and the subject (the shooter) to cover them
+      const fx = f[0] - HL - c.x, fz = f[1] - HW - c.z, L = Math.hypot(fx, fz) || 1, px = p.x - c.x, pz = p.z - c.z;
+      const along = (px * fx + pz * fz) / L, across = Math.abs(px * fz - pz * fx) / L;
+      if (along > 0 && along < L - 2.5 && across < 3.2) pm.root.visible = false;
+    }
+  }
   G3.ball.scale.setScalar(G3.camOverride && !G3.camOverride.attract ? 0.95 : 1.12);
   // ball: in the hand when held (the sim keeps its own carry point for the rules)
   const B = G3.ball;

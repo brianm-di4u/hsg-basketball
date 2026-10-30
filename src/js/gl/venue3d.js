@@ -202,7 +202,7 @@ function makeHoop(side, padColor, capColor) {
   brace.position.set(baseX + dir * Math.abs(boardX - baseX) * 0.35, 10.3, 0); brace.rotation.z = dir * 0.55; brace.rotation.y = Math.PI / 2; g.add(brace);
   // glass board with a white frame and shooter's square
   const bw = COURT.boardZ1 - COURT.boardZ0, bh = COURT.boardY1 - COURT.boardY0;
-  const glass = new THREE.Mesh(new THREE.BoxGeometry(0.12, bh, bw), new THREE.MeshStandardMaterial({ color: C('#D9F0F6'), roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.22, depthWrite: false }));
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(0.12, bh, bw), new THREE.MeshPhysicalMaterial({ color: C('#CFE9F2'), roughness: 0.04, metalness: 0, transparent: true, opacity: 0.3, depthWrite: false, clearcoat: 1, envMapIntensity: 1.6 }));
   glass.position.set(boardX, (COURT.boardY0 + COURT.boardY1) / 2, 0); g.add(glass);
   const lineM = new THREE.MeshStandardMaterial({ color: C('#F7F7F2'), roughness: 0.5 });
   const fr = (w, h, d, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), lineM); m.position.set(x, y, z); g.add(m); };
@@ -496,7 +496,7 @@ function nearSide(arena, home, away, atlas, palette, rng) {
     const riser = new THREE.Mesh(new THREE.BoxGeometry(len, rh, 0.2), riserM); riser.position.set(0, y + rh / 2, z); g.add(riser);
     for (let x = -len / 2 + 1.2; x < len / 2 - 1; x += 1.75 + rng() * 0.5) if (rng() > 0.18) seats.push({ x, y: y + rh * 0.55 - 1.0, z: z + 0.9, g: rng() < 0.15 ? 'stand' : 'seat', row: r, team: arena ? 0 : x > len / 2 - 26 ? 1 : 0, tint: !arena && x > len / 2 - 26 ? CL(away.colors.primary) : null });
   }
-  const wall = new THREE.Mesh(new THREE.PlaneGeometry(160, 90), new THREE.MeshStandardMaterial({ color: arena ? C('#1A1E2C') : C('#CFC8B8'), roughness: 0.8 }));
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(160, 90), new THREE.MeshStandardMaterial({ color: arena ? C('#1A1E2C') : C('#9A8E7C'), roughness: 0.8 })); // darker than the floor, so a replay keeps the court brightest
   wall.position.set(0, 45, z0 + rows * rd + 1); wall.rotation.y = Math.PI; g.add(wall);
   mergeStatic(g);
   const crowd = makeCrowd(seats, atlas, palette, rng);
@@ -545,7 +545,7 @@ export function buildVenue(v, opts) {
     // ---- home gym
     const woodMat = new THREE.MeshStandardMaterial({ color: C('#8E6640'), roughness: 0.55 });
     const riserMat = new THREE.MeshStandardMaterial({ color: C('#8A6440'), roughness: 0.8, emissive: C('#9A7650') }); // bounce on the shadowed riser fronts (C squares the value: this is about 0.1)
-    const ROWS = 12, RD = 2.3, RH = 1.3, Z0 = -(HW + 9.5), LEN = 126;
+    const ROWS = 8, RD = 2.3, RH = 1.3, Z0 = -(HW + 9.5), LEN = 126; // keep in step with art-src/blender/venue/build_gym.py
     for (let r = 0; r < ROWS; r++) {
       const z = Z0 - r * RD, y = r * RH;
       const step = new THREE.Mesh(new THREE.BoxGeometry(LEN, 0.35, RD), woodMat); step.position.set(0, y + RH - 0.17, z - RD / 2 + 0.05); step.receiveShadow = true; A(step);
@@ -556,7 +556,7 @@ export function buildVenue(v, opts) {
         const band = r < 3 && x < -LEN / 2 + 14;
         // the visitors' section sits at the far right end; everyone else wears home colors or plain clothes
         const visitors = x > LEN / 2 - 26;
-        seats.push({ x: x + (rng() - 0.5) * 0.3, y: y + RH * 0.55 - 1.0, z: z - 0.9, g: band ? 'band' : (r > 8 && rng() < 0.35 ? 'stand' : 'seat'), row: r,
+        seats.push({ x: x + (rng() - 0.5) * 0.3, y: y + RH * 0.55 - 1.0, z: z - 0.9, g: band ? 'band' : (r > 5 && rng() < 0.35 ? 'stand' : 'seat'), row: r,
           tint: band ? CL(home.colors.primary) : visitors ? CL(rng() < 0.6 ? away.colors.primary : rng() < 0.5 ? away.colors.secondary : '#3A3F4A') : null, team: visitors ? 1 : 0 });
       }
     }
@@ -594,10 +594,10 @@ export function buildVenue(v, opts) {
     l.font = '900 74px "Arial Black", Impact, sans-serif'; l.textAlign = 'center'; l.textBaseline = 'middle';
     l.fillStyle = contrast(home.colors.secondary, '#E4DED0') >= 2 ? home.colors.secondary : home.colors.primary; l.fillText(home.mascot.toUpperCase(), 512, 52);
     const letters = new THREE.Mesh(new THREE.PlaneGeometry(60, 5.6), new THREE.MeshStandardMaterial({ map: texOf(lc), transparent: true, roughness: 0.6 }));
-    letters.position.set(0, ROWS * RH + 9.8, backZ + 0.1); g.add(letters);
+    letters.position.set(0, ROWS * RH + 15.5, backZ + 0.1); g.add(letters);
     // wall scoreboard
     const sbBox = new THREE.Mesh(new THREE.BoxGeometry(17, 8.5, 0.8), [riserMat, riserMat, riserMat, riserMat, new THREE.MeshBasicMaterial({ map: sbTex, toneMapped: false, color: glow(0.5) }), riserMat]);
-    sbBox.position.set(0, ROWS * RH + 19.5, backZ + 0.6); g.add(sbBox);
+    sbBox.position.set(0, ROWS * RH + 24, backZ + 0.6); g.add(sbBox);
     // title pennants (real title years only) along the back wall
     const pens = v.pennants || [];
     // the same real title years also hang on the end walls, where the game camera sees them
@@ -606,9 +606,10 @@ export function buildVenue(v, opts) {
       pm.position.set(s * 65.6, 17, -22 + i * 5.4); pm.rotation.y = -s * Math.PI / 2; g.add(pm);
     });
     pens.forEach((p, i) => {
-      const pm = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 6), new THREE.MeshStandardMaterial({ map: texOf(pennantCanvas(p, home)), transparent: true, roughness: 0.85, side: THREE.DoubleSide }));
-      const x = (i - (pens.length - 1) / 2) * 5.6 + (pens.length > 3 ? 0 : 0);
-      pm.position.set(x + (x >= 0 ? 15 : -15), ROWS * RH + 18.5, backZ + 0.4); g.add(pm);
+      // title banners in a row just above the stands, where the broadcast camera sees them
+      const pm = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 7.6), new THREE.MeshStandardMaterial({ map: texOf(pennantCanvas(p, home)), transparent: true, roughness: 0.85, side: THREE.DoubleSide }));
+      const x = (i - (pens.length - 1) / 2) * 7.2;
+      pm.position.set(x + (x >= 0 ? 12 : -12), ROWS * RH + 9.2, backZ + 0.4); g.add(pm);
     });
     // scorer's table (lettered front panel) and team chairs between the court and the stands
     g.add(reflect(scorerTable(22, home, away, false)));
@@ -630,7 +631,7 @@ export function buildVenue(v, opts) {
     for (let x = -60; x <= 60; x += 15) { const t = new THREE.Mesh(new THREE.BoxGeometry(0.8, 2.6, 140), trussM); t.position.set(x, 80, -10); A(t); }
     const lampM = new THREE.MeshBasicMaterial({ color: C('#FFF4DC').multiplyScalar(GLOW * 1.4) });
     for (let x = -45; x <= 45; x += 15) for (const z of [-20, 0, 20]) {
-      const lamp = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.6, 0.6, 16), lampM); lamp.position.set(x, 76, z); A(lamp);
+      const lamp = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.6, 0.6, 16), lampM); lamp.position.set(x, 46, z); A(lamp);
     }
   } else {
     // ---- finals arena: two-tier bowl of royal-blue chairs; the +x end has only a short lower block

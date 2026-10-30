@@ -434,7 +434,7 @@ function replayScene(m) {
   const back = 13, side = 4;
   const px = sx0 + ux / ul * back - uz / ul * side, pz = sz0 + uz / ul * back + ux / ul * side;
   const tx = ball.x * 0.3 + rx * 0.5 + sx0 * 0.2, ty = Math.max(5.5, ball.y * 0.5 + 3.5), tz = ball.z * 0.3 + 25 * 0.5 + sz0 * 0.2;
-  G3.camOverride = { p: [px, 6, pz], t: [tx, ty, tz], fov: R.v && R.v.portrait ? 56 : 40 };
+  G3.camOverride = { p: [px, 6, pz], t: [tx, ty, tz], fov: R.v && R.v.portrait ? 56 : 40, focus: [sx0, sz0] };
   return { players, ball, camX: ball.x };
 }
 

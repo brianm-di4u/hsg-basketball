@@ -46,7 +46,7 @@ export function titleScreen(st) {
 export function selectScreen(st) {
   const x = st.pick;
   const hs = (x.home === 'hot-springs' || x.away === 'hot-springs') && st.save.unlocks.throwback;
-  return `<div class="panel wide">
+  return `<div class="panel wide setup">
     <h2>Exhibition</h2>
     ${seg('pickProgram', [['boys', 'Boys'], ['girls', 'Girls']], x.program, 'Program')}
     <div class="pickers"><div><h3 id="h-home">Home team</h3>${grid('pickHome', x.home, 'Home team')}</div>

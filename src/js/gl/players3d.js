@@ -122,7 +122,13 @@ vec3 kitColor(vec3 p) {
     }
     if (uRef < 0.5) { float wd = length(vec3(ax0, h, p.z) - uHand); if (wd > 0.034 && wd < 0.085 && h > uHand.y - 0.004 && h < uHand.y + 0.11) { kitRough = 0.85; return uStripe; } }
     if (uRef > 0.5 && h > 0.1 && h < 1.0 && ax0 < 0.27) { kitRough = 0.7; return vec3(0.025); }                 // officials: slacks
-    if (uRef > 0.5 && h > 1.22 && h < 1.5 && ax0 > 0.15 && ax0 < 0.34) { kitRough = 0.75; return mod(floor((p.x + 0.4) * 24.0), 2.0) < 1.0 ? vec3(0.02) : vec3(0.9); } // and short sleeves
+    // and a full striped shirt over the tank's bare shoulders and chest: short sleeves to the elbow, a black crew neck
+    if (uRef > 0.5 && h > 1.0 && h < 1.585 && ax0 < 0.34 && !(ax0 > 0.19 && h < 1.24)) {
+      kitRough = 0.75;
+      if (h > 1.552 && ax0 < 0.1) return vec3(0.02);
+      if (ax0 > 0.19 && h < 1.29) return vec3(0.02);                // the sleeve hem
+      return mod(floor((p.x + 0.4) * 24.0), 2.0) < 1.0 ? vec3(0.02) : vec3(0.9);
+    }
     kitRough = 0.48;
     return uSkin * vec3(1.0, 0.985, 1.0) + vec3(0.0, 0.002, 0.012);
   }

@@ -501,7 +501,7 @@ function drawFrame(dt) {
   if (sc === 'champion' && !R.reduced) {
     // the title moment: a slow sweep of the finals arena with the crowd on its feet
     const tt = performance.now() / 1000, ang = Math.sin(tt * 0.08) * 0.7, port = R.v && R.v.portrait;
-    G3.camOverride = { attract: true, p: [47 + Math.sin(ang) * (port ? 48 : 60), port ? 22 : 14, 25 + Math.cos(ang) * (port ? 48 : 60)], t: [47, port ? 4 : 9, 12], fov: port ? 62 : 40 };
+    G3.camOverride = { attract: true, p: [47 + Math.sin(ang) * (port ? 48 : 60), port ? 26 : 22, 25 + Math.cos(ang) * (port ? 48 : 60)], t: [47, port ? 3 : 5, 4], fov: port ? 62 : 40 };
   } else if (G3.camOverride && G3.camOverride.attract) { G3.camOverride = null; R.snap = true; }
   draw({ venue, dt, camX: 47, camZ: 25, players: [], cheer: sc === 'champion' ? 1 : 0 });
   updateScoreboard();

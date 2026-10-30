@@ -119,6 +119,8 @@ body.replay #sb, body.replay #pad { display: none; } /* the replay gets the phon
 body[data-scene="pause"] #screen, body[data-scene="break"] #screen, body[data-scene="final"] #screen { padding-top: 76px; }
 /* the champion moment and summaries stand alone: no live score bug behind them */
 body[data-scene="champion"] #sb { visibility: hidden; }
+/* (and the arena behind it stays bright: a light scrim, the crowd on its feet is the point of the moment) */
+body[data-scene="champion"] #screen { background: rgba(8, 10, 20, .28); }
 .panel { width: 100%; max-width: 560px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 20px 22px; box-shadow: 0 12px 40px rgba(0, 0, 0, .45); margin: auto 0; }
 .panel.wide { max-width: 880px; }
 /* a gym-scoreboard trim on every panel: a gold rail and a thin school-neutral stripe */

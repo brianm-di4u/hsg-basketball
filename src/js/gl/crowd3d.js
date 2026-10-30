@@ -77,10 +77,21 @@ function bakeBody(gltf, id) {
     }
     const tex = new THREE.DataTexture(data, nb * 4, rows, THREE.RGBAFormat, THREE.FloatType);
     tex.needsUpdate = true; tex.userData.keep = true;
-    lods.push({ geo: mesh.geometry, tex, nb });
+    // where the hands are, for props (the cheer squad's pom-poms): bone index and the point in bind space
+    const hands = {};
+    for (const side of ['L', 'R']) {
+      const name = 'middle_01_' + side.toLowerCase(), bi = sk.bones.findIndex((b) => b.name === name || b.name === 'hand_' + side);
+      const bk = sk.bones.findIndex((b) => b.name === name) >= 0 ? sk.bones.findIndex((b) => b.name === name) : bi;
+      if (bk >= 0) hands[side] = { i: bk, rest: null };
+    }
+    lods.push({ geo: mesh.geometry, tex, nb, data, hands, mesh });
   }
   for (const n of BONES) B[n].b.quaternion.copy(B[n].rest);
   hb.position.copy(hipRest);
+  rig.updateMatrixWorld(true);
+  for (const L of lods) for (const h of Object.values(L.hands)) {
+    h.rest = new THREE.Vector3().setFromMatrixPosition(L.mesh.skeleton.bones[h.i].matrixWorld).applyMatrix4(L.mesh.bindMatrixInverse);
+  }
   return { lods, meta };
 }
 
@@ -97,7 +108,7 @@ attribute vec4 color; attribute vec4 skinIndex; attribute vec4 skinWeight;
 attribute vec4 aMix; attribute vec3 aShirt; attribute vec3 aPants; attribute vec3 aSkin; attribute vec3 aHair; attribute vec4 aStyle;
 uniform sampler2D tBones; uniform vec3 uClip[${CROWD_CLIPS.length}];
 uniform float uTime, uCheerT, uCheerTeam, uExcite, uBasketX;
-varying vec3 vRest; varying float vPart; varying vec3 vShirt; varying vec3 vPants; varying vec3 vSkin; varying vec3 vHair; varying vec4 vStyle;
+varying vec3 vRest; varying vec3 vPart; varying vec3 vShirt; varying vec3 vPants; varying vec3 vSkin; varying vec3 vHair; varying vec4 vStyle;
 mat4 boneAt(float row, float i) {
   ivec2 b = ivec2(int(i + 0.5) * 4, int(row + 0.5));
   return mat4(texelFetch(tBones, b, 0), texelFetch(tBones, b + ivec2(1, 0), 0), texelFetch(tBones, b + ivec2(2, 0), 0), texelFetch(tBones, b + ivec2(3, 0), 0));
@@ -111,7 +122,7 @@ float clipRow(int c, float t) {
 // kinds: 0 seated fan, 1 standing fan, 2 cheer squad, 3 bench player, 4 coach
 float pickRow() {
   float kind = aMix.x, ph = aMix.y, team = aMix.z;
-  float t = uTime + ph * 7.0;
+  float t = uTime * (0.88 + 0.24 * fract(ph * 5.31)) + ph * 7.0; // each fan their own tempo: no row in lockstep
   bool mine = uCheerTeam < -0.5 || abs(team - uCheerTeam) < 0.5;
   // a make ripples out from the basket: the nearest fans are up first
   float e = uCheerT - (abs(instanceMatrix[3].x - uBasketX) * 0.012 + ph * 0.3);
@@ -129,6 +140,10 @@ float pickRow() {
   if (kind < 1.5) {
     if (e >= 0.0 && e < L && mine) return clipRow(3, e + ph);
     if (uExcite > 0.45 && ph < 0.5) return clipRow(7, t);
+    // standing idle: weight shifts, arms folded, or a slow clap
+    float v = fract(ph * 9.17);
+    if (v < 0.3) return clipRow(9, t);
+    if (v < 0.45) return clipRow(7, t * 0.6);
     return clipRow(6, t);
   }
   if (kind < 2.5) return clipRow(8, t * (e >= 0.0 && e < L ? 1.4 : 1.0));
@@ -140,15 +155,21 @@ const VERT_SKIN = `
   float row = pickRow();
   mat4 skm = skinWeight.x * boneAt(row, skinIndex.x) + skinWeight.y * boneAt(row, skinIndex.y) + skinWeight.z * boneAt(row, skinIndex.z) + skinWeight.w * boneAt(row, skinIndex.w);
   vec3 objectNormal = normalize((skm * vec4(normal, 0.0)).xyz);
-  vRest = position; vPart = color.r; vShirt = aShirt; vPants = aPants; vSkin = aSkin; vHair = aHair; vStyle = aStyle;
+  vRest = position; vPart = color.rgb; vShirt = aShirt; vPants = aPants; vSkin = aSkin; vHair = aHair; vStyle = aStyle;
 `;
 const FRAG_HEAD = `
 uniform vec3 uHeadC, uEye; uniform float uDim;
-varying vec3 vRest; varying float vPart; varying vec3 vShirt; varying vec3 vPants; varying vec3 vSkin; varying vec3 vHair; varying vec4 vStyle;
+varying vec3 vRest; varying vec3 vPart; varying vec3 vShirt; varying vec3 vPants; varying vec3 vSkin; varying vec3 vHair; varying vec4 vStyle;
 // style: x sleeves (0 vest, 1 tee, 2 long), y legs (0 shorts, 1 trousers), z hair (0 short, 1 long, 2 bald, 3 cap), w shoes (0 dark, 1 white)
+// vPart: arm, leg, head flags (blended across a triangle; each cut at 0.5). Clothes are cut by rest-pose height.
 vec3 fanColor(vec3 p) {
-  float z = floor(vPart * 8.0 + 0.5), h = p.y, ax = abs(p.x);
-  if (z > 5.5) {
+  float h = p.y, ax = abs(p.x);
+  bool head = vPart.b > 0.5 && vPart.b >= max(vPart.r, vPart.g), arm = !head && vPart.r > 0.5, leg = !head && !arm && vPart.g > 0.5;
+  if (leg && h > 0.97) leg = false; // the hips belong to the shirt's hem line, cut level all the way round
+  // a round collar: higher at the back and sides, a scoop at the front
+  float collar = uHeadC.y - 0.2 - 0.075 * smoothstep(0.0, 0.09, p.z) * (1.0 - smoothstep(0.045, 0.085, ax));
+  if (head || (!arm && !leg && h > collar)) {
+    if (h < collar) return vStyle.x < 0.5 ? vSkin : vShirt;           // the shirt's collar on the neck
     vec3 d = p - uHeadC;
     float back = clamp((0.04 - d.z) / 0.12, 0.0, 1.0);
     float line = 0.048 - 0.11 * back - 0.012 * smoothstep(0.05, 0.08, abs(d.x)) * (1.0 - back);
@@ -163,17 +184,15 @@ vec3 fanColor(vec3 p) {
     if (p.z > uEye.z - 0.02 && dot(e, e) < 0.00011) return vec3(0.03);
     return vSkin;
   }
-  if (z < 0.5) {
-    if (h < 0.97) return vPants;
-    if (h > 1.5 && ax < 0.07 && p.z > 0.0) return vSkin;          // the neckline
-    if (vStyle.x < 0.5 && ax > 0.15 && h > 1.36) return vSkin;    // a vest: bare shoulders
-    return vShirt;
+  if (arm) return (vStyle.x > 1.5 && h > 1.06) || (vStyle.x > 0.5 && vStyle.x < 1.5 && h > 1.33) ? vShirt : vSkin;
+  if (leg) {
+    if (h < 0.11) return vStyle.w > 0.5 ? vec3(0.82) : vec3(0.06);  // shoes
+    if (vStyle.y > 0.5 || h > 0.6) return vPants;                    // trousers, or shorts to the knee
+    return h < 0.26 ? vec3(0.85) : vSkin;                             // socks, bare shins
   }
-  if (z < 1.5) return vStyle.x > 1.5 || (vStyle.x > 0.5 && h > 1.33) ? vShirt : vSkin;
-  if (z < 2.5) return vStyle.x > 1.5 && h > 1.06 ? vShirt : vSkin;
-  if (z < 3.5) return vPants;
-  if (z < 4.5) return vStyle.y > 0.5 ? vPants : h < 0.26 ? vec3(0.85) : vSkin;
-  return vStyle.w > 0.5 ? vec3(0.82) : vec3(0.06);
+  if (h < 0.97) return vPants;
+  if (vStyle.x < 0.5 && ax > 0.15 && h > 1.36) return vSkin;          // a vest: bare shoulders
+  return vShirt;
 }
 `;
 function fanMaterial(body, lod, U) {
@@ -188,7 +207,8 @@ function fanMaterial(body, lod, U) {
       .replace('#include <beginnormal_vertex>', VERT_SKIN)
       .replace('#include <begin_vertex>', 'vec3 transformed = (skm * vec4(position, 1.0)).xyz;');
     sh.fragmentShader = FRAG_HEAD + sh.fragmentShader
-      .replace('#include <color_fragment>', '#include <color_fragment>\n diffuseColor.rgb = fanColor(vRest) * uDim;');
+      // (never a fan at the lens: a replay camera can sit right behind a bench)
+      .replace('#include <color_fragment>', '#include <color_fragment>\n if (length(vViewPosition) < 6.0) discard;\n diffuseColor.rgb = fanColor(vRest) * uDim;');
   };
   mat.customProgramCacheKey = () => 'fan3d';
   return mat;
@@ -224,6 +244,7 @@ export function buildCrowd3d(seats, opts) {
   const g = new THREE.Group();
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0), P = new THREE.Vector3();
   let count = 0;
+  const cheer = []; // the cheer squad, for their pom-poms
   for (const grp of Object.values(groups)) {
     const body = C3.bodies[grp.build], n = grp.list.length;
     const geo = new THREE.BufferGeometry();
@@ -239,6 +260,7 @@ export function buildCrowd3d(seats, opts) {
       P.set(st.f[0], st.f[1], st.f[2]); q.setFromAxisAngle(Y, st.f[3] + (rng() - 0.5) * (kind < 2 ? 0.35 : 0.1)); s.setScalar(sc);
       mesh.setMatrixAt(i, m.compose(P, q, s));
       mix.set([kind, rng(), st.team ?? 0, 0], i * 4);
+      if (kind === 2) cheer.push({ m: m.clone(), ph: mix[i * 4 + 1], body, lod: grp.lod, color: st.tint || new THREE.Color('#D4AF37') });
       const shirt = st.shirt || st.tint || opts.palette[Math.floor(rng() * opts.palette.length)];
       const j = 0.9 + rng() * 0.2;
       sh.set([shirt.r * j, shirt.g * j, shirt.b * j], i * 3);
@@ -260,11 +282,38 @@ export function buildCrowd3d(seats, opts) {
     g.add(mesh);
     count += n;
   }
+  // pom-poms: one sphere per hand, in the squad's colour, a little metallic
+  let poms = null;
+  if (cheer.length) {
+    poms = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.34, 0), new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.35, flatShading: true }), cheer.length * 2);
+    // (a near-black school colour shakes gold poms: black ones vanish against the crowd)
+    const gold = new THREE.Color('#D4AF37');
+    cheer.forEach((c, i) => { const col = c.color.r + c.color.g + c.color.b < 0.12 ? gold : c.color; poms.setColorAt(i * 2, col); poms.setColorAt(i * 2 + 1, col); });
+    poms.frustumCulled = false; poms.userData.dyn = true; g.add(poms);
+  }
+  const clipRow = (c, t) => { const k = C3.clipTable[c], f = Math.floor(Math.max(t, 0) * CROWD_FPS); return k.x + (k.z > 0.5 ? ((f % k.y) + k.y) % k.y : Math.min(f, k.y - 1)); };
+  const v = new THREE.Vector3(), sm = new THREE.Matrix4(), pm4 = new THREE.Matrix4(), one = new THREE.Vector3(1, 1, 1), qI = new THREE.Quaternion();
   return {
     g, count, U,
     // cheerAt: seconds since the last make (or null), team: the scoring team (-1: everyone), basketX: its rim (world x)
     update(time, cheerAge, team, excite, basketX) {
       U.uTime.value = time; U.uCheerT.value = cheerAge == null ? -99 : cheerAge; U.uCheerTeam.value = team; U.uExcite.value = excite; U.uBasketX.value = basketX;
+      if (!poms) return;
+      // the same row the vertex shader picks for the cheer squad (kind 2)
+      cheer.forEach((c, i) => {
+        const ph = c.ph, t = time * (0.88 + 0.24 * ((ph * 5.31) % 1)) + ph * 7.0;
+        const e = (cheerAge == null ? -99 : cheerAge) - (Math.abs(c.m.elements[12] - basketX) * 0.012 + ph * 0.3), L = 2.4 + ph * 1.6;
+        const row = clipRow(8, t * (e >= 0 && e < L ? 1.4 : 1.0));
+        const lod = c.body.lods[c.lod];
+        ['L', 'R'].forEach((side, k) => {
+          const h = lod.hands[side];
+          if (!h || !h.rest) { poms.setMatrixAt(i * 2 + k, pm4.makeScale(0, 0, 0)); return; }
+          sm.fromArray(lod.data, (row * lod.nb * 4 + h.i * 4) * 4);
+          v.copy(h.rest).applyMatrix4(sm).applyMatrix4(c.m);
+          poms.setMatrixAt(i * 2 + k, pm4.compose(v, qI, one));
+        });
+      });
+      poms.instanceMatrix.needsUpdate = true;
     },
   };
 }

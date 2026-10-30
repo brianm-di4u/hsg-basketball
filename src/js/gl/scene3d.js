@@ -27,8 +27,8 @@ const V = () => new THREE.Vector3();
 // officials (display only; the rules have no referees)
 const REF_KIT = { ref: true, jersey: '#F4F1EA', trim: '#111111', shorts: '#111111', num: '#111111', band: '#111111', light: false };
 const REF_LOOK = [
-  { id: 'ref-1', num: '', height: 71, look: { skin: '#8D5524', hair: 'buzz', hairC: '#1B1B1F', band: false } },
-  { id: 'ref-2', num: '', height: 69, look: { skin: '#E0AC69', hair: 'short', hairC: '#6B6B6B', band: false } },
+  { id: 'ref-1', num: '', height: 71, look: { skin: '#A86B45', hair: 'buzz', hairC: '#1B1B1F', band: false } },
+  { id: 'ref-2', num: '', height: 69, look: { skin: '#E0AC86', hair: 'short', hairC: '#6B6B6B', band: false } },
 ];
 
 // ---------------------------------------------------------------- loading
@@ -289,10 +289,14 @@ function ensureVenue(v, canSwap) {
   captureProbe();
 }
 // the room's own light for players, the ball and the floor's clear coat; people and effects stay out of it
-function attachCrowd3d(v) {
+function attachCrowd3d(v, players) {
   const V = G3.venue, girls = !!(v && v.home && v.home.roster && String(v.home.roster[0] && v.home.roster[0].id).includes('girls'));
   const o = { tier: G3.tier, palette: V.palette, girls, dim: V.arena ? 0.58 : 0.62 };
-  V.crowd3d = buildCrowd3d([...V.seats, ...(V.bench || [])], { ...o, seed: 11 });
+  // the benches wear the kits their teams play in tonight (home whites included)
+  const kits = {};
+  for (const it of players || []) if (it.kit && kits[it.pl.t] == null) kits[it.pl.t] = it.kit;
+  const bench = (V.bench || []).map((b) => { const k = kits[b.team]; return k && b.k === 3 && b.style && b.style[0] === 0 ? { ...b, shirt: new THREE.Color(k.jersey), pants: new THREE.Color(k.shorts || k.jersey) } : b; });
+  V.crowd3d = buildCrowd3d([...V.seats, ...bench], { ...o, seed: 11 });
   V.g.add(V.crowd3d.g); V.crowd.visible = false;
   if (V.near && V.near.seats) { V.near3d = buildCrowd3d(V.near.seats, { ...o, seed: 23 }); V.near.g.add(V.near3d.g); V.near.crowd.visible = false; }
 }
@@ -337,7 +341,7 @@ export function draw3d(scene, fx) {
   if (ANIM.clips) ANIM.stats.frames = (ANIM.stats.frames || 0) + 1;
   // the 3D crowd: bake once when its package is in, then seat it in the venue at a dead ball
   if (!crowd3dReady() && HQ.packages.crowd && HQ.packages.crowd['fans.glb']) { try { initCrowd3d(HQ.packages.crowd['fans.glb']); } catch (e) { console.info('[hq] crowd:', e.message); HQ.packages.crowd = null; } }
-  if (crowd3dReady() && G3.venue && !G3.venue.crowd3d && canSwap && G3.venue.seats) attachCrowd3d(scene.venue);
+  if (crowd3dReady() && G3.venue && !G3.venue.crowd3d && canSwap && G3.venue.seats) attachCrowd3d(scene.venue, scene.players);
   if (!ANIM.clips && HQ.packages.anims && HQ.packages.anims['anims.json']) { try { loadAnims(HQ.packages.anims); } catch (e) { console.info('[hq] anims:', e.message); HQ.packages.anims = null; } }
   if (canSwap && !G3.hqPlayers && HQ.packages['players-hq'] && HQ.packages['players-hq']['players-hq.glb']) swapPlayersHQ();
   // the nearest player to the camera sets the bottom of the broadcast frame (no empty wood under the play)

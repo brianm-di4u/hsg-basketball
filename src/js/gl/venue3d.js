@@ -628,7 +628,7 @@ export function buildVenue(v, opts) {
     // team benches: substitutes in team colors
     // (the team chairs stay empty until the benches get real players; spectators in them read wrong)
     // cheer squad on the baseline corners (standing sprites)
-    for (const s of [-1, 1]) for (let k = 0; k < 3; k++) seats.push({ x: s * (HL - 9 + k * 2.4), y: 0, z: -(HW + 2.6) - (k % 2) * 0.6, g: 'cheer', tint: CL(home.colors.primary), f: [s * (HL - 9 + k * 2.4), 0, -(HW + 2.6) - (k % 2) * 0.6, 0], k: 2, style: [0, 0, 1, 1] });
+    for (const s of [-1, 1]) for (let k = 0; k < 3; k++) seats.push({ x: s * (HL - 9 + k * 2.4), y: 0, z: -(HW + 2.6) - (k % 2) * 0.6, g: 'cheer', tint: CL(home.colors.primary), pants: CL(home.colors.secondary), f: [s * (HL - 9 + k * 2.4), 0, -(HW + 2.6) - (k % 2) * 0.6, 0], k: 2, style: [0, 0, 1, 1] });
     // ceiling: dark deck, steel trusses and round high-bay lamps
     const ceil = new THREE.Mesh(new THREE.PlaneGeometry(160, 140), new THREE.MeshStandardMaterial({ color: C('#2B2A2E'), roughness: 0.95 })); ceil.rotation.x = Math.PI / 2; ceil.position.y = 82; A(ceil);
     const trussM = new THREE.MeshStandardMaterial({ color: C('#3C3F47'), roughness: 0.5, metalness: 0.5 });

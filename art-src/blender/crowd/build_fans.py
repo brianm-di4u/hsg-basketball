@@ -5,8 +5,8 @@
 #
 # Each build (M, F) loses its clothing shells (the jersey, shorts and hair cap are painted per pixel in the game),
 # is decimated to two levels of detail (about 1,100 and 450 triangles) and keeps its skinning on the same rig.
-# One colour attribute per vertex says which body part it belongs to (r = part / 8): 0 trunk, 1 upper arm,
-# 2 forearm and hand, 3 thigh, 4 shin, 5 foot, 6 neck and head. The game colours shirts, sleeves, trousers or
+# One colour attribute per vertex flags its body part: r = arm, g = leg, b = neck and head (0 or 1; the trunk is
+# none). Flags, not a part number, so they blend cleanly across a triangle and the shader cuts at 0.5. The game colours shirts, sleeves, trousers or
 # shorts, shoes, skin and hair from that and the rest-pose position, per fan (src/js/gl/crowd3d.js).
 import bpy, bmesh, os
 
@@ -62,7 +62,7 @@ for bid in ('M', 'F'):
             for g in v.groups:
                 if g.group in names: acc[part_of(names[g.group])] = acc.get(part_of(names[g.group]), 0) + g.weight
             p = max(acc, key=acc.get) if acc else 0
-            col.data[v.index].color = (p / 8.0, 0, 0, 1)
+            col.data[v.index].color = (1.0 if p in (1, 2) else 0.0, 1.0 if p in (3, 4, 5) else 0.0, 1.0 if p == 6 else 0.0, 1)
         me.color_attributes.active_color = col
         me.color_attributes.render_color_index = me.color_attributes.find('part')
         for a in list(me.attributes):

@@ -1,13 +1,9 @@
 // 3D renderer: boot, fallback, venues, player close-ups, the shot payoff and replays. The shots here are the
 // visual review record. "Graphics: 3D gym" is forced through the saved settings, because the harness's
 // headless Chromium renders WebGL in software, where the game's Auto setting keeps the classic 2D court.
-// file:// and real-GPU frame rates are checked by tools/perf3d.mjs (the harness blocks file:// URLs).
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+// Download budgets live in budget.test.mjs; real-GPU frame rates in perf-gpu.test.mjs (run with --gpu).
 import { exhibition } from './helpers.mjs';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
 const FORCE_3D = () => { try { localStorage.setItem('hsg-hoops-v1', JSON.stringify({ v: 1, settings: { graphics: '3d' } })); } catch (e) { /* storage blocked */ } };
 
 async function ready3d(t) {
@@ -143,16 +139,6 @@ export const tests = [
     },
   },
   {
-    name: 'download size: game, three.js and packed assets',
-    viewports: ['desktop'],
-    async run(t) {
-      const total = ['index.html', 'vendor/three.bundle.js', 'assets/players.js', 'assets/tex.js']
-        .reduce((n, f) => n + fs.statSync(path.join(here, '..', f)).size, 0);
-      t.log(`download: ${(total / 1024 / 1024).toFixed(2)} MB`);
-      t.expect(total < 2.5 * 1024 * 1024, 'total download under 2.5 MB');
-    },
-  },
-  {
     name: '3D: quality tier changes keep drawing (adaptive governor)',
     initScript: FORCE_3D,
     async run(t) {
@@ -168,6 +154,23 @@ export const tests = [
         const shot = await t.shot(`v55-tier-${tier}`);
         t.expect(shot.stats.stddev > 25, `tier ${tier}: the court is drawn (stddev ${shot.stats.stddev.toFixed(1)})`);
       }
+    },
+  },
+  {
+    name: '3D: the governor steps down cheapest first under a slow CPU',
+    viewports: ['desktop'],
+    initScript: FORCE_3D,
+    async run(t) {
+      if (!t.gpu) { t.log('software GL already runs at the lowest step it reaches; run with --gpu'); return; }
+      await ready3d(t);
+      await exhibition(t, { seed: 9, paused: false });
+      await t.cpuThrottle(10); // far below a real device: frames land between 25 ms and 200 ms (slower ones are hitches it ignores)
+      await t.page.waitForFunction(() => (window.__game.getState().gfx.gov || []).length >= 2, null, { timeout: 30000 }).catch(() => {});
+      await t.cpuThrottle(1);
+      const gov = (await t.state()).gfx.gov || [];
+      t.log('governor steps: ' + gov.join(' → '));
+      t.expect(gov.length >= 2, `the governor stepped down (${gov.join(', ')})`);
+      t.expect(gov[0] === 'bloom' || gov[0] === 'dpr', `the first step is a cheap one, not a tier (${gov[0]})`);
     },
   },
   {

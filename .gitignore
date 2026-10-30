@@ -19,3 +19,12 @@ art-src/**/renders/
 /art-src/dem/
 # Raw downloaded map data (USGS, Census, NHD, OSM; refetched by game tools)
 /art-src/geo/raw/
+art-src/venue/*.exr
+art-src/blender/venue/*.blend1
+tools/dev/ktx/
+art-src/venue/*.rgba
+tools/dev/mpfb/
+art-src/blender/players/*.blend1
+
+# Downloaded CMU motion capture (BVH; art-src/anim/SOURCES.md lists the takes, re-fetched by URL)
+art-src/anim/cmu/

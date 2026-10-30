@@ -1,0 +1,73 @@
+// The high-quality home gym: the shared Blender shell (art-src/blender/venue/build_gym.py) with its baked
+// lightmaps, dressed per school. Surfaces are unlit MeshBasicMaterials whose color is the school's (or the
+// material's) albedo times the baked irradiance, so the light reads the same for every school without being
+// counted twice; the floor keeps its live material (markings, wood, clear coat, player shadows) and takes the
+// baked light as a multiplier. Everything procedural (crowd, pennants, scoreboards, hoops, benches) is still
+// built by venue3d.js on top.
+/* global THREE */
+import { GLOW } from './post.js';
+import { contrast } from '../util.js';
+
+// exposure for the baked light, calibrated with tools/probe.mjs against the lite gym: the court a touch brighter
+// than the lite floor (floorY about 0.24), the stands and walls as bright as before
+const EXPOSURE = 0.26, FLOOR_EXPOSURE = 0.12;
+
+// the shell's own colors (school tints replace the tint_* slots); C = the venue's linear color helper. School
+// paint keeps a little of every channel, so bright light never clips it to a pure hue
+const paint = (c) => c.lerp(new THREE.Color(0.18, 0.18, 0.18), 0.1);
+function slotColor(name, home, C) {
+  const dark = contrast(home.colors.primary, '#111111') < 2.2;
+  switch (name) {
+    case 'wood': return C('#A7794C');
+    case 'riser': return C('#6B4A2E');
+    case 'wall': return C('#E4DED0');
+    case 'tint_primary': return paint(C(dark ? home.colors.secondary : home.colors.primary));
+    case 'tint_secondary': return paint(C(home.colors.secondary));
+    case 'ceiling': return C('#3A3A40');
+    case 'steel': return C('#4A4E58');
+    case 'surround': return C('#9A7E62');
+    case 'seat': return C('#1F4FB8');   // the arena's royal-blue chairs
+    case 'step': return C('#5A6074');
+    default: return C('#CCCCCC');
+  }
+}
+
+// shell = { scene (glTF scene), lm: { floor, shell } (KTX2 textures), lmScale: { floor, shell } }
+// floorMat = venue3d's floor material, patched here to take the floor lightmap
+export function addShell(g, shell, home, floorMat, wallTex, C) {
+  const root = shell.scene.clone(true);
+  const lmMat = {};
+  for (const tag of ['floor', 'shell']) { const t = shell.lm[tag]; t.channel = 1; t.flipY = false; lmMat[tag] = t; }
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    o.geometry = o.geometry.clone(); // each venue owns its copy: rebuilding disposes the old venue's geometry
+    o.userData.dyn = true; // already batched by material, and venue3d's static merge would drop the lightmap UVs
+    const name = (o.material && o.material.name) || '';
+    const tag = name === 'floor' || name === 'surround' ? 'floor' : 'shell';
+    // (the arena's house is lit only by spill from the court spots: it gets a stronger exposure than the gym's walls)
+    const ex = tag === 'floor' ? FLOOR_EXPOSURE : shell.kind === 'arena' ? EXPOSURE * 2.6 : EXPOSURE;
+    const lm = lmMat[tag], k = shell.lmScale[tag] * ex * Math.PI; // MeshBasic divides baked light by π
+    if (name === 'floor') {
+      // the court keeps its live material; its UVs for the markings come from position (see the floor shader)
+      o.material = floorMat;
+      floorMat.userData.u.tLM.value = lm;
+      floorMat.userData.u.uLM.value = shell.lmScale.floor * FLOOR_EXPOSURE;
+      o.receiveShadow = true;
+      return;
+    }
+    const m = new THREE.MeshBasicMaterial({ color: slotColor(name, home, C), lightMap: lm, lightMapIntensity: k });
+    if (name === 'wall' && wallTex) { const t = wallTex.clone(); t.repeat.set(4 / 5.33, 4 / 5.33); t.needsUpdate = true; m.map = t; } // shell UVs run one per 4 ft
+    if (name === 'lamp') { m.lightMap = null; m.color = new THREE.Color(GLOW * 1.4, GLOW * 1.35, GLOW * 1.2); }
+    if (name === 'ceiling' || name === 'wall') m.side = THREE.DoubleSide; // big enclosing planes: never culled to a void
+    // the arena's stands are lit only by spill, so the bake leaves the upper rows black; the house lights' floor
+    // keeps the gaps between fans a dim blue, not a void
+    if (shell.kind === 'arena' && (name === 'seat' || name === 'step' || name === 'wall')) {
+      m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('reflectedLight.indirectDiffuse += lightMapTexel.rgb * lightMapIntensity * RECIPROCAL_PI;', 'reflectedLight.indirectDiffuse += lightMapTexel.rgb * lightMapIntensity * RECIPROCAL_PI + vec3(0.09);'); };
+      m.customProgramCacheKey = () => 'arenaFloorLit';
+    }
+    o.material = m;
+    o.userData.hq = true;
+  });
+  g.add(root);
+  return root;
+}

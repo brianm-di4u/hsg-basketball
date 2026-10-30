@@ -75,3 +75,115 @@ export async function contrastReport(page) {
     return { checked: els.length, fails: out };
   });
 }
+
+// ---------------------------------------------------------------- 3D capture (capture.test.mjs, tools/probe.mjs)
+import fs from 'node:fs';
+import path from 'node:path';
+
+// "Graphics: 3D gym" through saved settings: the harness's software GL would otherwise keep the 2D court.
+export const FORCE_3D = () => { try { localStorage.setItem('hsg-hoops-v1', JSON.stringify({ v: 1, settings: { graphics: '3d' } })); } catch (e) { /* storage blocked */ } };
+
+// streamed HQ art settles (or fails, or is off) before a capture: every frame shows the build the player gets
+export async function hqSettled(t) {
+  await t.page.waitForFunction(() => { const h = window.__game.getState().gfx.hq; return h && !['off', 'loading'].includes(h.state); }, null, { timeout: 60000 });
+}
+
+export async function ready3d(t) {
+  await t.page.waitForFunction(() => {
+    const g = window.__game && window.__game.getState().gfx;
+    return g && ['ready', 'failed', 'unsupported'].includes(g.state);
+  }, null, { timeout: 30000 });
+  const s = await t.state();
+  t.equal(s.gfx.state, 'ready', `3D renderer ready ${s.gfx.err || ''}`);
+  return s;
+}
+
+// Seeds whose forced shot has a known result (the sim is seeded and frozen, so these never change unless the
+// sim does; tools/find-seeds.mjs finds new ones). The capture asserts the result instead of searching.
+export const SEEDS = { make3: 23, miss: 41 };
+
+// In the page: a paused exhibition, the user's point guard set up for a three from the right wing with the
+// defense pulled away, then a forced release of quality q. Returns the points scored.
+export function shotFromInPage([seed, q, home = 'hot-springs', away = 'lakeside']) {
+  const g = window.__game; g.seed(seed);
+  g.newGame({ mode: 'exhibition', home, away, program: 'boys', user: 'home', paused: true });
+  for (let k = 0; k < 40 && g.getState().match.phase !== 'live'; k++) g.step(30);
+  g.act('give', 0, 0); g.act('place', 0, 0, 68, 13);
+  for (let s = 0; s < 5; s++) g.act('place', 1, s, 30, 5 + s * 10);
+  g.step(1);
+  g.act('shootAt', q);
+  let st = g.getState();
+  const s0 = st.match.score[0];
+  for (let k = 0; k < 200 && (st.match.ball.state === 'held' || st.match.ball.state === 'shot') && st.match.score[0] === s0; k++) { g.step(2); st = g.getState(); }
+  return st.match.score[0] - s0;
+}
+
+// In the page: screen-space facts about the current frame for tools/probe.mjs (ball, rims, players, court
+// and crowd sample points), all in CSS px. Points off screen are dropped.
+export function frameMetaInPage() {
+  const g = window.__game, s = g.getState(), m = s.match;
+  // project() gives stage pixels; the stage sits below the score strip on phones, so shift to page pixels
+  const stage = g.act('layout').stage || { x: 0, y: 0 };
+  const P = (x, z, y = 0) => { const q = g.act('project', x, z, y); return { x: q.x + stage.x, y: q.y + stage.y }; };
+  const W = innerWidth, H = innerHeight, on = (q) => q && q.x >= 0 && q.x < W && q.y >= 0 && q.y < H;
+  const out = { W, H, scene: s.scene, tier: s.gfx.tier, cam: s.gfx.cam, replay: !!s.replay, hud: s.hud, stage, sb: g.act('layout').sb };
+  if (out.hud && out.hud.slamBox) out.hud.slamBox = { ...out.hud.slamBox, x: out.hud.slamBox.x + stage.x, y: out.hud.slamBox.y + stage.y };
+  if (!m || s.gfx.mode !== '3d') return out;
+  const b = m.ball, bc = P(b.x, b.z, b.y), bt = P(b.x, b.z, b.y + 0.4);
+  out.ball = { x: bc.x, y: bc.y, r: Math.max(1, Math.abs(bt.y - bc.y)), state: b.state, on: on(bc) };
+  out.rims = [P(5.25, 25, 10), P(88.75, 25, 10)].map((q) => ({ x: q.x, y: q.y, on: on(q) }));
+  out.players = m.players.map((p) => {
+    const f = P(p.x, p.z, p.y), h = P(p.x, p.z, p.y + 6.2);
+    return { i: p.i, t: p.t, x: f.x, foot: f.y, head: h.y, px: Math.abs(f.y - h.y), on: on(f) || on(h), holder: b.holder === p.i };
+  });
+  const near = (x, z) => out.players.some((p) => p.on && Math.hypot(p.x - x, (p.foot + p.head) / 2 - z) < Math.max(18, p.px * 0.7));
+  out.floor = [];
+  for (let x = 3; x <= 91; x += 5) for (let z = 3; z <= 47; z += 4) { const q = P(x, z, 0); if (on(q) && !near(q.x, q.y)) out.floor.push([q.x, q.y]); }
+  out.crowd = [];
+  const sb = g.act('layout').sb, inSb = (q) => sb && q.x > sb.x && q.x < sb.x + sb.w && q.y > sb.y && q.y < sb.y + sb.h;
+  const addC = (q) => { if (on(q) && !inSb(q)) out.crowd.push([q.x, q.y]); };
+  for (let x = -6; x <= 100; x += 4) for (let r = 0; r < 9; r++) addC(P(x, -9 - r * 2.3, 1.6 + r * 1.55)); // far-side bleachers
+  for (const e of [-1, 1]) for (let z = 3; z <= 47; z += 4) for (let r = 0; r < 3; r++) addC(P(47 + e * (56.5 + r * 1.6), z, 4 + r * 0.9)); // baseline students
+  const ns = [P(30, 50, 0), P(47, 50, 0), P(64, 50, 0)];
+  out.nearSidelineY = Math.min(...ns.map((q) => q.y));
+  return out;
+}
+
+// Record frame meta for a shot; saveMeta writes screenshots/<milestone>/<viewport>/meta.json.
+export async function meta(t, name) {
+  t._meta = t._meta || {};
+  t._meta[name] = await t.page.evaluate(frameMetaInPage);
+}
+export function saveMeta(t, file = 'meta.json') {
+  if (!t._meta) return;
+  const f = path.join(t.shotDir, file);
+  let prev = {};
+  try { prev = JSON.parse(fs.readFileSync(f, 'utf8')); } catch { /* first write */ }
+  fs.mkdirSync(t.shotDir, { recursive: true });
+  fs.writeFileSync(f, JSON.stringify({ ...prev, ...t._meta }, null, 1));
+}
+
+// A still that also records its frame meta.
+export async function cshot(t, name, opts = {}) {
+  const r = await t.shot(name, { timeout: 15000, ...opts });
+  await meta(t, name);
+  return r;
+}
+
+// A frame burst: `frames` screenshots `every` sim ticks apart (step(n) draws one frame each time), saved as
+// screenshots/<milestone>/<viewport>/bursts/<name>/fNN.png, plus that burst's frame meta.
+export async function burst(t, name, { frames = 16, every = 3, onFrame = null } = {}) {
+  const dir = path.join(t.shotDir, 'bursts', name);
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  const metas = [];
+  for (let k = 0; k < frames; k++) {
+    if (k) await t.game('step', every);
+    if (onFrame) await onFrame(k);
+    await t.page.screenshot({ path: path.join(dir, `f${String(k).padStart(2, '0')}.png`) });
+    metas.push(await t.page.evaluate(frameMetaInPage));
+  }
+  fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify(metas));
+  t.log(`burst ${name}: ${frames} frames, every ${every} ticks`);
+  return metas;
+}

@@ -23,6 +23,7 @@ export const tests = [
     name: 'contrast: day theme',
     colorScheme: 'light',
     async run(t) {
+      await t.game('setState', { settings: { theme: 'light' } }); // Day is a choice; the default is the night look
       await t.game('newGame', { mode: 'season', school: 'cutter-morning-star', program: 'girls', seed: 2 });
       await sweep(t, 'light');
     },
@@ -32,7 +33,7 @@ export const tests = [
     colorScheme: 'dark',
     async run(t) {
       const s = await t.state();
-      t.equal(s.settings.theme, 'auto', 'theme follows the system');
+      t.equal(s.settings.theme, 'auto', 'default theme setting');
       t.expect(await t.page.evaluate(() => document.body.classList.contains('theme-dark')), 'night theme applied');
       await t.shot('31-dark-title');
       await t.game('newGame', { mode: 'season', school: 'mountain-pine', program: 'boys', seed: 2 });

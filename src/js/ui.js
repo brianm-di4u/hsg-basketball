@@ -46,16 +46,16 @@ export function titleScreen(st) {
 export function selectScreen(st) {
   const x = st.pick;
   const hs = (x.home === 'hot-springs' || x.away === 'hot-springs') && st.save.unlocks.throwback;
-  return `<div class="panel wide">
+  return `<div class="panel wide setup">
     <h2>Exhibition</h2>
     ${seg('pickProgram', [['boys', 'Boys'], ['girls', 'Girls']], x.program, 'Program')}
-    <h3 id="h-home">Home team</h3>${grid('pickHome', x.home, 'Home team')}
-    <h3 id="h-away">Away team</h3>${grid('pickAway', x.away, 'Away team')}
+    <div class="pickers"><div><h3 id="h-home">Home team</h3>${grid('pickHome', x.home, 'Home team')}</div>
+    <div><h3 id="h-away">Away team</h3>${grid('pickAway', x.away, 'Away team')}</div></div>
     ${x.home === x.away ? '<p class="warn" role="alert">Pick two different schools.</p>' : ''}
-    ${seg('pickSide', [['home', 'Home'], ['away', 'Away']], x.side, 'You play')}
+    <div class="opts">${seg('pickSide', [['home', 'Home'], ['away', 'Away']], x.side, 'You play')}
     ${seg('setQ', [[120, '2 min'], [240, '4 min'], [480, '8 min (full)']], st.settings.qLen, 'Quarters')}
-    ${seg('setClock', [[35, '35-second clock'], [0, 'Classic (off)']], st.settings.shotClock, 'Shot clock')}
-    ${seg('setDiff', DIFF.map((d, i) => [i, d.name]), st.settings.difficulty, 'Difficulty')}
+    ${seg('setClock', [[35, '35 seconds'], [0, 'Off (classic)']], st.settings.shotClock, 'Shot clock')}
+    ${seg('setDiff', DIFF.map((d, i) => [i, d.name]), st.settings.difficulty, 'Difficulty')}</div>
     ${hs ? seg('setThrow', [[1, '1912-style throwback'], [0, 'Regular']], x.throwback ? 1 : 0, 'Hot Springs kit') : ''}
     <div class="row end">${btn('title', 'Back')}${btn('startExhibition', 'Tip off', { cls: 'primary', disabled: x.home === x.away })}</div>
   </div>`;
@@ -306,8 +306,13 @@ export function helpScreen(st, tab = 'controls') {
     <li>Gyms are generic game art in each school's colors. Title-year pennants hang only for real state titles.</li>
     <li>Out-of-county opponents (Cinderbrook, Quartz Hollow and others) are fictional towns.</li></ul>
     <h3>Fact cards</h3><ul class="plain facts">${FACTS_LIST.map((f) => `<li>${esc(f.text)} <span class="src">(${esc(f.source)})</span></li>`).join('')}</ul>
-    <h3>Credits</h3><p>Spa City Hoops is part of the open-source Hot Springs Games collection (MIT license). Player bodies were modeled in Blender; the crowd, band, cheer squad, maple floor and block-wall images were painted for this game with AI image generation; everything else is drawn in code, and all sound is synthesized in the browser. No network connection is used.</p>
-    <p class="fine">Includes three.js r160.1 (MIT license, © 2010–2023 three.js authors) and the Bebas Neue typeface by Dharma Type (SIL Open Font License 1.1). Classic 2D court available in Settings → Graphics.</p>`;
+    <h3>Credits</h3><p>Spa City Hoops is part of the open-source Hot Springs Games collection (MIT license). Gyms, the arena and their lighting were built in Blender; the photo crowd cards (on the classic and lite views only), maple floor and block-wall images were painted for this game with AI image generation; everything else is drawn in code, and all sound is synthesized in the browser. The only network use is loading the game's own high-quality art from the same site after it starts: no ads, analytics or accounts.</p>
+    <ul class="plain bullets fine">
+    <li>Player and fan bodies: built from MakeHuman system assets with MPFB 2 (CC0).</li>
+    <li>Motion capture: the CMU Graphics Lab Motion Capture Database (mocap.cs.cmu.edu; created with funding from NSF EIA-0196217), BVH conversion by Bruce Hahne. Other animation is keyed for this game.</li>
+    <li>three.js r186 (MIT), postprocessing by pmndrs (Zlib), N8AO (ISC), the Basis Universal transcoder (Apache-2.0).</li>
+    <li>Typefaces: Bebas Neue by Dharma Type and Barlow Condensed by Jeremy Tribby (both SIL Open Font License 1.1).</li>
+    <li>Classic 2D court available in Settings → Graphics.</li></ul>`;
   return `<div class="panel wide">
     <h2>How to play</h2>
     <div class="tabs" role="tablist">${tabs.map(([k, l]) => `<button class="tab" role="tab" aria-selected="${k === tab}" data-act="helpTab" data-arg="${k}">${l}</button>`).join('')}</div>
@@ -324,7 +329,7 @@ export function settingsScreen(st, storageOk) {
     ${seg('setVol', [[0.25, 'Low'], [0.5, 'Medium'], [0.8, 'High']], s.vol, 'Volume')}
     ${seg('setMotion', [['auto', 'Follow system'], ['on', 'Reduce'], ['off', 'Full']], s.motion, 'Reduced motion')}
     ${seg('setText', [[100, '100%'], [115, '115%'], [130, '130%']], s.text, 'Text size')}
-    ${seg('setTheme', [['auto', 'Follow system'], ['light', 'Day'], ['dark', 'Night']], s.theme, 'Menu theme')}
+    ${seg('setTheme', [['auto', 'Default (night)'], ['light', 'Day'], ['dark', 'Night']], s.theme, 'Menu theme')}
     ${seg('setDiff', DIFF.map((d, i) => [i, d.name]), s.difficulty, 'Difficulty')}
     ${seg('setQ', [[120, '2 min'], [240, '4 min'], [480, '8 min (full)']], s.qLen, 'Quarter length')}
     ${seg('setClock', [[35, '35-second clock'], [0, 'Classic (off)']], s.shotClock, 'Shot clock')}

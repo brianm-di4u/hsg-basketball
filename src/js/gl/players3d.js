@@ -3,17 +3,20 @@
 // by the sim's actions. Display only: nothing here feeds back into the rules.
 /* global THREE */
 import { COURT } from '../court.js';
+import { mix, makePose, blendPose, MASKS } from './anim-mixer.js';
+import { solveLegs, reachArm } from './ik.js';
 
 const TAU = Math.PI * 2;
 const MODEL_H = 1.86; // rest height of the Blender bodies, metres
 const BONES = ['hips', 'spine', 'chest', 'neck', 'head', 'clavicle_L', 'clavicle_R', 'upperarm_L', 'upperarm_R', 'forearm_L', 'forearm_R',
   'hand_L', 'hand_R', 'thigh_L', 'thigh_R', 'shin_L', 'shin_R', 'foot_L', 'foot_R'];
 
-const P3 = { builds: null, numTex: new Map(), hairGeo: new Map(), tmpQ: null, tmpE: null, tmpV: null };
+const P3 = { builds: null, hq: false, meta: {}, numTex: new Map(), hairGeo: new Map(), tmpQ: null, tmpE: null, tmpV: null };
 
-export function initPlayers(gltf) {
+// gltf: the lite mannequins (core) or, once streamed in, the HQ MPFB bodies (hq = true)
+export function initPlayers(gltf, hq = false) {
   P3.tmpQ = new THREE.Quaternion(); P3.tmpE = new THREE.Euler(0, 0, 0, 'YXZ'); P3.tmpV = new THREE.Vector3();
-  P3.builds = {};
+  P3.builds = {}; P3.hq = hq; P3.meta = {};
   for (const id of ['M', 'F']) {
     const rig = gltf.scene.getObjectByName('Rig' + id);
     if (!rig) throw new Error('players.glb: missing Rig' + id);
@@ -21,6 +24,8 @@ export function initPlayers(gltf) {
     // GLTFLoader makes duplicate node names unique (hand_L_1, …); both rigs share one bone naming
     rig.traverse((o) => { const m = o.name.match(/^(.*)_(\d+)$/); if (m && BONES.includes(m[1])) o.name = m[1]; });
     P3.builds[id] = rig;
+    // where the HQ rig hangs its numbers and hair (written by art-src/blender/players/build_bodies_hq.py)
+    try { P3.meta[id] = rig.userData.hsg ? JSON.parse(rig.userData.hsg) : null; } catch (e) { P3.meta[id] = null; }
   }
 }
 
@@ -71,32 +76,158 @@ vec3 kitColor(vec3 p) {
 }
 `;
 
+// HQ bodies: every face carries a zone code (colour r = zone / 16); g = distance to a garment's open edge (x10 m),
+// b = how far a shorts vertex faces outward. Piping, panels and the shorts' waistband come out crisp and curved.
+const KIT3_VERT = ['attribute vec4 color; varying vec3 vRest; varying vec3 vZone;', '#include <begin_vertex>\n vRest = position; vZone = color.rgb;'];
+const KIT3_FRAG = `
+varying vec3 vRest; varying vec3 vZone;
+uniform vec3 uSkin, uJersey, uTrim, uShorts, uSock, uShoe, uHair, uStripe;
+uniform float uRef, uHairMix, uBand;
+uniform vec4 uHead; uniform vec3 uEye, uMouth, uHand, uBrow;
+float kitRough;
+// painted hair: a hairline high at the brow, dropping toward the nape; clear of the ears
+bool scalp(vec3 p) {
+  vec3 d = p - uHead.xyz;
+  float back = clamp((0.04 - d.z) / 0.12, 0.0, 1.0);                    // 0 at the brow, 1 at the back
+  float line = 0.048 - 0.11 * back - 0.012 * smoothstep(0.05, 0.08, abs(d.x)) * (1.0 - back);
+  bool ear = abs(d.x) > 0.072 && d.y < 0.015 && back < 0.75;
+  return d.y > line && !ear && length(d) < 0.2;
+}
+vec3 kitColor(vec3 p) {
+  float z = floor(vZone.r * 16.0 + 0.5), h = p.y;
+  kitRough = 0.62;
+  if (z < 0.5 && h > uHead.y - 0.09) {
+    if (uHairMix > 0.0 && scalp(p)) {
+      vec3 d = p - uHead.xyz; float back = clamp((0.04 - d.z) / 0.12, 0.0, 1.0);
+      float line = 0.048 - 0.11 * back - 0.012 * smoothstep(0.05, 0.08, abs(d.x)) * (1.0 - back);
+      if (uBand > 0.5 && d.y - line < 0.016) { kitRough = 0.9; return uStripe; }        // headband
+      kitRough = 0.9; return mix(uSkin, uHair, uHairMix);
+    }
+    // brows: a soft arch over each eye, thicker toward the nose
+    float bx = (abs(p.x) - uEye.x) / 0.022;
+    vec2 e = vec2(abs(p.x) - uEye.x, h - uEye.y - 0.03 + uBrow.x * bx * bx - uBrow.y * bx);
+    if (p.z > uEye.z - 0.02 && abs(e.x) < 0.024 && abs(e.y) < uBrow.z + 0.0025 * clamp(-e.x / 0.02, 0.0, 1.0)) { kitRough = 0.9; return mix(uSkin, uHair, 0.92); }
+    // upper lid line, and lips with a small colour shift
+    vec2 le = vec2(abs(p.x) - uEye.x, h - uEye.y);
+    if (p.z > uEye.z - 0.012 && abs(le.x) < 0.017 && le.y > 0.0095 - 0.012 * le.x * le.x / 0.0003 && le.y < 0.0125 - 0.012 * le.x * le.x / 0.0003) return uSkin * 0.35;
+    vec2 m = vec2(p.x / 0.02, (h - uMouth.y + 0.031) / 0.0062); // (MakeHuman's mouth joint sits at the upper lip line)
+    if (p.z > uMouth.z - 0.02 && dot(m, m) < 1.0) return uSkin * vec3(0.78, 0.6, 0.6) + vec3(0.03, 0.0, 0.01);
+  }
+  if (z < 0.5 || (z > 13.5 && uRef > 0.5)) {
+    float ax0 = abs(p.x);
+    if (h < 0.3 && ax0 < 0.22) {                                    // socks, painted to a smooth top, tucked into the shoe
+      kitRough = 0.85;
+      if (uRef > 0.5) return vec3(0.025);
+      return (h > 0.255 && h < 0.275) ? uStripe : uSock;
+    }
+    if (uRef < 0.5) { float wd = length(vec3(ax0, h, p.z) - uHand); if (wd > 0.034 && wd < 0.085 && h > uHand.y - 0.004 && h < uHand.y + 0.11) { kitRough = 0.85; return uStripe; } }
+    if (uRef > 0.5 && h > 0.1 && h < 1.12 && ax0 < 0.27) { kitRough = 0.7; return vec3(0.025); }                // officials: slacks
+    // and a full striped shirt over the tank's bare shoulders and chest: short sleeves to the elbow, a black crew neck
+    if (uRef > 0.5 && h > 1.0 && h < 1.585 && ax0 < 0.34 && !(ax0 > 0.19 && h < 1.24)) {
+      kitRough = 0.75;
+      if (h > 1.552 && ax0 < 0.1) return vec3(0.02);
+      if (ax0 > 0.19 && h < 1.29) return vec3(0.02);                // the sleeve hem
+      return mod(floor((p.x + 0.4) * 24.0), 2.0) < 1.0 ? vec3(0.02) : vec3(0.9);
+    }
+    kitRough = 0.48;
+    return uSkin * vec3(1.0, 0.985, 1.0) + vec3(0.0, 0.002, 0.012);
+  }
+  if (z < 1.5 || (z > 2.5 && z < 3.5)) {                         // jersey or shorts
+    kitRough = 0.8;
+    bool shorts = z > 2.5;
+    if (shorts && uRef > 0.5) discard; // officials wear slacks: the body's legs underneath are painted black
+    float ax = abs(p.x), front = p.z > 0.0 ? 1.0 : 0.0;
+    // the garment's edges as smooth curves of the rest pose (y up, +z forward): distance inside the edge, metres
+    float d;
+    if (shorts) d = min(1.065 - h, h - 0.56);
+    else {
+      float neck = mix(1.51 + 0.6 * ax, 1.43 + 1.25 * ax * ax * 8.0, front);       // a scooped front, higher back
+      float arm = (h < 1.36 ? 0.212 : 0.212 - (h - 1.36) * 0.4) - ax;              // armholes narrowing into straps
+      d = min(min(neck - h, arm), h - 0.985);
+    }
+    if (d < 0.0) discard;                                           // outside the garment: the body shows
+    if (d < 0.017) return uTrim;                                     // piping on every edge
+    if (shorts && vZone.b > 0.78) return uStripe;                 // outer side panels
+    if (uRef > 0.5 && !shorts) return mod(floor((p.x + 0.4) * 24.0), 2.0) < 1.0 ? vec3(0.02) : vec3(0.9);
+    if (uRef > 0.5) return vec3(0.025);
+    return shorts ? uShorts : uJersey;
+  }
+  if (z < 2.5 || z > 13.5) return uStripe;                        // trim, wristbands
+  if (z < 4.5) return uStripe;
+  if (z < 5.5) { kitRough = 0.85; return uRef > 0.5 ? vec3(0.025) : uSock; }
+  if (z < 7.5) {
+    if (h < 0.018) { kitRough = 0.7; return vec3(0.12); }                       // outsole
+    if (h < 0.034) { kitRough = 0.5; return vec3(0.9, 0.89, 0.86); }           // midsole
+    if (uRef > 0.5) { kitRough = 0.4; return vec3(0.02); }
+    kitRough = 0.4; return h < 0.042 ? uStripe : uShoe;
+  }
+  if (z < 8.5) {
+    if (uHairMix > 0.0 && !scalp(p)) discard;                       // the cap's edge is the painted hairline
+    if (uBand > 0.5 && h < uHead.y + 0.04 && h > uHead.y + 0.02) { kitRough = 0.9; return uStripe; }
+    kitRough = 0.7; return mix(uSkin, uHair, uHairMix) * (0.9 + 0.25 * smoothstep(0.6, 1.0, sin((h - uHead.y) * 160.0)));
+  }
+  if (z < 11.5) {
+    vec3 c = vec3(sign(p.x) * uEye.x, uEye.y, uEye.z - 0.012);
+    vec3 n = normalize(p - c);
+    float d = n.z;                                                  // 1 looking straight ahead
+    kitRough = 0.05;
+    if (dot(n, normalize(vec3(-0.35 * sign(p.x), 0.4, 1.0))) > 0.9965) return vec3(1.6);  // catchlight
+    if (d > 0.982) return vec3(0.008);                              // pupil
+    if (d > 0.9) return mix(uHair * 0.5 + vec3(0.07, 0.04, 0.02), vec3(0.02), smoothstep(0.915, 0.9, d)); // iris, darker ring
+    kitRough = 0.15; return vec3(0.86, 0.84, 0.8);                // eye white
+  }
+  if (z < 12.5) { kitRough = 0.9; return mix(uSkin, uHair, 0.92); } // brows
+  return uSkin * vec3(0.86, 0.72, 0.7);                           // lips
+}
+`;
+
 function kitMaterial() {
   const mat = new THREE.MeshStandardMaterial({ roughness: 0.6, metalness: 0 });
   const u = {
     uSkin: { value: new THREE.Color() }, uJersey: { value: new THREE.Color() }, uTrim: { value: new THREE.Color() }, uShorts: { value: new THREE.Color() },
     uSock: { value: new THREE.Color() }, uShoe: { value: new THREE.Color() }, uHair: { value: new THREE.Color() }, uStripe: { value: new THREE.Color() },
     uChest: { value: 0.19 }, uLight: { value: 0 }, uRef: { value: 0 }, uHairMix: { value: 1 }, uBand: { value: 0 },
+    uHead: { value: new THREE.Vector4(0, 1.77, 0.03, 0.12) }, uEye: { value: new THREE.Vector3(0.032, 1.76, 0.1) },
+    uMouth: { value: new THREE.Vector3(0, 1.69, 0.1) }, uHand: { value: new THREE.Vector3(0.4, 0.95, 0) }, uBrow: { value: new THREE.Vector3(0.0028, 0.0018, 0.0042) },
   };
   mat.userData.u = u;
+  const hq = P3.hq, V = hq ? KIT3_VERT : KIT_VERT;
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
-    sh.vertexShader = KIT_VERT[0] + '\n' + sh.vertexShader.replace('#include <begin_vertex>', KIT_VERT[1]);
-    sh.fragmentShader = KIT_FRAG + sh.fragmentShader
+    sh.vertexShader = V[0] + '\n' + sh.vertexShader.replace('#include <begin_vertex>', V[1]);
+    sh.fragmentShader = (hq ? KIT3_FRAG : KIT_FRAG) + sh.fragmentShader
       .replace('#include <color_fragment>', '#include <color_fragment>\n diffuseColor.rgb = kitColor(vRest);')
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = kitRough;')
-      // a soft rim light so players separate from the floor and dark skin keeps its modelling
-      .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n { float fr = pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 2.5); reflectedLight.indirectDiffuse += diffuseColor.rgb * (0.22 + fr * 0.85) + vec3(fr * 0.06); }');
+      // fill so dark skin keeps its modelling, plus a cool back light that rims the shoulders, heads and arms
+      // (view space: from behind the players and above), which separates them from the floor and the crowd
+      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+        { vec3 V = normalize(vViewPosition);
+          float fr = pow(1.0 - saturate(dot(normal, V)), 2.5);
+          reflectedLight.indirectDiffuse += diffuseColor.rgb * (0.3 + fr * 0.45); // fill, so the shadow side of dark skin keeps its features
+          float rim = pow(1.0 - saturate(dot(normal, V)), 3.0) * saturate(dot(normal, normalize(vec3(0.3, 0.6, -0.75))) + 0.3);
+          // gated by the light this point receives (none for a body in the unlit apron), tinted by the surface and
+          // capped, so a dark kit gets a cool edge and never a white glow
+          float lit = clamp(dot(reflectedLight.directDiffuse, vec3(0.333)) / max(0.03, dot(diffuseColor.rgb, vec3(0.333))) * 0.6, 0.0, 1.0);
+          reflectedLight.directSpecular += min(vec3(0.62, 0.72, 1.0) * rim * 1.6 * lit * (0.35 + 0.65 * diffuseColor.rgb), vec3(0.3)); }`);
   };
-  mat.customProgramCacheKey = () => 'kit1';
+  mat.customProgramCacheKey = () => (hq ? 'kit3' : 'kit2');
   return mat;
 }
 
-const col = (c, hex) => c.set(hex).convertSRGBToLinear();
+// Color.set() already converts sRGB hex to linear (three's color management); converting again crushed dark skin to black
+const col = (c, hex) => c.set(hex);
+// skin and hair: the roster's tones were authored against that crushed look, so keep each player's family by
+// setting halfway between the hex and its linear value (deep tones stay deep, never black)
+const lin = (v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+// skin takes its true color (each player keeps the same tone; deep tones stay lit and modelled); hair goes half
+// way, so dark hair stays dark and grey reads as grey-black
+const _srgb = { r: 0, g: 0, b: 0 };
+const colLook = (c, hex, w = 0) => { new THREE.Color(hex).getRGB(_srgb, THREE.SRGBColorSpace); const k = (v) => v * (1 - w) + lin(v) * w; c.setRGB(k(_srgb.r), k(_srgb.g), k(_srgb.b), THREE.SRGBColorSpace); return c; };
 
+const SKIN3 = { '#F1C9A5': '#E9C3A6', '#E0AC86': '#C99B7E', '#C68863': '#9E6E54', '#A86B45': '#7A513C', '#7D4A2A': '#5A3A2B', '#5A3420': '#432A1F' };
 function setKit(pm, kit, look) {
   const u = pm.mat.userData.u;
-  col(u.uSkin.value, look.skin); col(u.uHair.value, look.hairC);
+  if (pm.hq) colLook(u.uSkin.value, SKIN3[String(look.skin).toUpperCase()] || look.skin, 0); else colLook(u.uSkin.value, look.skin, 0.3); colLook(u.uHair.value, look.hairC, 0.5);
   col(u.uJersey.value, kit.jersey); col(u.uShorts.value, kit.shorts); col(u.uTrim.value, kit.trim);
   col(u.uStripe.value, kit.light ? kit.trim : kit.band || kit.trim);
   col(u.uSock.value, kit.light ? '#F4F1EA' : '#F4F1EA');
@@ -105,21 +236,32 @@ function setKit(pm, kit, look) {
   u.uRef.value = kit.ref ? 1 : 0;
   u.uHairMix.value = look.hair === 'buzz' ? 0.72 : 1;
   u.uBand.value = look.band ? 1 : 0;
+  if (pm.meta) {
+    const c = pm.meta.headCenter; u.uHead.value.set(c[0], c[1], c[2], pm.meta.headRadius);
+    if (pm.meta.eye) u.uEye.value.set(...pm.meta.eye);
+    if (pm.meta.mouth) u.uMouth.value.set(...pm.meta.mouth);
+    if (pm.meta.hand) u.uHand.value.set(...pm.meta.hand);
+    // each character's own brows: arch, tilt toward the nose and weight from a stable hash of who they are
+    const hsh = [...String(look.id || look.skin + look.hair + look.hairC)].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7);
+    const f = (k) => ((hsh >>> k) & 255) / 255;
+    u.uBrow.value.set(0.0016 + 0.0026 * f(0), -0.0005 + 0.0032 * f(8), 0.0034 + 0.0018 * f(16));
+  }
 }
 
 // ---------------------------------------------------------------- numbers and hair
 function numberTexture(num, fg, edge) {
   const k = `${num}|${fg}|${edge}`;
   if (P3.numTex.has(k)) return P3.numTex.get(k);
-  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  // 256 px (sharp in the menus' close camera); premultiplied alpha, so the filtered edge never darkens to a halo
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256;
   const c = cv.getContext('2d');
-  c.font = '900 92px "Arial Black", Impact, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.font = '900 184px "Arial Black", Impact, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
   const s = String(num);
-  c.save(); c.translate(64, 68); if (s.length > 1) c.scale(0.86, 1);
-  c.lineJoin = 'round'; c.lineWidth = 12; c.strokeStyle = edge; c.strokeText(s, 0, 0);
+  c.save(); c.translate(128, 136); if (s.length > 1) c.scale(0.86, 1);
+  c.lineJoin = 'round'; c.lineWidth = 22; c.strokeStyle = edge; c.strokeText(s, 0, 0);
   c.fillStyle = fg; c.fillText(s, 0, 0);
   c.restore();
-  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; t.premultiplyAlpha = true;
   P3.numTex.set(k, t);
   return t;
 }
@@ -190,14 +332,38 @@ export function makePlayer(build) {
     const model = b.getWorldQuaternion(new THREE.Quaternion()).premultiply(rigQInv);
     bones[n] = { b, rest: b.quaternion.clone(), model, inv: model.clone().invert() };
   }
+  // clips lower and raise the hips: model +y in the hips' parent frame, in rig units
+  const hb = bones.hips.b, hp = hb.parent;
+  const toParent = new THREE.Matrix4().copy(hp.matrixWorld).invert().multiply(rig.matrixWorld);
+  const hipUp = new THREE.Vector3(0, 1, 0).transformDirection(toParent).multiplyScalar(1 / new THREE.Vector3().setFromMatrixScale(toParent).x);
+  // the ball sits in the right palm: midway along the hand toward the knuckles, a ball's radius off the palm
+  const mPos = (name) => { const o = rig.getObjectByName(name); return o ? o.getWorldPosition(new THREE.Vector3()).applyMatrix4(new THREE.Matrix4().copy(rig.matrixWorld).invert()) : null; };
+  const hR = mPos('hand_R'), knR = mPos('middle_01_r') || mPos('forearm_R').sub(hR).multiplyScalar(-0.45).add(hR);
+  const sock = hR.clone().lerp(knR, 0.75).add(new THREE.Vector3(0.11, 0.0, 0.03));
+  const socket = sock.applyMatrix4(rig.matrixWorld).applyMatrix4(new THREE.Matrix4().copy(bones.hand_R.b.matrixWorld).invert());
+  // finger chains (HQ only): curl axis per segment in the model frame
+  const fingers = [];
+  for (const side of ['l', 'r']) for (const f of ['thumb', 'index', 'middle', 'ring', 'pinky']) {
+    for (let k = 1; k <= 3; k++) {
+      const b = rig.getObjectByName(`${f}_0${k}_${side}`); if (!b) continue;
+      const a0 = mPos(b.name), a1 = k < 3 ? mPos(`${f}_0${k + 1}_${side}`) : a0.clone().add(a0.clone().sub(mPos(`${f}_0${k - 1}_${side}`)));
+      const dir = a1.sub(a0).normalize();
+      const palm = new THREE.Vector3(side === 'l' ? -1 : 1, 0, 0.25).normalize(); // palms face the thighs in the rest pose
+      const axis = new THREE.Vector3().crossVectors(palm, dir).normalize();
+      const model = b.getWorldQuaternion(new THREE.Quaternion()).premultiply(rigQInv);
+      fingers.push({ b, rest: b.quaternion.clone(), model, inv: model.clone().invert(), axis, thumb: f === 'thumb', k, side });
+    }
+  }
   const hairMat = new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0 });
-  const numMatF = new THREE.MeshStandardMaterial({ transparent: true, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -2, depthWrite: false });
+  const numMatF = new THREE.MeshStandardMaterial({ transparent: true, premultipliedAlpha: true, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -2, depthWrite: false });
   const numMatB = numMatF.clone();
   const plane = new THREE.PlaneGeometry(0.25, 0.25);
-  const front = new THREE.Mesh(plane, numMatF); front.position.set(0, 1.32, 0.15);
-  const back = new THREE.Mesh(plane, numMatB); back.position.set(0, 1.35, -0.136); back.rotation.y = Math.PI;
+  const meta = P3.hq ? P3.meta[build] : null;
+  const front = new THREE.Mesh(plane, numMatF); front.position.set(...(meta ? meta.numFront : [0, 1.32, 0.15]));
+  const back = new THREE.Mesh(plane, numMatB); back.position.set(...(meta ? meta.numBack : [0, 1.35, -0.136])); back.rotation.y = Math.PI;
   attach(rig, 'chest', front); attach(rig, 'chest', back);
-  const pm = { root, rig, mesh, mat, bones, build, hair: null, hairMat, front, back, numMatF, numMatB, key: '', st: null };
+  const pm = { root, rig, mesh, mat, bones, build, hq: P3.hq, meta, hair: null, hairMat, front, back, numMatF, numMatB, key: '', st: null,
+    hipRest: hb.position.clone(), hipUp, socket, fingers, proc: makePose(), ankH: mPos('foot_L').y };
   return pm;
 }
 
@@ -207,12 +373,18 @@ export function dressPlayer(pm, r, kit) {
   pm.key = k;
   // attachments are placed in the rest pose (a pooled rig may still hold its last pose)
   for (const n of BONES) pm.bones[n].b.quaternion.copy(pm.bones[n].rest);
-  setKit(pm, kit, r.look);
-  col(pm.hairMat.color, r.look.hairC);
+  pm.bones.hips.b.position.copy(pm.hipRest); // and a clip may have lowered the hips
+  setKit(pm, kit, { ...r.look, id: r.id || r.num });
+  colLook(pm.hairMat.color, r.look.hairC, 0.5);
   if (pm.hair) pm.hair.parent.remove(pm.hair);
   const hg = hairGeometry(r.look.hair);
   pm.hair = new THREE.Group();
-  if (hg) { const hm = new THREE.Mesh(hg, pm.hairMat); hm.castShadow = true; pm.hair.add(hm); }
+  if (hg) {
+    const hm = new THREE.Mesh(hg, pm.hairMat); hm.castShadow = true;
+    // the styles are modelled for the lite head (centre 1.73 m, radius 0.1): move and scale them onto an HQ head
+    if (pm.meta) { const c = pm.meta.headCenter, k = 1.06; hm.position.set(c[0], c[1] - 1.73 * k, c[2] - 0.01); hm.scale.setScalar(k); }
+    pm.hair.add(hm);
+  }
   attach(pm.rig, 'head', pm.hair);
   pm.front.visible = pm.back.visible = !kit.ref;
   if (kit.ref) { pm.st = null; return; }
@@ -235,6 +407,36 @@ function applyPose(pm, pose) {
     q.setFromEuler(e);
     q.premultiply(B.inv).multiply(B.model);
     B.b.quaternion.copy(B.rest).multiply(q);
+  }
+}
+
+// the same, from a clip pose (quaternion turns per bone, a hips height change in model metres)
+function applyPoseQ(pm, pose) {
+  const q = P3.tmpQ;
+  for (const n of BONES) {
+    const B = pm.bones[n];
+    q.copy(pose.q[n]).premultiply(B.inv).multiply(B.model);
+    B.b.quaternion.copy(B.rest).multiply(q);
+  }
+  pm.bones.hips.b.position.copy(pm.hipRest).addScaledVector(pm.hipUp, pose.dy);
+}
+// Euler poses (poseFor) as quaternions, to layer the procedural parts over the clips
+function eulerToQ(P, out) {
+  const e = P3.tmpE;
+  for (const n of BONES) { const d = P[n]; if (d) { e.set(d[0], d[1], d[2], 'YXZ'); out.q[n].setFromEuler(e); } else out.q[n].identity(); }
+  out.dy = 0; out.c = 0;
+  return out;
+}
+// fingers: a relaxed curl, closing around the ball when it is in the hand (HQ bodies have finger bones)
+const _fq = { q: null };
+function poseFingers(pm, grip, gripL) {
+  if (!pm.fingers.length) return;
+  const q = _fq.q || (_fq.q = new THREE.Quaternion());
+  for (const F of pm.fingers) {
+    const g = F.side === 'r' ? grip : gripL;
+    const a = F.thumb ? 0.15 + 0.25 * g : (F.k === 1 ? 0.25 + 0.35 * g : 0.35 + 0.3 * g);
+    q.setFromAxisAngle(F.axis, a).premultiply(F.inv).multiply(F.model);
+    F.b.quaternion.copy(F.rest).multiply(q);
   }
 }
 
@@ -350,11 +552,69 @@ export function updatePlayer(pm, ctx) {
   const toBall = Math.atan2(ctx.ballX - pl.x, ctx.ballZ - pl.z);
   ctx.lookYaw = Math.max(-0.9, Math.min(0.9, angDiff(st.head, toBall)));
   const sc = (ctx.r.height / 12) / MODEL_H;
-  pm.root.position.set(pl.x - COURT.L / 2, pl.y || 0, pl.z - COURT.W / 2);
+  // the sim leaves the floor the tick a jumper starts: show the knee load first (the first 0.13 s rise eases in)
+  // (the feet stay down 0.08 s, then the body catches the sim up by 0.22 s)
+  const lift = pl.act === 'shoot' ? smooth(Math.max(0, Math.min(1, ((pl.actT || 0) - 0.08) / 0.14))) : 1;
+  let y = (pl.y || 0) * lift;
+  // a dunk hangs on the rim a moment after the throw-down, then drops
+  if (pl.act === 'layup' && pl.stype === 'dunk') {
+    if (!ctx.released) st.hangY = Math.max(st.hangY || 0, y);
+    else { const h = st.rimPost || 0; if (h < 0.16) y = Math.max(y, st.hangY || 0); else if (h < 0.3) y = Math.max(y, (st.hangY || 0) * (1 - (h - 0.16) / 0.14)); }
+  } else st.hangY = 0;
+  ctx.airY = y;
+  pm.root.position.set(pl.x - COURT.L / 2, y, pl.z - COURT.W / 2);
   pm.root.rotation.y = st.head;
   pm.root.scale.setScalar(sc);
-  applyPose(pm, poseFor(pm, ctx));
-  const hand = pm.bones.hand_R.b;
+  const P = poseFor(pm, ctx);
+  st.hash = st.hash ?? ((ctx.r.num || 0) * 7 + (ctx.r.id ? String(ctx.r.id).length : 3));
+  ctx.hash = st.hash;
+  // the dribbling hand is the one on the camera's side (the ball never hides behind the body); a change of hand
+  // waits a third of a second and plays as a crossover
+  if (ctx.dribbling && ctx.camX != null) {
+    const rx = -Math.cos(st.head), rz = Math.sin(st.head);
+    const want = rx * (ctx.camX - pl.x) + rz * (ctx.camZ - pl.z) >= 0 ? 'R' : 'L';
+    if (!st.drib) st.drib = want;
+    st.dribWait = want === st.drib ? 0 : (st.dribWait || 0) + ctx.dt;
+    if (st.dribWait > 0.33) { st.drib = want; st.dribWait = 0; if (st.mx) st.mx.cross = true; }
+  }
+  ctx.dribHand = st.drib || 'R';
+  const clipPose = pm.noClips ? null : mix(st, ctx, sc);
+  if (clipPose) {
+    // the procedural layers the clips don't cover: defensive hands, the two-hand hold, the head turned to the ball
+    const proc = eulerToQ(P, pm.proc);
+    if (ctx.defending && !ctx.chasing && !ctx.pl.act?.match(/jump|steal/)) blendPose(clipPose, proc, 0.85, MASKS.UPPER);
+    if (ctx.holdBall) blendPose(clipPose, proc, 1, MASKS.UPPER);
+    const e = P3.tmpE, q = P3.tmpQ;
+    for (const n of ['neck', 'head']) { e.set(0, ctx.lookYaw * 0.35, 0, 'YXZ'); q.setFromEuler(e); clipPose.q[n].premultiply(q); }
+    applyPoseQ(pm, clipPose);
+    st.dy = clipPose.dy; st.c = clipPose.c;
+  } else { applyPose(pm, P); pm.bones.hips.b.position.copy(pm.hipRest); st.c = -1; }
+  const two = ctx.hasBall && (ctx.holdBall || ctx.pl.act === 'shoot' || ctx.pl.act === 'layup');
+  poseFingers(pm, ctx.hasBall && (two || ctx.dribHand !== 'L') ? 1 : 0, two ? 0.8 : ctx.hasBall && ctx.dribHand === 'L' ? 1 : 0);
   pm.root.updateMatrixWorld(true);
-  return hand.getWorldPosition(P3.tmpV);
+  if (clipPose) solveLegs(pm, st, ctx);
+  // the dribble: the ball bounces in a lane ahead of the right hip, where the camera sees it, and the hand comes
+  // down onto it at the top of each bounce
+  // layups and dunks: the hand goes to the front of the rim (a dunk holds it there through the throw-down)
+  if (clipPose && pl.act === 'layup' && ctx.rimX != null) {
+    const dunk = pl.stype === 'dunk';
+    if (!ctx.released) st.rimPost = 0; else st.rimPost = (st.rimPost || 0) + ctx.dt;
+    const w = !ctx.released ? smooth(Math.max(0, Math.min(1, (ctx.meterF - 0.35) / 0.5))) : Math.max(0, 1 - Math.max(0, st.rimPost - (dunk ? 0.32 : 0.05)) / 0.2);
+    const dir = ctx.rimX > COURT.L / 2 ? 1 : -1;
+    P3.tmpT = P3.tmpT || new THREE.Vector3();
+    P3.tmpT.set(ctx.rimX - dir * (dunk ? 0.55 : 0.9) - COURT.L / 2, dunk ? 10.35 : 10.6, COURT.rimZ - COURT.W / 2);
+    reachArm(pm, 'R', P3.tmpT, w * (dunk ? 1 : 0.7));
+  }
+  if (ctx.dribbling && clipPose) {
+    const run = Math.min(1, Math.hypot(pl.vx || 0, pl.vz || 0) / 14);
+    const hs = ctx.dribHand === 'L' ? 1 : -1;
+    const lane = P3.tmpV.set(0.3 * hs, 0, 0.3 + 0.12 * run).applyMatrix4(pm.root.matrixWorld);
+    const w = smooth(Math.max(0, Math.min(1, (ctx.ballY / ctx.ballTop - 0.5) / 0.42)));
+    P3.tmpT = P3.tmpT || new THREE.Vector3();
+    reachArm(pm, ctx.dribHand, P3.tmpT.set(lane.x, ctx.ballY + 0.44 + 0.08 * sc, lane.z), w * 0.95);
+    lane.y = ctx.ballTop + 2; // the scene takes the sim's height (the lower of the two)
+    return lane;
+  }
+  const hand = pm.bones.hand_R.b;
+  return P3.tmpV.copy(pm.socket).applyMatrix4(hand.matrixWorld);
 }

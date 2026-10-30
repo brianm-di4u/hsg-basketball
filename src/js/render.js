@@ -147,15 +147,21 @@ function P2(x, z, y = 0) { const v = R.v; _p2.X = sx(v, x); _p2.Y = sy(v, z, y);
 
 // The HUD layer, shared by both renderers: YOU marker, particles, callouts, meters, off-screen arrow.
 function drawHud(c, v, P, scene) {
+  if (is3d() && !v.portrait) ballHalo(c, P, scene.ball); // landscape only: there the crowd is what sits behind the ball's arc
   for (const it of scene.players || []) if (it.user) chevron(c, v, P, it);
   for (const p of R.fx.parts) {
     const q = P(p.x, p.z, p.y), X = q.X, Y = q.Y, s = q.s;
     if (p.kind === 'conf') { c.fillStyle = p.c; c.save(); c.translate(X, Y); c.rotate(p.t * 5 + p.r * 6); c.fillRect(-3, -1.5, 6, 3); c.restore(); }
-    else if (p.kind === 'steam') { c.fillStyle = `rgba(255,255,255,${0.16 * (1 - p.t / p.life)})`; c.beginPath(); c.arc(X + Math.cos(p.r * 9) * s * 0.8, Y - p.t * s, s * (0.3 + p.t * 0.6), 0, TAU); c.fill(); }
+    else if (p.kind === 'steam') {
+      if (is3d()) continue; // in 3D the rim flash and the cloth net carry the make; flat puffs read as ghost discs
+      c.fillStyle = `rgba(255,255,255,${0.16 * (1 - p.t / p.life)})`; c.beginPath(); c.arc(X + Math.cos(p.r * 9) * s * 0.8, Y - p.t * s, s * (0.3 + p.t * 0.6), 0, TAU); c.fill(); }
     else { c.fillStyle = p.c; c.globalAlpha = 1 - p.t / p.life; c.beginPath(); c.arc(X, Y, Math.max(1.5, s * 0.12), 0, TAU); c.fill(); c.globalAlpha = 1; }
   }
   for (const p of R.fx.pops) {
+    if (scene.slam && scene.slam.t < 0.12 && /^\+\d/.test(p.text)) continue; // the +3 follows the card's landing
+    if (v.portrait && /^\+\d/.test(p.text)) continue; // phones: the score bug and the card say it; a +3 would sit on the board
     const q = P(p.x, p.z, p.y);
+    if (q.X < 0 || q.X > v.W || q.Y < 0 || q.Y > v.H || q.vis === false) continue; // its rim or player is off screen
     const X = clamp(q.X, 70, v.W - 70), Y = clamp(q.Y - p.t * q.s * 2.2, 40, v.H - 30);
     const size = Math.round(clamp(q.s * (p.big ? 1.6 : 1.05), p.big ? 26 : 17, p.big ? 54 : 34));
     c.font = `400 ${Math.round(size * 1.25)}px "Bebas Neue", "Arial Black", Impact, sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
@@ -172,18 +178,63 @@ function drawHud(c, v, P, scene) {
   if (scene.offscreen) offscreenArrow(c, v, P, scene.offscreen);
   if (scene.letterbox) { const h = Math.round(v.H * 0.07); c.fillStyle = '#000'; c.fillRect(0, 0, v.W, h); c.fillRect(0, v.H - h, v.W, h); }
   if (scene.banner) banner(c, v, scene.banner);
-  if (scene.slam) slamCallout(c, v, scene.slam);
+  R.slamBox = null;
+  // a cinematic close camera (replays, close-ups) carries the moment itself: no card over the ball
+  if (scene.slam && !(is3d() && G3.camOverride && !G3.camOverride.attract)) slamCallout(c, v, P, scene);
+}
+
+// A loose ball in 3D gets a soft dark halo, so it reads against the crowd and the floor alike (the ball itself
+// stays clear: the halo starts outside its edge).
+function ballHalo(c, P, b) {
+  if (!b || b.state === 'held' || b.state === 'dead' || b.y < 7) return; // a high ball only: near the floor a dark disc reads as a smudge
+  const q = P(b.x, b.z, b.y), r = Math.max(4, q.s * 0.45);
+  if (r > 12 || G3.camOverride) return; // close and cinematic cameras show the ball well enough on their own
+  const g = c.createRadialGradient(q.X, q.Y, r * 1.12, q.X, q.Y, r * 5);
+  g.addColorStop(0, 'rgba(8,6,12,0.72)'); g.addColorStop(0.4, 'rgba(8,6,12,0.45)'); g.addColorStop(1, 'rgba(8,6,12,0)');
+  c.fillStyle = g; c.beginPath(); c.arc(q.X, q.Y, r * 5, 0, TAU); c.arc(q.X, q.Y, r * 1.12, 0, TAU, true); c.fill();
 }
 
 // big-play callout: a slanted plate in the scoring team's color with speed streaks; slides in, holds, fades
-function slamCallout(c, v, s) {
-  const t = s.t, inT = Math.min(1, t / 0.14), out = t > 0.8 ? 1 - (t - 0.8) / 0.2 : 1;
-  const size = Math.round(clamp(v.W * 0.085, 40, 92));
-  const y = v.H * (v.portrait ? 0.58 : 0.72);
-  const slide = R.reduced ? 0 : (1 - inT) * v.W * 0.4;
+function slamCallout(c, v, P, scene) {
+  const s = scene.slam;
+  const t = s.t, inT = Math.min(1, t / 0.14), out = t > 0.75 ? 1 - (t - 0.75) / 0.25 : 1;
+  const size = Math.round(clamp(v.W * 0.085, 40, 92) * ((s.ref || s).scale || 1));
+  let hPx = size * 1.15 + 12 + size * 0.5, wPx = Math.min(v.W - 16, size * 5.4);
+  // the slot is chosen once, when the card appears, and kept: clear of the rim it went through, the ball and
+  // every player (plus a margin), scored over a grid of candidate places; the card never jumps
+  const ref = s.ref || s;
+  if (!ref.slot) {
+    const pad = v.portrait ? 40 : 24, keep = [];
+    if (s.side != null) { const r = P(COURT.rimX[s.side], COURT.rimZ, COURT.rimY); keep.push({ x: r.X - 4 * r.s, y: r.Y - 9 * r.s, w: 8 * r.s, h: 15 * r.s, wt: 4 }); } // the rim, the board and the +3 above it
+    if (scene.ball) { const b = P(scene.ball.x, scene.ball.z, Math.max(0.4, scene.ball.y)); keep.push({ x: b.X - 2 * b.s - pad, y: b.Y - 2 * b.s - pad, w: 4 * b.s + 2 * pad, h: 4 * b.s + 2 * pad, wt: 4 }); }
+    // every player where they are and where they'll be in 0.7 s (play restarts under the card after a make)
+    for (const it of scene.players || []) for (const ahead of [0, 0.35, 0.7]) {
+      const x = it.pl.x + (it.pl.vx || 0) * ahead, z = it.pl.z + (it.pl.vz || 0) * ahead;
+      const f = P(x, z, it.pl.y || 0), hd = P(x, z, (it.pl.y || 0) + it.r.height / 12);
+      const ph = Math.abs(f.Y - hd.Y), pw = ph * 0.7;
+      keep.push({ x: f.X - pw / 2 - pad, y: hd.Y - pad, w: pw + 2 * pad, h: ph + 2 * pad, wt: (it.user ? 3 : 1) * (ahead ? 0.6 : 1) });
+    }
+    const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    // first choice: the band over the crowd, under the score bug, where play rarely goes after a make
+    const ys = v.portrait ? [0.14, 0.22, 0.34, 0.62, 0.8, 0.46, 0.53, 0.72] : [0.23, 0.74, 0.84, 0.56, 0.14], xs = [0.5, 0.3, 0.7];
+    let best = null;
+    for (const fy of ys) for (const fx of xs) {
+      const cx = clamp(v.W * fx, wPx / 2 + 8, v.W - wPx / 2 - 8), box = { x: cx - wPx / 2, y: v.H * fy - hPx / 2, w: wPx, h: hPx };
+      const cost = keep.reduce((n, k) => n + (hit(box, k) ? k.wt : 0), 0) + (fx !== 0.5 ? 0.3 : 0) + ys.indexOf(fy) * 0.1;
+      if (!best || cost < best.cost) best = { cost, x: cx, y: v.H * fy };
+    }
+    // nothing clear at full size: a smaller card, placed again
+    if (best.cost > 0.5 && !ref.small) { ref.small = true; ref.scale = 0.72; }
+    ref.slot = best;
+  }
+  const y = ref.slot.y, cx = ref.slot.x;
+  R.slamBox = { x: Math.round(cx - wPx / 2), y: Math.round(y - hPx / 2), w: Math.round(wPx), h: Math.round(hPx) };
+  // it slides in from the right but never past the viewport edge (it fades in over the slide instead)
+  const room = Math.max(0, v.W - 6 - (cx + wPx / 2));
+  const slide = R.reduced ? 0 : Math.min((1 - inT) * v.W * 0.4, room);
   c.save();
-  c.globalAlpha = Math.max(0, out);
-  c.translate(v.W / 2 + slide, y);
+  c.globalAlpha = Math.max(0, out) * (s.fade ?? 1) * Math.min(1, 0.25 + inT);
+  c.translate(cx + slide, y);
   c.font = `400 ${size}px "Bebas Neue", "Arial Black", Impact, sans-serif`;
   const w = c.measureText(s.text).width + size * 1.2, h = size * 1.15;
   c.transform(1, 0, -0.18, 1, 0, 0);
@@ -194,7 +245,14 @@ function slamCallout(c, v, s) {
   c.textAlign = 'center'; c.textBaseline = 'middle';
   c.lineWidth = Math.max(4, size * 0.08); c.strokeStyle = '#0B0A10'; c.strokeText(s.text, 0, 3);
   c.fillStyle = '#FFF6E0'; c.fillText(s.text, 0, 3);
-  if (s.sub) { c.font = `400 ${Math.round(size * 0.34)}px "Bebas Neue", "Arial Black", sans-serif`; c.fillStyle = '#FFF6E0'; c.fillText(s.sub, 0, h / 2 + size * 0.32); }
+  // the team under the card, on its own plate, never under 15 px
+  if (s.sub && y > v.H * 0.4) {
+    const fs = Math.max(15, Math.round(size * 0.34));
+    c.font = `700 ${fs}px "Barlow Condensed", system-ui, sans-serif`;
+    const tw = c.measureText(s.sub).width + 14, ty = h / 2 + fs * 0.95;
+    c.fillStyle = 'rgba(10,9,16,0.9)'; c.fillRect(-tw / 2, ty - fs * 0.62, tw, fs * 1.24);
+    c.fillStyle = '#FFF6E0'; c.fillText(s.sub, 0, ty);
+  }
   c.restore();
 }
 
@@ -209,7 +267,7 @@ function banner(c, v, b) {
   c.fillStyle = '#FF4A3A'; c.beginPath(); c.arc(x + big * 0.75, y + h / 2, big * 0.22, 0, TAU); c.fill();
   c.fillStyle = '#FFF6E0'; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText(b.text, x + big * 1.15, y + h / 2 + 1);
   if (b.sub) {
-    c.font = `700 ${Math.round(big * 0.6)}px system-ui, sans-serif`;
+    c.font = `700 ${Math.max(14, Math.round(big * 0.68))}px "Barlow Condensed", system-ui, sans-serif`;
     const sw = c.measureText(b.sub).width + 16;
     c.fillStyle = 'rgba(14,12,22,0.75)'; c.beginPath(); c.roundRect(x, y + h + 6, sw, big * 1.1, 5); c.fill();
     c.fillStyle = '#E9E2D2'; c.fillText(b.sub, x + 8, y + h + 6 + big * 0.56);
@@ -232,11 +290,11 @@ function ring(c, v, it) {
 }
 function chevron(c, v, P, it) {
   const q = P(it.pl.x, it.pl.z, (it.pl.y || 0) + it.r.height / 12 + 0.7);
-  const s = Math.max(14, q.s), X = q.X, top = is3d() && v.W >= 760 ? Math.max(q.Y, 96 + s) : q.Y; // clear of the floating score bug
+  const s = clamp(q.s, 14, 24), X = q.X, top = is3d() && v.W >= 760 ? Math.max(q.Y, 96 + s) : q.Y; // clear of the floating score bug
   c.fillStyle = '#FFD84D'; c.strokeStyle = '#14121F'; c.lineWidth = 2;
   c.beginPath(); c.moveTo(X - s * 0.5, top - s * 0.55); c.lineTo(X + s * 0.5, top - s * 0.55); c.lineTo(X, top); c.closePath(); c.fill(); c.stroke();
   const fs = Math.round(clamp(s * 0.6, 11, 18));
-  c.font = `800 ${fs}px system-ui, sans-serif`; c.textAlign = 'center'; c.textBaseline = 'bottom';
+  c.font = `700 ${Math.round(fs * 1.12)}px "Barlow Condensed", system-ui, sans-serif`; c.textAlign = 'center'; c.textBaseline = 'bottom';
   c.lineWidth = 3; c.strokeText('YOU', X, top - s * 0.6); c.fillStyle = '#FFD84D'; c.fillText('YOU', X, top - s * 0.6);
 }
 
@@ -318,7 +376,7 @@ function drawFTMeter(c, v, P, ft) {
   c.fillStyle = '#FFFFFF'; c.beginPath(); c.moveTo(mx, Y - 1); c.lineTo(mx - 6, Y - 9); c.lineTo(mx + 6, Y - 9); c.closePath(); c.fill();
   c.fillRect(mx - 1.5, Y, 3, h);
   const size = Math.round(clamp(q.s * 0.6, 13, 18));
-  c.font = `800 ${size}px system-ui, sans-serif`; c.textAlign = 'center'; c.textBaseline = 'bottom';
+  c.font = `700 ${Math.round(size * 1.12)}px "Barlow Condensed", system-ui, sans-serif`; c.textAlign = 'center'; c.textBaseline = 'bottom';
   const txt = ft.label || `FREE THROW ${ft.n} OF ${ft.total}`;
   c.lineWidth = 4; c.strokeStyle = '#14121F'; c.strokeText(txt, X + w / 2, Y - 11); c.fillStyle = '#FFF6E0'; c.fillText(txt, X + w / 2, Y - 11);
 }

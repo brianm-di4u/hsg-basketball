@@ -1,0 +1,123 @@
+{
+ "schema": 3,
+ "build": "2026-10-30T15:27:27.665Z",
+ "packages": {
+  "venue-gym": {
+   "prio": 1,
+   "tiers": {
+    "high": [
+     "gym.75428e8e.glb",
+     "gym-lm-floor-h.7bd5839d.webp",
+     "gym-lm-shell-h.60ea6079.webp"
+    ],
+    "medium": [
+     "gym.75428e8e.glb",
+     "gym-lm-floor-m.01cf99e4.webp",
+     "gym-lm-shell-m.36b9a653.webp"
+    ]
+   },
+   "lmScale": {
+    "floor": 6.4503326416015625,
+    "shell": 3.9768624305725098
+   }
+  },
+  "venue-arena": {
+   "prio": 2,
+   "tiers": {
+    "high": [
+     "arena.af5545b2.glb",
+     "arena-lm-floor-h.c247f02c.webp",
+     "arena-lm-shell-h.b3e3615c.webp"
+    ],
+    "medium": [
+     "arena.af5545b2.glb",
+     "arena-lm-floor-m.c5ad719c.webp",
+     "arena-lm-shell-m.013a9703.webp"
+    ]
+   },
+   "lmScale": {
+    "floor": 7.126298904418945,
+    "shell": 1.7803549766540527
+   }
+  },
+  "players-hq": {
+   "prio": 3,
+   "tiers": {
+    "high": [
+     "players-hq.1ccd0a14.glb"
+    ],
+    "medium": [
+     "players-hq.1ccd0a14.glb"
+    ]
+   }
+  },
+  "crowd": {
+   "prio": 5,
+   "tiers": {
+    "high": [
+     "fans.769fe3a7.glb"
+    ],
+    "medium": [
+     "fans.769fe3a7.glb"
+    ]
+   }
+  },
+  "anims": {
+   "prio": 4,
+   "tiers": {
+    "high": [
+     "anims.b666b466.json",
+     "anims.a8e7f592.bin"
+    ],
+    "medium": [
+     "anims.b666b466.json",
+     "anims.a8e7f592.bin"
+    ]
+   }
+  }
+ },
+ "files": {
+  "gym.75428e8e.glb": {
+   "bytes": 135168
+  },
+  "gym-lm-floor-h.7bd5839d.webp": {
+   "bytes": 164504
+  },
+  "gym-lm-floor-m.01cf99e4.webp": {
+   "bytes": 10424
+  },
+  "gym-lm-shell-h.60ea6079.webp": {
+   "bytes": 403044
+  },
+  "gym-lm-shell-m.36b9a653.webp": {
+   "bytes": 69692
+  },
+  "arena.af5545b2.glb": {
+   "bytes": 192844
+  },
+  "arena-lm-floor-h.c247f02c.webp": {
+   "bytes": 129692
+  },
+  "arena-lm-floor-m.c5ad719c.webp": {
+   "bytes": 8248
+  },
+  "arena-lm-shell-h.b3e3615c.webp": {
+   "bytes": 521076
+  },
+  "arena-lm-shell-m.013a9703.webp": {
+   "bytes": 93242
+  },
+  "players-hq.1ccd0a14.glb": {
+   "bytes": 2258008
+  },
+  "fans.769fe3a7.glb": {
+   "bytes": 155852
+  },
+  "anims.b666b466.json": {
+   "bytes": 14208
+  },
+  "anims.a8e7f592.bin": {
+   "bytes": 108224
+  }
+ }
+}

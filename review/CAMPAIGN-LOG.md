@@ -237,3 +237,31 @@ Most of r2's loss was two regressions, both fixed after the verdict:
 
 Every verdict ranks the same gap as the largest: the players (mannequins) and their animation, then the photo
 crowd's style clash. Those are M4-M6.
+
+## M4 result: closed on the plateau rule (r1 6.6, r2 6.6)
+- **Built:** HQ players from MPFB 2 / MakeHuman (CC0 output). `art-src/blender/players/build_bodies_hq.py` makes M
+  and F athletes:
+  - stylized, larger head and eyes; modelled nose, ears and lips; five-finger hands
+  - a game_engine rig renamed to the runtime's 19 bones, with the A-pose applied as rest
+  - garment shells; procedural sneakers per foot (MakeHuman's toes are separate tubes no shell can cover)
+  - a hair cap
+
+  The `players-hq` package (2.3 MB) streams in and swaps every player at a dead ball.
+- **Shader (`kit3`)** cuts every visible edge per pixel as a smooth curve: neckline, armholes, hems with
+  piping, shorts side panels, wristbands, socks, the sole and midsole, the hairline and headband. It also
+  draws:
+  - per-character brows, lids, lips
+  - eyes with iris ring, pupil and catchlight
+  - officials in striped sleeves, slacks and black socks
+- **Skin:** a 3D tone ramp keeps the roster's tone classes and gives dark skin real blue.
+- **Panel:** every reviewer credits real characters (faces, hands, piping). The scores held at 6.6, held down by
+  procedural animation (M5), the photo crowd's style clash (M6) and the venue gaps carried from M3.
+- **Fixed after the r2 verdict:** sneakers (no toe ridges; smooth toe box, sole, collar); socks painted per
+  pixel; officials' socks black.
+- **Carried forward:**
+  - skin: the tone of the player you control and the referees' hue
+  - hair: tapered sculpted styles in place of the primitive buns and cylinders
+  - eyes: the "expressive eyes" scale
+  - officials: a body preset, so no shorts silhouette over slacks
+  - the close-camera foreground hand; the mobile card margin (12 of 32 device px)
+  - spacing in player clumps

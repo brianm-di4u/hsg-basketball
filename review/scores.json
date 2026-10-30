@@ -106,5 +106,36 @@
     "overall": 6.5,
     "blockers": 5,
     "note": "plateau (-0.19): M3 closed; skin and crowd regressions fixed after"
+  },
+  {
+    "round": "v3-m4-r1",
+    "scores": {
+      "art": 6.5,
+      "lighting": 6.5,
+      "animation": 6.5,
+      "ui": 7,
+      "typography": 6.5,
+      "readability": 6.5,
+      "mobile": 7,
+      "authenticity": 6.5
+    },
+    "overall": 6.6,
+    "blockers": 5
+  },
+  {
+    "round": "v3-m4-r2",
+    "scores": {
+      "art": 6.5,
+      "lighting": 6.5,
+      "animation": 6.5,
+      "ui": 7,
+      "typography": 6.5,
+      "readability": 6.5,
+      "mobile": 7,
+      "authenticity": 6.5
+    },
+    "overall": 6.6,
+    "blockers": 5,
+    "note": "plateau (+0.00): M4 closed; sneakers, socks and officials fixed after"
   }
 ]

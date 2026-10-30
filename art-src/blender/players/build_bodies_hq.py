@@ -178,14 +178,35 @@ def build(bid):
     for _ in range(3): bmesh.ops.smooth_vert(bm, verts=jv, factor=0.5, use_axis_x=True, use_axis_y=True, use_axis_z=False)  # cloth hangs over the body's detail
     shorts = shell(lambda f: 0.53 < zc(f) < 1.1 and all(wsum(v, arm_i) < 0.3 for v in f.verts),
                    lambda v: 0.014 + 0.032 * max(0.0, min(1.0, (0.95 - v.co.z) / 0.39)), 'shorts')
-    shoes = shell(lambda f: zc(f) < 0.112 and all(wsum(v, leg_lo_i) > 0.3 for v in f.verts), lambda v: 0.024, 'shoes')
-    sv = list({v for f in shoes for v in f.verts})
-    for _ in range(8): bmesh.ops.smooth_vert(bm, verts=sv, factor=0.6, use_axis_x=True, use_axis_y=True, use_axis_z=True)  # toes into a rounded toe box
-    bm.normal_update()
-    for v in sv: v.co += v.normal * 0.008
-    for v in sv:
-        v.co.x *= 1.04
-        if v.co.z < 0.02: v.co.z = 0.0   # a flat sole on the floor
+    # sneakers: MakeHuman's toes are separate tubes no shell can smooth over, so each foot gets its own shoe, a
+    # shaped sphere with a flat sole and a rounded toe box, skinned to the foot (heel) and ball (toe) bones; the bare
+    # foot inside it goes
+    foot_faces = [f for f in body_faces if f.is_valid and zc(f) < 0.105 and all(wsum(v, leg_lo_i) > 0.3 for v in f.verts)]
+    shoes = []
+    for sgn, side in ((1, 'L'), (-1, 'R')):
+        vs = [v.co.copy() for f in foot_faces for v in f.verts if v.co.x * sgn > 0]
+        if not vs: continue
+        mn = Vector((min(v.x for v in vs), min(v.y for v in vs), 0)); mx = Vector((max(v.x for v in vs), max(v.y for v in vs), max(v.z for v in vs)))
+        cx, cy = (mn.x + mx.x) / 2, (mn.y + mx.y) / 2
+        hx, hy = (mx.x - mn.x) / 2 + 0.014, (mx.y - mn.y) / 2 + 0.016
+        res = bmesh.ops.create_uvsphere(bm, u_segments=20, v_segments=12, radius=1.0)
+        sv = res['verts']
+        foot_g, ball_g = vg.get('foot_' + side), vg.get('ball_' + side.lower())
+        for v in sv:
+            x, y, z = v.co
+            zz = 0.0 if z < -0.35 else (z + 0.35) / 1.35 * 0.092             # a flat sole, a rounded top
+            toe = max(0.0, -y)                                                # the front half (MakeHuman faces -y)
+            zz *= 1.0 - 0.3 * toe ** 2                                        # the toe box lowers to the tip
+            zz *= 1.0 + 0.22 * max(0.0, y)                                    # a padded collar at the heel
+            v.co = Vector((cx + x * hx * (1.0 - 0.05 * toe), cy + y * hy, zz))
+            d = v[dl]; d.clear()
+            t = max(0.0, min(1.0, (cy - v.co.y) / hy * 0.8 + 0.2))
+            if foot_g is not None: d[foot_g] = 1.0 - t * (0.6 if ball_g is not None else 0.0)
+            if ball_g is not None: d[ball_g] = t * 0.6
+        sf = [f for f in {f for v in sv for f in v.link_faces}]
+        for f in sf: f.smooth = True
+        shoes += sf
+    bmesh.ops.delete(bm, geom=foot_faces, context='FACES_ONLY')
 
     # ---- zones (a face layer that survives into the mesh as an integer face attribute)
     def boundary_tree(faces):
@@ -221,8 +242,6 @@ def build(bid):
         c = f.calc_center_median()
         if is_eye(f):
             f[zl] = ZONES['sclera']
-        elif c.z < 0.115 and abs(c.x) < 0.2: f[zl] = ZONES['shoe']                       # the foot inside the shoe
-        elif 0.115 <= c.z < 0.30 and abs(c.x) < 0.2: f[zl] = ZONES['stripe'] if 0.255 < c.z < 0.275 else ZONES['sock']
         else: f[zl] = ZONES['skin']
     bm.verts.index_update()
     EDGE = [edge_d.get(v, 1.0) for v in bm.verts]

@@ -134,7 +134,8 @@ float pickRow() {
       return clipRow(4, e - L);
     }
     if (e >= 0.0 && e < 2.6 && !mine && ph > 0.55) return clipRow(5, e + ph);
-    if (uExcite > 0.45 && fract(ph * 3.7) < 0.5) return clipRow(1, t);
+    // (a bench mostly sits and watches: a third of it claps, so six team-mates never move as one)
+    if (uExcite > 0.45 && fract(ph * 3.7) < (kind > 2.5 ? 0.33 : 0.5)) return clipRow(1, t);
     return clipRow(0, t);
   }
   if (kind < 1.5) {
@@ -290,6 +291,8 @@ export function buildCrowd3d(seats, opts) {
     const gold = new THREE.Color('#D4AF37');
     cheer.forEach((c, i) => { const col = c.color.r + c.color.g + c.color.b < 0.12 ? gold : c.color; poms.setColorAt(i * 2, col); poms.setColorAt(i * 2 + 1, col); });
     poms.frustumCulled = false; poms.userData.dyn = true; g.add(poms);
+    // like the fans, never at the lens
+    poms.material.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n if (length(vViewPosition) < 6.0) discard;'); };
   }
   const clipRow = (c, t) => { const k = C3.clipTable[c], f = Math.floor(Math.max(t, 0) * CROWD_FPS); return k.x + (k.z > 0.5 ? ((f % k.y) + k.y) % k.y : Math.min(f, k.y - 1)); };
   const v = new THREE.Vector3(), sm = new THREE.Matrix4(), pm4 = new THREE.Matrix4(), one = new THREE.Vector3(1, 1, 1), qI = new THREE.Quaternion();

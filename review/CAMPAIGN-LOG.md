@@ -322,3 +322,35 @@ crowd's style clash. Those are M4-M6.
 | M3 r1 | 6.7 |
 | M4 | 6.6 |
 | M5 | 6.8 |
+
+## M6 result: closed on the plateau rule (r1 7.0, +0.19; r2 7.0, +0.0)
+- **Built:** a 3D crowd in place of the photo cards. `art-src/blender/crowd/build_fans.py` makes low-poly fans
+  from the HQ bodies (shells stripped; 1,100 / 450 / 200 triangles; arm, leg and head flags per vertex).
+  `src/js/gl/crowd3d.js` bakes the crowd clips (`crowd-clips.js`) into a bone texture and draws one instanced
+  mesh per build and detail level (at most 8 draw calls). Clothes, skin and hair are painted per fan. A make
+  ripples the scoring side to its feet from the basket; some of the other side hold their heads. Benches (six
+  substitutes in the team's own kit, an assistant, a standing head coach), the cheer squad with pom-poms, and
+  standing student sections. The crowd streams in the HQ `crowd` package (156 KB).
+- **Scores:** Art 6.5 → 7, Lighting 6.5 → 7, Authenticity 6.5 → 7.5; overall 6.8 → 7.0. The darker 3D house
+  gives a real lighting hierarchy (desktop floor/crowd 3.2-4.1, c04 ball contrast 6.0).
+- **Gates:** `tests/crowd.test.mjs` (GPU): fans seated, at most 8 crowd draw calls, the stands change 4.7× idle after
+  a make (needs 1.5×). Perf inside budget: desktop arena 1.37M triangles (≤ 1.5M), phone arena 587k (≤ 600k);
+  desktop about 440-570 fps uncapped, phone 640-690.
+- **Found and fixed:** the body part was one interpolated number, so triangles between trunk and thigh painted
+  as arms (torn hips, chest patches, sawtooth collars); MakeHuman helper groups (Left/Right/Mid) outweighed the
+  bone groups.
+- **After the r2 verdict (not yet scored):** a third of a bench claps, the rest sit and watch; pom-poms are culled at
+  the lens like the fans.
+- **Carried forward** (the r2 verdict has the pass tests):
+  - the replay foreground: a pom-pom at the lens (culled after the verdict, unverified)
+  - bench sameness, bald mannequin heads up close, stepped necklines, faceted pom-poms
+  - officials: shorts silhouette over tights, swirled stripes, the c15 arms-out pose
+  - c14 desktop voidPct 14.6 (< 5); c09 arena voids 5.7 desktop, 7.6 phone (≤ 3; was 5.4 phone before M6)
+  - the M5 items: the dunk float, the jumper hold, c21 piping, the mobile c21 z-fight, the mobile card margin
+
+| Point | Overall |
+|---|---|
+| Baseline | 6.1 |
+| M4 | 6.6 |
+| M5 | 6.8 |
+| M6 | 7.0 |

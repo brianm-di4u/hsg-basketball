@@ -168,5 +168,36 @@
     "overall": 6.8,
     "blockers": 5,
     "note": "plateau (+0.06 after +0.125): M5 closed; net stretch and hem flare raised after"
+  },
+  {
+    "round": "v3-m6-r1",
+    "scores": {
+      "art": 7,
+      "lighting": 7,
+      "animation": 7,
+      "ui": 7,
+      "typography": 6.5,
+      "readability": 7,
+      "mobile": 7,
+      "authenticity": 7.5
+    },
+    "overall": 7,
+    "blockers": 6
+  },
+  {
+    "round": "v3-m6-r2",
+    "scores": {
+      "art": 7,
+      "lighting": 7,
+      "animation": 7,
+      "ui": 7,
+      "typography": 6.5,
+      "readability": 7,
+      "mobile": 7,
+      "authenticity": 7.5
+    },
+    "overall": 7,
+    "blockers": 6,
+    "note": "plateau (+0.19, +0.0): M6 closed; bench clap share and pom lens cull after"
   }
 ]

@@ -292,12 +292,12 @@ crowd's style clash. Those are M4-M6.
   `tools/strip.mjs` (burst strips cropped to one player).
 
 ## M5 result: closed on the plateau rule (r1 6.8, +0.125; r2 6.8, +0.06)
-- **r1** (verdict ): Animation 6.5 → 7, the first category move since M2. The jumper (gather,
+- **r1** (verdict `review/v3-m5-r1.md`): Animation 6.5 → 7, the first category move since M2. The jumper (gather,
   set point, release, held follow-through, landing) and the run cycle with a floor dribble cleared the 7 anchor.
   10 blockers, mostly new: the dunk through the rim, a rigid net, officials in a bind pose, the dribble hiding
   the ball, shoulder piping wings, floating buns, replay blur on the subject, c14/c21 cameras, a SLAM DUNK
   callout on a three, the mobile dunk camera.
-- **r2** (verdict ): five blockers closed (dribble, officials, buns, callout, mobile dunk
+- **r2** (verdict `review/v3-m5-r2.md`): five blockers closed (dribble, officials, buns, callout, mobile dunk
   camera); Readability 6.5 → 7. Found and fixed in the round: the mocap heading was read from the hip bone's
   own axis (up), so the clips turned the whole body (c21 showed backs of heads); replay IK kept old foot locks
   across cuts (a shooter drawn sitting).

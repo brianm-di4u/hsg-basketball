@@ -117,9 +117,12 @@ export function shotFromInPage([seed, q, home = 'hot-springs', away = 'lakeside'
 // and crowd sample points), all in CSS px. Points off screen are dropped.
 export function frameMetaInPage() {
   const g = window.__game, s = g.getState(), m = s.match;
-  const P = (x, z, y = 0) => g.act('project', x, z, y);
+  // project() gives stage pixels; the stage sits below the score strip on phones, so shift to page pixels
+  const stage = g.act('layout').stage || { x: 0, y: 0 };
+  const P = (x, z, y = 0) => { const q = g.act('project', x, z, y); return { x: q.x + stage.x, y: q.y + stage.y }; };
   const W = innerWidth, H = innerHeight, on = (q) => q && q.x >= 0 && q.x < W && q.y >= 0 && q.y < H;
-  const out = { W, H, scene: s.scene, tier: s.gfx.tier, cam: s.gfx.cam, replay: !!s.replay, hud: s.hud, stage: g.act('layout').stage };
+  const out = { W, H, scene: s.scene, tier: s.gfx.tier, cam: s.gfx.cam, replay: !!s.replay, hud: s.hud, stage, sb: g.act('layout').sb };
+  if (out.hud && out.hud.slamBox) out.hud.slamBox = { ...out.hud.slamBox, x: out.hud.slamBox.x + stage.x, y: out.hud.slamBox.y + stage.y };
   if (!m || s.gfx.mode !== '3d') return out;
   const b = m.ball, bc = P(b.x, b.z, b.y), bt = P(b.x, b.z, b.y + 0.4);
   out.ball = { x: bc.x, y: bc.y, r: Math.max(1, Math.abs(bt.y - bc.y)), state: b.state, on: on(bc) };

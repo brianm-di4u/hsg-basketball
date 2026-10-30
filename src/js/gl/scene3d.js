@@ -4,7 +4,9 @@
 /* global THREE */
 import { COURT, rimFor } from '../court.js';
 import { initPlayers, makePlayer, dressPlayer, updatePlayer } from './players3d.js';
-import { buildVenue, makeReflector, loadImages, drawScoreboard, LAYER_REFLECT } from './venue3d.js';
+import { buildVenue, loadImages, drawScoreboard, LAYER_REFLECT } from './venue3d.js';
+import { makeProbe } from './probe3d.js';
+import { makeTrail } from './trail3d.js';
 import { fmtClock } from '../util.js';
 import { CORE } from './build-info.js';
 import { makePost } from './post.js';
@@ -13,8 +15,8 @@ const HL = COURT.L / 2, HW = COURT.W / 2;
 export const G3 = {
   state: 'off', // off | loading | ready | failed | unsupported
   tier: 'high', renderer: null, scene: null, camera: null, venue: null, venueKey: '', players: new Map(), pool: { M: [], F: [] },
-  ball: null, ballSpin: 0, images: {}, reflector: null, W: 0, H: 0, dpr: 1, camX: HL, camZ: 0, snap: true, sun: null, time: 0,
-  canvas: null, userRing: null, err: '', P: null, frames: 0, cheer: 0, camOverride: null, punch: 0, refs: [{ x: 40, z: -1.6, vx: 0, vz: 0, act: 'idle', y: 0, t: 0 }, { x: 96, z: 34, vx: 0, vz: 0, act: 'idle', y: 0, t: 1 }], flags: { reflect: true, env: true, sun: true },
+  ball: null, ballSpin: 0, images: {}, probe: null, W: 0, H: 0, dpr: 1, camX: HL, camZ: 0, snap: true, sun: null, time: 0,
+  canvas: null, userRing: null, err: '', P: null, frames: 0, cheer: 0, camOverride: null, punch: 0, refs: [{ x: 40, z: -1.6, vx: 0, vz: 0, act: 'idle', y: 0, t: 0 }, { x: 96, z: 34, vx: 0, vz: 0, act: 'idle', y: 0, t: 1 }], flags: { env: true, sun: true },
 };
 const V = () => new THREE.Vector3();
 // officials (display only; the rules have no referees)
@@ -123,22 +125,14 @@ function init(stage) {
   G3.blobs = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: st, transparent: true, depthWrite: false, toneMapped: false }), 14);
   G3.blobs.renderOrder = 1; G3.blobs.frustumCulled = false;
   G3.scene.add(G3.blobs);
-  // shot trail: a short comet of additive puffs behind the ball in flight
-  G3.trail = [];
-  const tg = new THREE.SphereGeometry(0.42, 10, 8);
-  for (let k = 0; k < 14; k++) {
-    const t = new THREE.Mesh(tg, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-    t.visible = false; G3.scene.add(t); G3.trail.push(t);
-  }
-  G3.trailPts = [];
+  // shot trail: one glowing ribbon behind the ball in flight (trail3d.js)
+  G3.trailFx = makeTrail(); G3.scene.add(G3.trailFx.mesh);
   // user marker: a bright ring under your player
   const ring = new THREE.Mesh(new THREE.RingGeometry(1.2, 1.55, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffd84d, transparent: true, opacity: 0.95, depthWrite: false, toneMapped: false }));
   ring.add(new THREE.Mesh(new THREE.RingGeometry(1.62, 1.74, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x14121f, transparent: true, opacity: 0.8, depthWrite: false, toneMapped: false })));
   ring.position.y = 0.03; ring.visible = false; ring.renderOrder = 2;
   G3.scene.add(ring); G3.userRing = ring;
-  if (G3.tier !== 'low') G3.reflector = makeReflector(G3.tier === 'high' ? 0.5 : 0.33);
-  G3.pmrem = new THREE.PMREMGenerator(r);
-  G3.envs = {};
+  G3.probe = makeProbe(r, G3.tier === 'high' ? 256 : G3.tier === 'medium' ? 128 : 64);
   G3.post = makePost(r, G3.scene, G3.camera, G3.tier);
   G3.P = project;
 }
@@ -169,12 +163,12 @@ export function resize3d(w, h, dpr) {
   G3.snap = true;
 }
 
-// Broadcast framing: a high sideline camera. Wide screens show ~60 ft of court; portrait phones look down
-// more steeply and show ~34 ft, so the far sideline and the basket stay in frame.
+// Broadcast framing: a sideline camera. Wide screens show ~52 ft of court at the look-at depth; narrow ones
+// look down more steeply and show less, so the far sideline and the basket stay in frame.
 function frame(W, H) {
   const asp = W / H;
   const t = Math.max(0, Math.min(1, (1.25 - asp) / 0.65)); // 0 = landscape, 1 = portrait
-  const fov = 30 + t * 14, pitch = (21 + t * 18) * Math.PI / 180, span = 52 - t * 30;
+  const fov = 30 + t * 14, pitch = (17.5 + t * 18) * Math.PI / 180, span = 52 - t * 30;
   const hf = 2 * Math.atan(Math.tan((fov * Math.PI / 180) / 2) * asp);
   let D = (span / 2) / Math.tan(hf / 2);
   // the court depth must fit vertically too
@@ -184,7 +178,7 @@ function frame(W, H) {
 export function clampCam3(x) {
   const f = frame(G3.W || 1280, G3.H || 720);
   const half = f.span / 2;
-  const lo = half - 13, hi = COURT.L - half + 13;
+  const lo = half - 19, hi = COURT.L - half + 19; // far enough past the baselines that a drive to the rim stays in frame
   return lo > hi ? HL : Math.min(hi, Math.max(lo, x));
 }
 function placeCamera(dt, scene) {
@@ -198,18 +192,24 @@ function placeCamera(dt, scene) {
     return;
   }
   const vert = scene.vertical || 0;
-  const goal = vert ? Math.max(20, Math.min(COURT.L - 20, scene.camX ?? HL)) : clampCam3(scene.camX ?? HL);
+  let goal = vert ? Math.max(20, Math.min(COURT.L - 20, scene.camX ?? HL)) : clampCam3(scene.camX ?? HL);
+  // a horizontal dead zone: small moves of the play leave the camera still, so the frame stops swimming
+  if (!vert && !G3.snap) { const dz = f.span * 0.06, c = G3.camGoal ?? goal; goal = goal > c + dz ? goal - dz : goal < c - dz ? goal + dz : c; }
+  G3.camGoal = goal;
   const zGoal = (scene.camZ ?? HW) - HW;
-  if (G3.snap || scene.reduced) { G3.camX = goal; G3.camZ = zGoal; G3.snap = false; }
-  else { const k = Math.min(1, dt * (scene.fast ? 5.5 : 3.2)); G3.camX += (goal - G3.camX) * k; G3.camZ += (zGoal - G3.camZ) * k; }
+  if (G3.snap || scene.reduced) { G3.camX = goal; G3.camZ = zGoal; G3.nearZ = scene.nearZ; G3.snap = false; }
+  else {
+    const k = Math.min(1, dt * (scene.fast ? 5.5 : 3.2)); G3.camX += (goal - G3.camX) * k; G3.camZ += (zGoal - G3.camZ) * k;
+    if (scene.nearZ != null) G3.nearZ = G3.nearZ == null ? scene.nearZ : G3.nearZ + (scene.nearZ - G3.nearZ) * Math.min(1, dt * 3);
+  }
   if (vert) {
     // portrait phones: the court runs up the screen toward the basket your team attacks; the full width fits
     const portrait = G3.H > G3.W;
     const fov = portrait ? 50 : 40;
     if (cam.fov !== fov) { cam.fov = fov; cam.updateProjectionMatrix(); }
-    const pitch = (portrait ? 37 : 26) * Math.PI / 180, hf = 2 * Math.atan(Math.tan((fov * Math.PI / 180) / 2) * (G3.W / G3.H));
-    const D = (portrait ? 18 : 22) / Math.tan(hf / 2);
-    const tx = G3.camX - HL + vert * (portrait ? 8 : 4), tz = G3.camZ * (portrait ? 0.72 : 0.5);
+    const pitch = (portrait ? 32 : 26) * Math.PI / 180, hf = 2 * Math.atan(Math.tan((fov * Math.PI / 180) / 2) * (G3.W / G3.H));
+    const D = (portrait ? 14.5 : 22) / Math.tan(hf / 2);
+    const tx = G3.camX - HL + vert * (portrait ? 6 : 4), tz = G3.camZ * (portrait ? 0.85 : 0.5);
     const sh = scene.shake ? (Math.random() - 0.5) * scene.shake * 0.5 : 0;
     cam.position.set(tx - vert * Math.cos(pitch) * D + sh, 3 + Math.sin(pitch) * D, tz + sh);
     cam.up.set(0, 1, 0);
@@ -219,10 +219,16 @@ function placeCamera(dt, scene) {
   }
   const fovNow = f.fov * (1 - 0.07 * G3.punch);
   if (cam.fov !== fovNow) { cam.fov = fovNow; cam.updateProjectionMatrix(); }
-  // look-at rides the ball's depth, so a play on the far sideline sits mid-frame instead of against the crowd
-  const tx = G3.camX - HL, tz = 3 - f.t * 3 + G3.camZ * (0.72 - f.t * 0.05);
+  // look-at depth: the frame's bottom edge sits a few feet below the nearest player's feet, so the play fills
+  // the frame instead of bare wood; never past the near sideline
+  const pitch = f.pitch + (scene.fast ? 2.5 * Math.PI / 180 : 0); // a shot tips the camera down a touch: the shooter's head clears the crowd line
+  const camY = 3 + Math.sin(pitch) * f.D, bottomAng = pitch + (fovNow * Math.PI / 180) / 2;
+  const zNear = Math.min(HW + 4, (G3.nearZ ?? HW) - HW + 3.5);
+  let tz = zNear - Math.cos(pitch) * f.D + camY / Math.tan(bottomAng);
+  tz = Math.max(tz, -HW - 6); // (the top edge sits near the horizon, so the far sideline stays in frame anyway)
+  const tx = G3.camX - HL;
   const sh = scene.shake ? (Math.random() - 0.5) * scene.shake * 0.5 : 0;
-  cam.position.set(tx + sh, 3 + Math.sin(f.pitch) * f.D + sh, tz + Math.cos(f.pitch) * f.D);
+  cam.position.set(tx + sh, camY + sh, tz + Math.cos(pitch) * f.D);
   cam.lookAt(tx, 3, tz);
   cam.updateMatrixWorld();
 }
@@ -247,38 +253,19 @@ function ensureVenue(v) {
   if (k === G3.venueKey) return;
   if (G3.venue) { G3.scene.remove(G3.venue.g); disposeTree(G3.venue.g); }
   G3.venueKey = k;
-  G3.venue = buildVenue(v, { images: G3.images, reflect: !!G3.reflector, floorPx: G3.tier === 'high' ? 18 : 13 });
+  G3.venue = buildVenue(v, { images: G3.images, floorPx: G3.tier === 'high' ? 18 : 13, probe: G3.probe.pos });
   G3.scene.add(G3.venue.g);
   const arena = v.kind === 'arena';
-  G3.hemi.intensity = arena ? 0.38 : 0.8;
+  G3.hemi.intensity = arena ? 0.5 : 0.8;
   G3.sun.intensity = arena ? 1.1 : 1.0;
-  G3.scene.background = new THREE.Color(arena ? 0x07080c : 0x1b1714);
-  G3.scene.environment = envFor(arena);
-  G3.scene.fog = arena ? new THREE.Fog(0x07080c, 140, 320) : null;
+  G3.scene.background = new THREE.Color(arena ? 0x141826 : 0x1b1714);
+  G3.scene.fog = arena ? new THREE.Fog(0x161b2b, 130, 300) : null;
+  captureProbe();
 }
-// A generated surround for image-based light: a dark roof with rows of lamps, a warm band of crowd and a wood
-// floor. It gives the glossy floor and the players even, gym-like highlights instead of one hot spot.
-function envFor(arena) {
-  const k = arena ? 'arena' : 'gym';
-  if (G3.envs[k]) return G3.envs[k];
-  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 256;
-  const c = cv.getContext('2d');
-  c.fillStyle = arena ? '#06070B' : '#2A2622'; c.fillRect(0, 0, 512, 128);
-  // lamps only high overhead (elevation > ~55°), so the floor at broadcast angles mirrors the roof, not a lamp
-  for (let row = 0; row < 3; row++) for (let i = 0; i < 16; i++) {
-    const x = i * 32 + (row % 2) * 16 + 8, y = 8 + row * 13;
-    const g = c.createRadialGradient(x, y, 0, x, y, arena ? 7 : 9);
-    g.addColorStop(0, '#FFFFFF'); g.addColorStop(1, 'rgba(255,240,215,0)');
-    c.fillStyle = g; c.fillRect(x - 10, y - 10, 20, 20);
-  }
-  const band = c.createLinearGradient(0, 108, 0, 150);
-  band.addColorStop(0, arena ? '#1A1C2A' : '#5A4A3E'); band.addColorStop(1, arena ? '#2A2E44' : '#7A6450');
-  c.fillStyle = band; c.fillRect(0, 108, 512, 42);
-  c.fillStyle = arena ? '#3A2C20' : '#8A6A48'; c.fillRect(0, 150, 512, 106);
-  const t = new THREE.CanvasTexture(cv); t.mapping = THREE.EquirectangularReflectionMapping; t.colorSpace = THREE.SRGBColorSpace;
-  G3.envs[k] = G3.pmrem.fromEquirectangular(t).texture;
-  t.dispose();
-  return G3.envs[k];
+// the room's own light for players, the ball and the floor's clear coat; people and effects stay out of it
+function captureProbe() {
+  const hide = [G3.ball, G3.blobs, G3.userRing, G3.trailFx.mesh, ...[...G3.players.values()].map((pm) => pm.root)];
+  G3.envTex = G3.probe.capture(G3.scene, hide);
 }
 function disposeTree(o) {
   o.traverse((c) => {
@@ -306,7 +293,11 @@ export function draw3d(scene, fx) {
   const dt = Math.min(0.5, scene.dt || 0); // a step(n) hook draws once for n ticks; let the camera catch up
   G3.time += dt; G3.frames++;
   ensureVenue(scene.venue);
-  placeCamera(dt, { camX: scene.camX, camZ: scene.camZ, reduced: scene.reduced, shake: fx.shake, fast: scene.ball && scene.ball.state === 'shot', vertical: scene.vertical });
+  // the nearest player to the camera sets the bottom of the broadcast frame (no empty wood under the play)
+  // (only players inside the frame horizontally count, judged from the last frame's camera)
+  let nearZ = -Infinity;
+  for (const it of scene.players || []) { const q = project(it.pl.x, it.pl.z, 0); if (G3.snap || (q.X > -30 && q.X < G3.W + 30)) nearZ = Math.max(nearZ, it.pl.z); }
+  placeCamera(dt, { camX: scene.camX, camZ: scene.camZ, nearZ: isFinite(nearZ) ? nearZ : null, reduced: scene.reduced, shake: fx.shake, fast: scene.ball && scene.ball.state === 'shot', vertical: scene.vertical });
   G3.vertical = scene.vertical || 0;
   const m = scene.m;
   // players
@@ -382,35 +373,35 @@ export function draw3d(scene, fx) {
     for (const k of [0, 1]) if (G3.players.get(200 + k) && G3.players.get(200 + k).root.visible) put(G3.refs[k].x, G3.refs[k].z, 0, 2.4);
     G3.blobs.count = n; G3.blobs.instanceMatrix.needsUpdate = true;
   }
-  // trail while the ball is a shot in flight
-  const inShot = ball && ball.state === 'shot' && !scene.reduced;
-  if (inShot) {
-    // a jump of several feet between drawn frames (a step(n) hook) restarts the trail instead of leaving a stray puff
-    if (G3.trailPts.length && G3.trailPts[0].distanceTo(B.position) > 3) G3.trailPts.length = 0;
-    G3.trailPts.unshift(B.position.clone()); if (G3.trailPts.length > G3.trail.length * 2) G3.trailPts.length = G3.trail.length * 2;
-  }
-  else G3.trailPts.length = 0;
-  const gold = scene.perfect ? 0xffb21f : 0xff8a3d;
-  G3.trail.forEach((t, k) => {
-    const p = G3.trailPts[k * 2 + 1];
-    t.visible = !!p;
-    if (!p) return;
-    t.position.copy(p); const f = 1 - k / G3.trail.length;
-    t.scale.setScalar(0.45 + f * 0.9); t.material.opacity = 0.15 + f * 0.6; t.material.color.setHex(gold);
-  });
-  // hoops: net stretch, rim shake, shot clocks
+  B.material.emissive.setRGB(0.32, 0.1, 0.02).multiplyScalar(ball && ball.state !== 'held' && ball.state !== 'dead' && ball.y > 1.2 ? 1 : 0);
+  // trail while the ball is a shot in flight, cleared once it drops below the rim (no ghosts over the hoop)
+  const inShot = ball && ball.state === 'shot' && !scene.reduced && !(ball.y < COURT.rimY - 0.4 && ball.vy < 0);
+  if (inShot) G3.trailFx.update(B.position, G3.camera, scene.perfect ? 0xffc23a : 0xfff0d8, 0.5);
+  else G3.trailFx.clear();
+  // the ball's dark outline keeps about 1.5 px on screen at any distance
+  if (ball && B.visible) { const q = project(B.position.x + HL, B.position.z + HW, B.position.y); const rpx = Math.max(1, q.s * 0.4 * B.scale.x); B.children[0].scale.setScalar(1 + 1.6 / rpx); }
+  // hoops: cloth net, rim flash and board shake on a make, rim shake on iron, shot clocks
   const V3 = G3.venue;
   // looking down the court, the near hoop stands between the camera and the play: ghost it
   for (const side of [0, 1]) {
     const h = V3.hoops[side];
+    // looking down the court on a phone the near hoop would sit in front of the play: leave it out
     const fade = !!scene.vertical && side === (scene.vertical > 0 ? 0 : 1) && !G3.camOverride;
-    if (fade !== h.faded) { h.faded = fade; for (const m of h.fade) m.opacity = fade ? 0.18 : m.userData.baseOpacity; }
+    // (its static parts are merged into the venue mesh, so hide its materials rather than its group)
+    if (fade !== h.faded) { h.faded = fade; for (const m of h.fade) m.visible = !fade; }
   }
   for (const side of [0, 1]) {
     const h = V3.hoops[side];
     const st = fx.net[side] || 0, rs = fx.rim[side] || 0;
-    h.net.scale.set(1 - st * 0.12, 1 + st * 0.35 + Math.sin(G3.time * 30) * st * 0.04, 1 - st * 0.12);
-    h.rim.position.y = h.rimBaseY + Math.sin(rs * 30) * rs * 0.08;
+    if (st > h.lastNet + 0.3) { h.netSim.kick(1); h.flash = 1; h.shake = Math.max(h.shake, 0.6); }
+    if (rs > h.lastRim + 0.3) { h.netSim.kick(0.45, side ? -1 : 1); h.shake = Math.max(h.shake, 1); }
+    h.lastNet = st; h.lastRim = rs;
+    const bl = ball && B.visible ? [B.position.x - h.rimX, B.position.y - COURT.rimY, B.position.z] : null;
+    h.netSim.update(dt, bl);
+    h.flash = Math.max(0, h.flash - dt * 6); h.shake = Math.max(0, h.shake - dt * 2.5);
+    const rm = h.rim.material; rm.emissive.copy(rm.userData.baseEmissive).lerp(new THREE.Color(3.4, 1.4, 0.5), h.flash);
+    h.rim.position.y = h.rimBaseY + Math.sin(G3.time * 42) * h.shake * 0.07;
+    h.g.position.z = Math.sin(G3.time * 31) * h.shake * 0.05;
     const sc = m && m.rules && m.rules.shotClock ? (m.clock.shotOff ? '--' : String(Math.ceil(Math.max(0, m.clock.shot - 0.001)))) : '';
     drawShotClock3(h.dg, sc);
   }
@@ -428,6 +419,7 @@ export function draw3d(scene, fx) {
   if (scene.cheer) { G3.cheer = Math.max(G3.cheer, scene.cheer); if (!scene.reduced && scene.m) G3.punch = 1; }
   G3.punch = Math.max(0, G3.punch - dt * 2.2);
   const cu = V3.crowd.material.uniforms;
+  if (scene.cheer) cu.uCheerTeam.value = V3.arena || scene.cheerTeam == null ? -1 : scene.cheerTeam;
   cu.uTime.value = G3.time; cu.uCheer.value = scene.reduced ? 0 : Math.min(1, G3.cheer + (m ? (m.crowd || 0) * 0.25 : 0));
   cu.uRight.value.setFromMatrixColumn(G3.camera.matrixWorld, 0);
   // shadow camera follows the action
@@ -435,12 +427,10 @@ export function draw3d(scene, fx) {
   G3.sun.position.set(G3.camX - HL - 4, 90, -18); G3.sun.target.position.set(G3.camX - HL, 0, 0); G3.sun.target.updateMatrixWorld();
   // render: reflection pass, then the frame
   const r = G3.renderer;
-  V3.floor.mat.userData.u.uRefl.value = G3.reflector && G3.flags.reflect ? (V3.arena ? 0.2 : 0.14) : 0;
-  G3.scene.environment = G3.flags.env ? envFor(V3.arena) : null;
+  G3.scene.environment = G3.flags.env ? G3.envTex : null;
   G3.sun.visible = G3.flags.sun;
   r.info.reset();
   const t1 = performance.now();
-  if (G3.reflector && G3.flags.reflect) G3.reflector.render(r, G3.scene, G3.camera, V3.floor.mat, G3.W * G3.dpr, G3.H * G3.dpr);
   const t2 = performance.now();
   r.shadowMap.needsUpdate = true;
   if (G3.post) G3.post.render(dt); else r.render(G3.scene, G3.camera);
@@ -479,9 +469,6 @@ export function setTier(t) {
   G3.tier = t;
   const r = G3.renderer;
   r.shadowMap.enabled = t === 'high'; G3.sun.castShadow = t === 'high';
-  if (t === 'low') { if (G3.reflector) G3.reflector.dispose(); G3.reflector = null; }
-  else if (!G3.reflector) G3.reflector = makeReflector(t === 'high' ? 0.5 : 0.33);
-  else G3.reflector.scale = t === 'high' ? 0.5 : 0.33;
   if (G3.post) G3.post.dispose();
   G3.post = makePost(r, G3.scene, G3.camera, t);
   r.getContext(); // materials pick up shadow changes on their next compile

@@ -51,7 +51,7 @@ const touchOn = () => state.settings.touch === 'on' || (state.settings.touch ===
 function applySettings() {
   const s = state.settings;
   document.documentElement.style.fontSize = `${s.text}%`;
-  const dark = s.theme === 'dark' || (s.theme === 'auto' && mq('(prefers-color-scheme: dark)'));
+  const dark = s.theme !== 'light'; // the broadcast night look is the default; Day is a choice in Settings
   document.body.classList.toggle('theme-dark', dark);
   document.body.classList.toggle('theme-light', !dark);
   document.body.classList.toggle('reduced', reducedMotion());
@@ -423,7 +423,9 @@ function replayScene(m) {
     rp.shooter = { x: sp[0], z: sp[1] };
   }
   const sx0 = rp.shooter.x, sz0 = rp.shooter.z;
-  const ux = sx0 - rx, uz = sz0 - 25, ul = Math.hypot(ux, uz) || 1;
+  // the camera stays on the near side of the shooter-to-rim line, so it looks toward the far-side crowd and
+  // never into the open camera side of the gym
+  const ux = sx0 - rx, uz = Math.max(4, Math.abs(sz0 - 25)), ul = Math.hypot(ux, uz) || 1;
   const back = 13, side = 4;
   const px = sx0 + ux / ul * back - uz / ul * side, pz = sz0 + uz / ul * back + ux / ul * side;
   const tx = ball.x * 0.3 + rx * 0.5 + sx0 * 0.2, ty = Math.max(5.5, ball.y * 0.35 + 4.5), tz = ball.z * 0.3 + 25 * 0.5 + sz0 * 0.2;
@@ -439,11 +441,11 @@ function matchEvents(m) {
     switch (e.k) {
       case 'score': {
         const side = rimSide(rimFor(m.dir[e.t]));
-        pop(`+${e.pts}`, COURT.rimX[side], 11.5, 25, '#FFF6E0', e.pts === 3);
+        pop(`+${e.pts}`, COURT.rimX[side], 14.8, 25, '#FFF6E0', e.pts === 3); // above the backboard, never on the rim
         if (e.pts === 3) burst('steam', COURT.rimX[side], 10, 25, 10, ['#fff']);
         play('cheer', { big: e.pts === 3 || m.teams[e.t].isUser });
-        state.cheer = e.pts === 3 ? 1 : 0.75;
-        { const lm = state.lastMake || {}; if (e.pts === 3 || lm.dunk || lm.buzzer) { state.slam = { m, text: lm.buzzer ? 'BUZZER BEATER' : lm.dunk ? 'SLAM DUNK' : '3 POINTS', color: m.teams[e.t].colors.primary, sub: m.teams[e.t].short.toUpperCase(), at: m.time }; } if (e.pts === 3 || lm.dunk || lm.buzzer) queueReplay(m, lm.dunk ? 'DUNK' : lm.buzzer ? 'BUZZER BEATER' : 'THREE', lm.side ?? rimSide(m.ball.x)); state.lastMake = null; }
+        state.cheer = e.pts === 3 ? 1 : 0.75; state.cheerTeam = e.t;
+        { const lm = state.lastMake || {}; if (e.pts === 3 || lm.dunk || lm.buzzer) { state.slam = { m, text: lm.buzzer ? 'BUZZER BEATER' : lm.dunk ? 'SLAM DUNK' : '3 POINTS', color: m.teams[e.t].colors.primary, sub: m.teams[e.t].short.toUpperCase(), at: m.time, side }; } if (e.pts === 3 || lm.dunk || lm.buzzer) queueReplay(m, lm.dunk ? 'DUNK' : lm.buzzer ? 'BUZZER BEATER' : 'THREE', lm.side ?? rimSide(m.ball.x)); state.lastMake = null; }
         announce(`${m.teams[e.t].short} scores ${e.pts}. ${m.teams[0].short} ${m.teams[0].score}, ${m.teams[1].short} ${m.teams[1].score}.`);
         break;
       }
@@ -454,7 +456,7 @@ function matchEvents(m) {
       case 'whistle': play('whistle'); if (WHY[e.why]) pop(WHY[e.why], m.ball.x, 8, m.ball.z, '#FFB4A8'); if (e.why === 'shotclock') announce('Shot-clock violation.'); break;
       case 'buzzer': play('buzzer'); break;
       case 'steal': pop('STEAL!', m.p[e.i].x, 7, m.p[e.i].z, '#FFD84D'); play('steal'); break;
-      case 'block': pop('BLOCKED!', m.p[e.i].x, 9, m.p[e.i].z, '#FFD84D'); play('block'); shake(0.4); state.cheer = 0.6; break;
+      case 'block': pop('BLOCKED!', m.p[e.i].x, 9, m.p[e.i].z, '#FFD84D'); play('block'); shake(0.4); state.cheer = 0.6; state.cheerTeam = m.p[e.i].t; break;
       case 'andone': pop('AND ONE!', m.p[e.i].x, 8, m.p[e.i].z, '#5FD38A', true); break;
       case 'fouledout': pop('FOULED OUT', m.ball.x, 8, m.ball.z, '#FFB4A8'); announce('A player has fouled out.'); break;
       case 'tip': play('squeak'); break;
@@ -508,7 +510,7 @@ function drawMatch(m, dt) {
     return { pl, r, kit: T.kit, home: pl.t === 0, user: ut >= 0 && !m.user.auto && m.user.ctrl === pl.idx && state.scene !== 'title' };
   });
   // lead toward the basket being attacked; portrait phones lead further so that basket stays in frame
-  let camX = m.ball.x + (m.phase === 'live' ? m.dir[m.poss] * (R.v && R.v.portrait ? 11 : 8) : 0);
+  let camX = m.ball.x + (m.phase === 'live' ? m.dir[m.poss] * (R.v && R.v.portrait ? 7 : is3d() ? 5 : 8) : 0); // the 3D frame sits closer to the play, so a smaller lead
   if (m.ball.state === 'shot' && m.ball.shot) { const d = m.dir[m.ball.shot.team]; camX = (m.ball.x + rimFor(d) - d * 6) / 2; }
   // in the frontcourt (and while a shot flies), keep the basket being attacked inside the frame
   if (!verticalDir(m) && (m.phase === 'live' || m.ball.state === 'shot') && m.poss >= 0) {
@@ -516,6 +518,9 @@ function drawMatch(m, dt) {
     const reach = is3d() ? (R.v && R.v.portrait ? 9 : 14) : (R.v && R.v.portrait ? 9 : 20);
     if ((m.ball.x - COURT.L / 2) * d > 0 || m.ball.state === 'shot') camX = d > 0 ? Math.max(camX, rim - reach) : Math.min(camX, rim + reach);
   }
+  // the ball outranks the rim: the 3D frame is close to the play, so never let the camera drift more than
+  // 13 ft from the ball (about a third of the frame at the players' depth)
+  if (is3d() && !verticalDir(m)) camX = Math.max(m.ball.x - 13, Math.min(m.ball.x + 13, camX));
   if (m.phase === 'ft' && m.ft) camX = rimFor(m.dir[m.ft.team]) - m.dir[m.ft.team] * 10;
   if (m.phase === 'tipoff') camX = 47;
   let meter = null, ftMeter = null, offscreen = null;
@@ -541,14 +546,14 @@ function drawMatch(m, dt) {
     return;
   }
   const perfect = m.ball.state === 'shot' && m.ball.shot && m.ball.shot.label === 'PERFECT';
-  const slamT = state.slam && state.slam.m === m ? (m.time - state.slam.at) / 1.4 : -1;
+  const slamT = state.slam && state.slam.m === m ? (m.time - state.slam.at) / SLAM_S : -1;
   const slam = slamT >= 0 && slamT < 1 && state.scene !== 'title' && m.ball.state !== 'shot' ? { ...state.slam, t: slamT } : null;
   // title attract mode: a slow sweep around the gym (the 3D view only; reduced motion keeps the game camera)
   if (state.scene === 'title' && !R.reduced) {
     const tt = performance.now() / 1000, ang = Math.sin(tt * 0.05) * 0.85;
     G3.camOverride = { attract: true, p: [47 + Math.sin(ang) * 66, 19 + Math.sin(tt * 0.07) * 3, 25 + Math.cos(ang) * 66], t: [m.ball.x * 0.5 + 23.5, 5, 22], fov: 34 };
   } else if (G3.camOverride && G3.camOverride.attract) { G3.camOverride = null; R.snap = true; }
-  draw({ m, venue: venueOf(m), dt, camX, camZ: m.ball.z, players, ball: m.ball, meter, ftMeter, offscreen, cheer, perfect, slam, vertical: verticalDir(m) });
+  draw({ m, venue: venueOf(m), dt, camX, camZ: m.ball.z, players, ball: m.ball, meter, ftMeter, offscreen, cheer, cheerTeam: state.cheerTeam, perfect, slam, vertical: verticalDir(m) });
   updateScoreboard();
 }
 
@@ -743,12 +748,14 @@ function sumState() {
   };
 }
 
+// how long the big-play card stays up (s): gone before play resumes at the other end
+const SLAM_S = 1.15;
 // on-screen callouts, for the capture and review tests (same visibility rule as drawMatch)
 function hudState() {
   const m = state.match, sl = state.slam;
   const age = sl && m && sl.m === m ? m.time - sl.at : -1;
-  const live = age >= 0 && age < 1.4 && state.scene !== 'title' && m.ball.state !== 'shot';
-  return { slam: live ? { text: sl.text, age: +age.toFixed(2) } : null, pops: R.fx.pops.map((p) => ({ text: p.text, age: +p.t.toFixed(2) })) };
+  const live = age >= 0 && age < SLAM_S && state.scene !== 'title' && m.ball.state !== 'shot';
+  return { slam: live ? { text: sl.text, age: +age.toFixed(2) } : null, slamBox: live && R.slamBox ? { ...R.slamBox } : null, pops: R.fx.pops.map((p) => ({ text: p.text, age: +p.t.toFixed(2) })) };
 }
 
 function stepN(n) {

@@ -11,6 +11,8 @@ import path from 'node:path';
 import { FORCE_3D, ready3d, SEEDS, shotFromInPage, cshot, meta, saveMeta, burst } from './helpers.mjs';
 
 const G = (t, fn, ...a) => t.page.evaluate(fn, a);
+// a big step(n) draws a single frame; a second of short steps lets the camera settle as it does in real play
+const settle = (t) => G(t, () => { for (let k = 0; k < 30; k++) window.__game.step(2); });
 
 // a paused exhibition stepped until play is live
 async function liveGame(t, o) {
@@ -48,7 +50,7 @@ export const tests = [
       if (!t.gpu) { t.log('software GL: first still only; run with --gpu for the full capture'); return; }
 
       await liveGame(t, { seed: 11, home: 'hot-springs', away: 'lake-hamilton' });
-      await t.game('step', 300);
+      await t.game('step', 276); await settle(t);
       await cshot(t, 'c02-live');
 
       await setJumper(t);
@@ -73,12 +75,13 @@ export const tests = [
       await cshot(t, 'c17-replay-early');
       await G(t, () => { const g = window.__game; g.act('freeze', false); g.act('endReplay'); });
 
-      await G(t, () => { const g = window.__game; g.seed(4); g.newGame({ mode: 'challenge', challenge: 'lady-trojans-five', program: 'girls', paused: true }); g.step(200); });
+      await G(t, () => { const g = window.__game; g.seed(4); g.newGame({ mode: 'challenge', challenge: 'lady-trojans-five', program: 'girls', paused: true }); g.step(176); });
+      await settle(t);
       await cshot(t, 'c09-arena');
       await liveGame(t, { seed: 8, home: 'jessieville', away: 'cutter-morning-star', program: 'girls' });
-      await t.game('step', 380); await cshot(t, 'c10-jessieville');
+      await t.game('step', 356); await settle(t); await cshot(t, 'c10-jessieville');
       await liveGame(t, { seed: 9, home: 'mountain-pine', away: 'lake-hamilton', user: 'away' });
-      await t.game('step', 460); await cshot(t, 'c11-mountain-pine');
+      await t.game('step', 436); await settle(t); await cshot(t, 'c11-mountain-pine');
 
       // close-ups: the bench and scorer's table, a player's face and hands
       await liveGame(t, { seed: 11, home: 'hot-springs', away: 'lake-hamilton' });
@@ -88,7 +91,7 @@ export const tests = [
       await closeOn(t, 5, { d: 7, h: 5.6, fov: 24 }); // an opponent: the user's YOU chevron would cover the face
       await cshot(t, 'c21-face-close');
       await t.game('act', 'cam', null);
-      await t.game('step', 260);
+      await t.game('step', 236); await settle(t);
       await cshot(t, 'c19-handler');
 
       await G(t, () => { const g = window.__game; g.seed(2); g.newGame({ mode: 'shootout', paused: true }); g.step(40); });

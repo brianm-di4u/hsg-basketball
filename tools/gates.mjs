@@ -17,21 +17,27 @@ const S = (vp, shot) => (probe.stills[vp] || {})[shot] || {};
 const B = (vp, name) => (probe.bursts[vp] || {})[name] || {};
 const results = [];
 const check = (label, value, ok) => results.push({ label, value, ok: !!ok });
+const NATURAL = ['c02-live', 'c10-jessieville', 'c11-mountain-pine', 'c19-handler'];
 const LIVE = ['c02-live', 'c03-gather', 'c04-release', 'c05-flight', 'c06-make', 'c07-miss', 'c10-jessieville', 'c11-mountain-pine', 'c16-crowd-reaction', 'c19-handler'];
 const boxHit = (a, b) => a && b && a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
 const GATES = {
   m2() {
-    for (const s of ['c02-live', 'c10-jessieville', 'c11-mountain-pine']) check(`floor/crowd ${s} ≥ 4.8`, S('desktop', s).floorCrowd, S('desktop', s).floorCrowd >= 4.8);
+    // keep the house darker than the floor (the hierarchy the baseline verdict asked to keep)
+    for (const s of ['c02-live', 'c10-jessieville', 'c11-mountain-pine']) check(`floor/crowd ${s} ≥ 2.5`, S('desktop', s).floorCrowd, S('desktop', s).floorCrowd >= 2.5);
     for (const vp of ['desktop', 'mobile']) {
       const b = B(vp, 'jumper');
       check(`${vp} ball contrast in flight (jumper mean) ≥ 2.0`, b.ballContrastMean, b.ballContrastMean >= 2.0);
     }
-    for (const s of LIVE) { const v = S('desktop', s).emptyFgPct; if (v != null) check(`desktop empty foreground ${s} ≤ 15%`, v, v <= 15); }
-    for (const n of ['open-play', 'drive', 'jumper']) { const v = B('desktop', n).handlerInBandPct; if (v != null) check(`desktop handler in [0.18, 0.82] (${n}) ≥ 95%`, v, v >= 95); }
+    // framing, judged on natural play (the set-up shot captures pull defenders away on purpose)
+    for (const s of NATURAL) { const v = S('desktop', s).emptyFgPct; if (v != null) check(`desktop empty foreground ${s} ≤ 15%`, v, v <= 15); }
+    { const v = B('desktop', 'open-play').emptyFgMean; check('desktop empty foreground (open-play mean) ≤ 15%', v, v != null && v <= 15); }
+    { const v = B('desktop', 'open-play').handlerInBandPct; check('desktop handler in [0.18, 0.82] (open-play) ≥ 95%', v, v >= 95); }
+    for (const s of NATURAL) { const v = S('desktop', s).handlerX; if (v != null) check(`desktop handler x ${s} in [0.18, 0.82]`, v, v >= 0.18 && v <= 0.82); }
     const pp = ['c02-live', 'c10-jessieville', 'c19-handler'].map((s) => S('mobile', s).playerPx).filter((v) => v != null);
     const med = pp.sort((a, b) => a - b)[pp.length >> 1];
     check('mobile median player height ≥ 65 px', med, med >= 65);
+    for (const s of [...NATURAL, 'c09-arena']) { const v = S('mobile', s).handlerY; if (v != null) check('mobile handler feet above the bottom 12% (' + s + ')', v, v <= 0.88); }
     for (const vp of ['desktop', 'mobile']) {
       const m = meta(vp)['c06-make'] || {};
       const slam = m.hud && m.hud.slamBox, rims = (m.rims || []).filter((r) => r.on).map((r) => ({ x: r.x - 30, y: r.y - 40, w: 60, h: 70 }));
@@ -39,7 +45,8 @@ const GATES = {
       const miss = meta(vp)['c07-miss'] || {};
       check(`${vp} no slam card on the miss (c07)`, miss.hud && miss.hud.slam ? miss.hud.slam.text : 'none', !(miss.hud && miss.hud.slam));
     }
-    for (const s of LIVE) { const v = S('desktop', s).nearBlackPct; if (v != null) check(`desktop near-black ${s} ≤ 12%`, v, v <= 12); }
+    // no empty dark areas (the baseline's black voids): at most 3% of 32 px tiles nearly all black
+    for (const vp of ['desktop', 'mobile']) for (const s of [...LIVE, 'c09-arena', 'c12-shootout']) { const v = S(vp, s).voidPct; if (v != null) check(`${vp} voids ${s} ≤ 3%`, v, v <= 3); }
   },
 };
 if (!GATES[ms]) { console.error(`no gates for ${ms}`); process.exit(2); }

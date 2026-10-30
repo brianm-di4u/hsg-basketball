@@ -7,7 +7,8 @@
 //
 // Per still: luma mean, near-black % (luma < 16), clipped % (> 250), floor and crowd median luminance and
 // their ratio, ball-vs-surround contrast, empty foreground below the lowest player, the ball handler's
-// screen x, median player height (CSS px). Per burst: the same, aggregated over frames.
+// screen x, median player height (CSS px), void share (32 px tiles that are nearly all near-black).
+// Per burst: the same, aggregated over frames.
 // Luminance is relative luminance (linear, 0-1); contrast ratios are WCAG-style (L1 + 0.05) / (L2 + 0.05).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -40,6 +41,16 @@ function measure([b64, meta, annotate]) {
       let sum = 0, black = 0, clip = 0, n = 0;
       for (let i = 0; i < d.length; i += 4 * 7) { const l = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; sum += l; n++; if (l < 16) black++; if (l > 250) clip++; }
       const out = { luma: +(sum / n).toFixed(1), nearBlackPct: +(100 * black / n).toFixed(1), clippedPct: +(100 * clip / n).toFixed(2) };
+      // voids: 32-css-px tiles that are almost all near-black (a dark area with nothing in it, not dark clothes)
+      { const T = Math.round(32 * k); let tiles = 0, voids = 0;
+        for (let ty = 0; ty + T <= c.height; ty += T) for (let tx = 0; tx + T <= c.width; tx += T) {
+          let dark = 0, m = 0;
+          for (let y = ty; y < ty + T; y += 4) for (let x = tx; x < tx + T; x += 4) { const i = (y * c.width + x) * 4; m++; if (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2] < 16) dark++; }
+          const sb = meta.sb, inSb = sb && tx / k < sb.x + sb.w && (tx + T) / k > sb.x && ty / k < sb.y + sb.h && (ty + T) / k > sb.y;
+          if (inSb) continue; // the score bug is a dark panel by design, not an empty part of the scene
+          tiles++; if (dark / m > 0.92) voids++;
+        }
+        out.voidPct = +(100 * voids / tiles).toFixed(1); }
       if (meta.floor && meta.floor.length) out.floorY = +median(meta.floor.flatMap(([x, y]) => patch(x, y))).toFixed(4);
       // the crowd is people and the dark gaps between rows: the mean over a wide patch, then the median of those
       if (meta.crowd && meta.crowd.length) out.crowdY = +median(meta.crowd.map(([x, y]) => mean(patch(x, y, 10)))).toFixed(4);
@@ -62,7 +73,7 @@ function measure([b64, meta, annotate]) {
         out.emptyFgPct = +(100 * Math.max(0, st.y + st.h - low) / st.h).toFixed(1);
         out.playerPx = +median(ps.map((p) => p.px)).toFixed(1);
         const h = ps.find((p) => p.holder);
-        if (h) out.handlerX = +((h.x - st.x) / st.w).toFixed(3);
+        if (h) { out.handlerX = +((h.x - st.x) / st.w).toFixed(3); out.handlerY = +((h.foot - st.y) / st.h).toFixed(3); }
       }
       if (!annotate) return resolve({ out });
       g.lineWidth = 2 * k;

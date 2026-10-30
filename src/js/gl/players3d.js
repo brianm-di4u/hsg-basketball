@@ -85,10 +85,16 @@ function kitMaterial() {
     sh.fragmentShader = KIT_FRAG + sh.fragmentShader
       .replace('#include <color_fragment>', '#include <color_fragment>\n diffuseColor.rgb = kitColor(vRest);')
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = kitRough;')
-      // a soft rim light so players separate from the floor and dark skin keeps its modelling
-      .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n { float fr = pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 2.5); reflectedLight.indirectDiffuse += diffuseColor.rgb * (0.22 + fr * 0.85) + vec3(fr * 0.06); }');
+      // fill so dark skin keeps its modelling, plus a cool back light that rims the shoulders, heads and arms
+      // (view space: from behind the players and above), which separates them from the floor and the crowd
+      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+        { vec3 V = normalize(vViewPosition);
+          float fr = pow(1.0 - saturate(dot(normal, V)), 2.5);
+          reflectedLight.indirectDiffuse += diffuseColor.rgb * (0.18 + fr * 0.45);
+          float rim = pow(1.0 - saturate(dot(normal, V)), 3.0) * saturate(dot(normal, normalize(vec3(0.3, 0.6, -0.75))) + 0.3);
+          reflectedLight.directSpecular += vec3(0.62, 0.72, 0.95) * rim * 1.1; }`);
   };
-  mat.customProgramCacheKey = () => 'kit1';
+  mat.customProgramCacheKey = () => 'kit2';
   return mat;
 }
 

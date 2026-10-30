@@ -324,7 +324,7 @@ export function settingsScreen(st, storageOk) {
     ${seg('setVol', [[0.25, 'Low'], [0.5, 'Medium'], [0.8, 'High']], s.vol, 'Volume')}
     ${seg('setMotion', [['auto', 'Follow system'], ['on', 'Reduce'], ['off', 'Full']], s.motion, 'Reduced motion')}
     ${seg('setText', [[100, '100%'], [115, '115%'], [130, '130%']], s.text, 'Text size')}
-    ${seg('setTheme', [['auto', 'Follow system'], ['light', 'Day'], ['dark', 'Night']], s.theme, 'Menu theme')}
+    ${seg('setTheme', [['auto', 'Default (night)'], ['light', 'Day'], ['dark', 'Night']], s.theme, 'Menu theme')}
     ${seg('setDiff', DIFF.map((d, i) => [i, d.name]), s.difficulty, 'Difficulty')}
     ${seg('setQ', [[120, '2 min'], [240, '4 min'], [480, '8 min (full)']], s.qLen, 'Quarter length')}
     ${seg('setClock', [[35, '35-second clock'], [0, 'Classic (off)']], s.shotClock, 'Shot clock')}

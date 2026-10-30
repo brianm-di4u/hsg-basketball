@@ -39,7 +39,9 @@ export function makeTrail() {
         side.crossVectors(seg, toCam).normalize();
         const f = i < pts.length ? 1 - i / (pts.length - 1 || 1) : 0, w = width * (0.15 + 0.85 * f);
         pos.set([p.x + side.x * w, p.y + side.y * w, p.z + side.z * w, p.x - side.x * w, p.y - side.y * w, p.z - side.z * w], i * 6);
-        alpha[i * 2] = alpha[i * 2 + 1] = f * f * 0.9;
+        // fades in a short way behind the ball, so the ball keeps a clear dark edge
+        const head = Math.min(1, (1 - f) / 0.18);
+        alpha[i * 2] = alpha[i * 2 + 1] = f * f * head * 0.9;
       }
       geo.attributes.position.needsUpdate = true; geo.attributes.aAlpha.needsUpdate = true;
       mesh.visible = true;

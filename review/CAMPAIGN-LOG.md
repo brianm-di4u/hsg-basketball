@@ -71,3 +71,65 @@ Each review round is: capture → probe → packet → panel (Prosecutor A, Pros
 - **Parity:** luma within ±2% and floor/crowd regions within ±5% on all c-shots against v3-m0-r1; c10's crowd
   is -9.7%, from crowd animation phase. Before/after sheets inspected. No full panel for this invisible milestone:
   M2's panel reviews the combined M1+M2 build.
+
+## M2 (2026-10-29): broadcast pass on lite art
+Iterated against dev captures (`v3-m2-dev`) and automated gates (`tools/gates.mjs m2`) before the panel.
+
+**Changes:**
+- **Floor:** the planar reflector is removed, which kills the ghosts. The floor is now clearcoat
+  `MeshPhysicalMaterial`, with lamp-row light pools and a box-projected reflection probe of the venue
+  (`probe3d.js`). The probe is also `scene.environment`.
+- **Ball:** a ribbon trail that starts just behind the ball and clears below the rim (`trail3d.js`). The outline
+  holds about 1.5 px at any distance. A HUD halo darkens what's behind a loose ball, and the ball glows slightly
+  in flight.
+- **Make payoff:**
+  - a verlet cloth net (`net3d.js`), a rim emissive flash and hoop shake
+  - the scoring side's crowd stands (a team attribute in the crowd shader)
+  - the HUD steam puffs are gone in 3D; they were the baseline's ghost discs
+- **Camera:**
+  - **Desktop:** pitch 17.5°; the frame bottom sits 3.5 ft below the nearest on-screen player; a 6%-of-span dead
+    zone; a 2.5° tip-down on shots.
+  - **Lead and clamps:** the 3D lead is 5 ft; the camera never drifts more than 13 ft from the ball; the end clamp
+    is ±19 ft.
+  - **Portrait:** pitch 32°, half-width 14.5 ft, lead 7+6 ft, players about 82-90 px.
+  - **Replay:** stays on the near side of the shooter-rim line, so it never faces the open camera side.
+  - **Mobile near hoop:** hidden through material visibility, because its parts are merged into the venue mesh.
+- **Venue:**
+  - stanchion pads get a light bevel cap and stripe
+  - a dark primary color falls back to the secondary for wainscots and bench chairs
+  - bench figures sit in front of the chairs
+  - no repeated crowd faces within 3 seats
+  - arena apron wordmarks repeat (they read whole in any crop); the arena apron, roof and fog are lighter
+  - arena side tiers run into the corners
+- **Light:**
+  - a cool back rim light in the kit shader
+  - the house a touch dimmer (crowd `uLight` 0.54 in gyms, 0.36 in the arena)
+  - bloom on HDR emitters (`GLOW` in `post.js`: lamps, scoreboards, ribbons, exits, shot clocks, rim flash)
+  - a light contrast and saturation grade
+- **HUD:**
+  - the slam card is placed in the first band clear of the projected rim and ball, and lasts 1.15 s; `slamBox`
+    is exposed for the gates
+  - "+3" sits above the backboard and is dropped when its anchor leaves the screen
+  - the chevron is clamped to 14-24 px
+  - the score bug is 560 px wide, with FOULS at 12.5 px
+- **Menus:** the night broadcast theme is the default (Day is a Settings choice). Navy panels, gold primary
+  buttons, display face on headings and buttons.
+
+**Probe fixes found along the way:**
+- **Mobile points:** stage-relative coordinates were treated as page coordinates. All mobile probe numbers in
+  v3-m0-r1 and v3-m1-r1 were offset by the score-strip height.
+- **Crowd luminance:** now the mean over a wide patch.
+- **New metrics:** `voidPct` (nearly-black 32 px tiles, excluding the score bug) replaces frame-wide near-black
+  as a gate; `handlerY` is added.
+- **Gate thresholds:**
+  - floor/crowd ≥ 2.5: keep the hierarchy the Arbiter asked to keep, not 4.8
+  - empty foreground and handler band judged on natural-play shots only (the set-up captures pull defenders
+    away on purpose)
+- **Capture:** settles the camera with 30 two-tick steps before live stills; one big `step(n)` draws only a
+  single frame.
+- **Gates:** 49/49 before the panel.
+- **Perf** (uncapped, RTX 5060), before bloom: desktop 530-593 fps, task ~1.7 ms, 108-120 calls; mobile 670-885 fps.
+
+**Deferred:** title banners in the desktop gameplay band. The back wall above the bleachers is outside the
+lower camera's frame, so the HQ venue (M3) redesigns the wall layout. End-wall pennants already show in end
+frames (c07).

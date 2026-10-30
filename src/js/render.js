@@ -147,15 +147,19 @@ function P2(x, z, y = 0) { const v = R.v; _p2.X = sx(v, x); _p2.Y = sy(v, z, y);
 
 // The HUD layer, shared by both renderers: YOU marker, particles, callouts, meters, off-screen arrow.
 function drawHud(c, v, P, scene) {
+  if (is3d()) ballHalo(c, P, scene.ball);
   for (const it of scene.players || []) if (it.user) chevron(c, v, P, it);
   for (const p of R.fx.parts) {
     const q = P(p.x, p.z, p.y), X = q.X, Y = q.Y, s = q.s;
     if (p.kind === 'conf') { c.fillStyle = p.c; c.save(); c.translate(X, Y); c.rotate(p.t * 5 + p.r * 6); c.fillRect(-3, -1.5, 6, 3); c.restore(); }
-    else if (p.kind === 'steam') { c.fillStyle = `rgba(255,255,255,${0.16 * (1 - p.t / p.life)})`; c.beginPath(); c.arc(X + Math.cos(p.r * 9) * s * 0.8, Y - p.t * s, s * (0.3 + p.t * 0.6), 0, TAU); c.fill(); }
+    else if (p.kind === 'steam') {
+      if (is3d()) continue; // in 3D the rim flash and the cloth net carry the make; flat puffs read as ghost discs
+      c.fillStyle = `rgba(255,255,255,${0.16 * (1 - p.t / p.life)})`; c.beginPath(); c.arc(X + Math.cos(p.r * 9) * s * 0.8, Y - p.t * s, s * (0.3 + p.t * 0.6), 0, TAU); c.fill(); }
     else { c.fillStyle = p.c; c.globalAlpha = 1 - p.t / p.life; c.beginPath(); c.arc(X, Y, Math.max(1.5, s * 0.12), 0, TAU); c.fill(); c.globalAlpha = 1; }
   }
   for (const p of R.fx.pops) {
     const q = P(p.x, p.z, p.y);
+    if (q.X < 0 || q.X > v.W || q.Y < 0 || q.Y > v.H || q.vis === false) continue; // its rim or player is off screen
     const X = clamp(q.X, 70, v.W - 70), Y = clamp(q.Y - p.t * q.s * 2.2, 40, v.H - 30);
     const size = Math.round(clamp(q.s * (p.big ? 1.6 : 1.05), p.big ? 26 : 17, p.big ? 54 : 34));
     c.font = `400 ${Math.round(size * 1.25)}px "Bebas Neue", "Arial Black", Impact, sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
@@ -172,14 +176,36 @@ function drawHud(c, v, P, scene) {
   if (scene.offscreen) offscreenArrow(c, v, P, scene.offscreen);
   if (scene.letterbox) { const h = Math.round(v.H * 0.07); c.fillStyle = '#000'; c.fillRect(0, 0, v.W, h); c.fillRect(0, v.H - h, v.W, h); }
   if (scene.banner) banner(c, v, scene.banner);
-  if (scene.slam) slamCallout(c, v, scene.slam);
+  R.slamBox = null;
+  // a cinematic close camera (replays, close-ups) carries the moment itself: no card over the ball
+  if (scene.slam && !(is3d() && G3.camOverride && !G3.camOverride.attract)) slamCallout(c, v, P, scene);
+}
+
+// A loose ball in 3D gets a soft dark halo, so it reads against the crowd and the floor alike (the ball itself
+// stays clear: the halo starts outside its edge).
+function ballHalo(c, P, b) {
+  if (!b || b.state === 'held' || b.state === 'dead' || b.y < 1.2) return;
+  const q = P(b.x, b.z, b.y), r = Math.max(4, q.s * 0.45);
+  const g = c.createRadialGradient(q.X, q.Y, r * 1.12, q.X, q.Y, r * 5);
+  g.addColorStop(0, 'rgba(8,6,12,0.72)'); g.addColorStop(0.4, 'rgba(8,6,12,0.45)'); g.addColorStop(1, 'rgba(8,6,12,0)');
+  c.fillStyle = g; c.beginPath(); c.arc(q.X, q.Y, r * 5, 0, TAU); c.arc(q.X, q.Y, r * 1.12, 0, TAU, true); c.fill();
 }
 
 // big-play callout: a slanted plate in the scoring team's color with speed streaks; slides in, holds, fades
-function slamCallout(c, v, s) {
-  const t = s.t, inT = Math.min(1, t / 0.14), out = t > 0.8 ? 1 - (t - 0.8) / 0.2 : 1;
+function slamCallout(c, v, P, scene) {
+  const s = scene.slam;
+  const t = s.t, inT = Math.min(1, t / 0.14), out = t > 0.75 ? 1 - (t - 0.75) / 0.25 : 1;
   const size = Math.round(clamp(v.W * 0.085, 40, 92));
-  const y = v.H * (v.portrait ? 0.58 : 0.72);
+  // keep clear of the rim it went through and of the ball: try a few bands, take the first one free of both
+  const keep = [];
+  if (s.side != null) { const r = P(COURT.rimX[s.side], COURT.rimZ, COURT.rimY); keep.push({ x: r.X - 3 * r.s, y: r.Y - 4.5 * r.s, w: 6 * r.s, h: 9 * r.s }); }
+  if (scene.ball) { const b = P(scene.ball.x, scene.ball.z, Math.max(0.4, scene.ball.y)); keep.push({ x: b.X - 2 * b.s - 10, y: b.Y - 2 * b.s - 10, w: 4 * b.s + 20, h: 4 * b.s + 20 }); }
+  const hPx = size * 1.15 + 12 + size * 0.5, wPx = Math.min(v.W, size * 5.4);
+  const bands = v.portrait ? [0.62, 0.8, 0.4] : [0.72, 0.5, 0.86];
+  const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  let y = v.H * bands[0];
+  for (const f of bands) { const box = { x: v.W / 2 - wPx / 2, y: v.H * f - hPx / 2, w: wPx, h: hPx }; if (!keep.some((k) => hit(box, k))) { y = v.H * f; break; } }
+  R.slamBox = { x: Math.round(v.W / 2 - wPx / 2), y: Math.round(y - hPx / 2), w: Math.round(wPx), h: Math.round(hPx) };
   const slide = R.reduced ? 0 : (1 - inT) * v.W * 0.4;
   c.save();
   c.globalAlpha = Math.max(0, out);
@@ -232,7 +258,7 @@ function ring(c, v, it) {
 }
 function chevron(c, v, P, it) {
   const q = P(it.pl.x, it.pl.z, (it.pl.y || 0) + it.r.height / 12 + 0.7);
-  const s = Math.max(14, q.s), X = q.X, top = is3d() && v.W >= 760 ? Math.max(q.Y, 96 + s) : q.Y; // clear of the floating score bug
+  const s = clamp(q.s, 14, 24), X = q.X, top = is3d() && v.W >= 760 ? Math.max(q.Y, 96 + s) : q.Y; // clear of the floating score bug
   c.fillStyle = '#FFD84D'; c.strokeStyle = '#14121F'; c.lineWidth = 2;
   c.beginPath(); c.moveTo(X - s * 0.5, top - s * 0.55); c.lineTo(X + s * 0.5, top - s * 0.55); c.lineTo(X, top); c.closePath(); c.fill(); c.stroke();
   const fs = Math.round(clamp(s * 0.6, 11, 18));

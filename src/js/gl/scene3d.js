@@ -12,6 +12,8 @@ import { HQ } from './hq.js';
 import { fmtClock } from '../util.js';
 import { CORE } from './build-info.js';
 import { makePost } from './post.js';
+import { A as ANIM, loadAnims } from './anim-mixer.js';
+import { IK } from './ik.js';
 
 const HL = COURT.L / 2, HW = COURT.W / 2;
 export const G3 = {
@@ -137,7 +139,7 @@ function init(stage) {
   G3.probe = makeProbe(r, G3.tier === 'high' ? 256 : G3.tier === 'medium' ? 128 : 64);
   G3.post = makePost(r, G3.scene, G3.camera, G3.tier);
   G3.P = project;
-  if (window.__TEST__) window.__G3 = G3; // test and debug access
+  if (window.__TEST__) { window.__G3 = G3; window.__ANIM = ANIM; } // test and debug access
 }
 
 function ballTexture() {
@@ -321,6 +323,8 @@ export function draw3d(scene, fx) {
   G3.time += dt; G3.frames++;
   const canSwap = !scene.m || scene.m.phase !== 'live' || !!G3.camOverride || !!scene.reduced;
   ensureVenue(scene.venue, canSwap);
+  if (ANIM.clips) ANIM.stats.frames = (ANIM.stats.frames || 0) + 1;
+  if (!ANIM.clips && HQ.packages.anims && HQ.packages.anims['anims.json']) { try { loadAnims(HQ.packages.anims); } catch (e) { console.info('[hq] anims:', e.message); HQ.packages.anims = null; } }
   if (canSwap && !G3.hqPlayers && HQ.packages['players-hq'] && HQ.packages['players-hq']['players-hq.glb']) swapPlayersHQ();
   // the nearest player to the camera sets the bottom of the broadcast frame (no empty wood under the play)
   // (only players inside the frame horizontally count, judged from the last frame's camera)
@@ -336,7 +340,7 @@ export function draw3d(scene, fx) {
   // players
   const seen = new Set();
   const ball = scene.ball;
-  let handPos = null;
+  let handPos = null, handScale = 0;
   for (const it of scene.players || []) {
     const pl = it.pl;
     const idx = pl.idx ?? 0;
@@ -356,9 +360,11 @@ export function draw3d(scene, fx) {
       ballX: ball ? ball.x : HL, ballZ: ball ? ball.z : HW, meterF: Math.min(1, (pl.meter || 0) / 1.0), released: !hasBall,
       dribbleY: hasBall ? Math.max(0, Math.min(1, (ball.y - 0.4) / ((it.r.height / 12) * 0.5))) : 0,
       holdBall: hasBall && m && (m.phase === 'inbound' || m.phase === 'ft' || m.phase === 'dead'),
+      // the sim's bounce: ball height = |sin(dp)|; 0 on the floor, 0.5 at the top (in the hand)
+      dribblePhase: hasBall && ball.dp != null ? (ball.dp / Math.PI) % 1 : null,
     };
     const hp = updatePlayer(pm, ctx);
-    if (hasBall) handPos = hp.clone();
+    if (hasBall) { handPos = hp.clone(); handScale = pm.root.scale.x; }
     if (it.user) { G3.userRing.visible = true; G3.userRing.position.x = pl.x - HL; G3.userRing.position.z = pl.z - HW; }
   }
   if (!(scene.players || []).some((it) => it.user)) G3.userRing.visible = false;
@@ -404,8 +410,11 @@ export function draw3d(scene, fx) {
     if (handPos && ball.state === 'held') {
       const pl = (scene.players || []).find((it) => it.pl.hasBall);
       const shooting = pl && (pl.pl.act === 'shoot' || pl.pl.act === 'layup');
-      if (shooting || ctx0(m)) B.position.set(handPos.x, handPos.y + 0.35, handPos.z);
-      else B.position.set(handPos.x, Math.min(handPos.y - 0.3, ball.y), handPos.z);
+      // handPos is the ball's seat in the palm; on the dribble the ball drops away below the hand
+      B.position.copy(handPos);
+      if (!shooting && !ctx0(m)) B.position.y = Math.min(handPos.y, ball.y);
+      // the ball sits in the palm whenever it isn't dropping away on the dribble (model metres, for the tests)
+      else if (handScale) G3.ballErr = Math.max(G3.ballErr || 0, B.position.distanceTo(handPos) / handScale);
       if (B.position.y < 0.4) B.position.y = 0.4;
     } else B.position.set(ball.x - HL, Math.max(0.4, ball.y), ball.z - HW);
     const d = B.position.distanceTo(prev);
@@ -484,7 +493,11 @@ export function draw3d(scene, fx) {
   const t1 = performance.now();
   const t2 = performance.now();
   r.shadowMap.needsUpdate = true;
-  if (G3.post) G3.post.render(dt); else r.render(G3.scene, G3.camera);
+  if (G3.post) {
+    const co = G3.camOverride, cinema = !!(co && !co.attract && co.focus);
+    if (cinema) G3.post.setCinema(true, (G3._focus || (G3._focus = new THREE.Vector3())).set(co.focus[0] - HL, 4.5, co.focus[1] - HW)); else G3.post.setCinema(false);
+    G3.post.render(dt);
+  } else r.render(G3.scene, G3.camera);
   const t3 = performance.now();
   const pf = G3.prof || (G3.prof = { n: 0, js: 0, refl: 0, main: 0 });
   pf.n++; pf.js += t1 - t0; pf.refl += t2 - t1; pf.main += t3 - t2;
@@ -528,10 +541,14 @@ export function setTier(t) {
   resize3d(G3.W, G3.H, window.devicePixelRatio || 1);
 }
 
+export function animCtl(o) {
+  if (o === 'reset') { ANIM.stats = { players: 0, ms: 0, frames: 0 }; ANIM.seen.clear(); IK.maxResid = 0; IK.slips = 0; IK.locked = 0; G3.ballErr = 0; }
+  else if (o === 'proc' || o === 'mixer') ANIM.mode = o; else ANIM.lab = o || null; return { mode: ANIM.mode, lab: ANIM.lab, clips: ANIM.clips ? Object.fromEntries(Object.entries(ANIM.clips).map(([k, c]) => [k, +c.dur.toFixed(3)])) : {} }; }
 export function info3d() {
   if (G3.state !== 'ready') return { state: G3.state, err: G3.err };
   const i = G3.renderer.info;
   return { state: G3.state, tier: G3.tier, prof: G3.prof ? { ...G3.prof } : null, calls: i.render.calls, tris: i.render.triangles, geos: i.memory.geometries, texs: i.memory.textures, venue: G3.venueKey, frames: G3.frames,
     hqVenue: !!(G3.venue && G3.venue.hq), hqPlayers: !!G3.hqPlayers,
+    anim: { mode: ANIM.clips ? ANIM.mode : 'proc', clips: ANIM.clips ? Object.keys(ANIM.clips).length : 0, msPer: ANIM.stats.players ? +(ANIM.stats.ms / ANIM.stats.players).toFixed(4) : 0, footResidCm: +(IK.maxResid * 100).toFixed(2), slips: IK.slips, locked: IK.locked, worst: IK.worst, seen: [...ANIM.seen], ballErrCm: +((G3.ballErr || 0) * 100).toFixed(2), frames: ANIM.stats.frames || 0 },
     cam: { x: +G3.camera.position.x.toFixed(1), y: +G3.camera.position.y.toFixed(1), z: +G3.camera.position.z.toFixed(1), fov: G3.camera.fov } };
 }

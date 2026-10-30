@@ -81,6 +81,14 @@ for (const kind of ['gym', 'arena']) {
   packages['players-hq'] = { prio: 3, tiers: { high: [glb], medium: [glb] } };
 }
 
+// ---- anims (tools/build-anims.mjs: retargeted CMU clips + keyed clips)
+{
+  const { buildAnims } = await import('./build-anims.mjs');
+  const { files: af, list } = await buildAnims();
+  for (const [f, b] of Object.entries(af)) { fs.writeFileSync(path.join(HQ, f), b); files[f] = { bytes: b.length }; }
+  packages.anims = { prio: 4, tiers: { high: list, medium: list } };
+}
+
 await browser.close();
 // delete orphans, write the manifest
 for (const f of fs.readdirSync(HQ)) if (f !== 'manifest.json' && !files[f]) fs.rmSync(path.join(HQ, f));

@@ -73,6 +73,11 @@ if (fs.existsSync(bench)) {
 }
 await browser.close();
 
+// close strips: desktop bursts cropped to one player
+for (const [name, pl] of [['jumper', '0'], ['drive', '0'], ['dunk', '4'], ['open-play', null]]) {
+  if (!fs.existsSync(path.join(base, 'desktop', 'bursts', name))) continue;
+  run('tools/strip.mjs', ms, name, ...(pl ? ['--player', pl] : []), '--out', path.join(out, 'bursts', `desktop-${name}-close.png`));
+}
 const list = (d) => (fs.existsSync(path.join(out, d)) ? fs.readdirSync(path.join(out, d)).filter((f) => !fs.statSync(path.join(out, d, f)).isDirectory()).sort() : []);
 const md = `# Review packet: ${ms}
 
@@ -84,7 +89,9 @@ ${prev ? `Before/after pairs compare with round \`${prev}\`.` : 'This is a basel
 - \`sheets/\`: contact sheets of every still (${list('sheets').join(', ')})
 - \`stills/<viewport>/\`: full-size stills. Open these for detail; cite them by name.
 - \`bursts/\`: motion strips, frames in order (${list('bursts').join(', ')}). Each burst steps the game a fixed number of
-  sim ticks per frame (1 tick = 1/60 s): jumper 3, drive 3, open-play 4, make-wide 5, net-close 2.
+  sim ticks per frame (1 tick = 1/60 s): jumper 3, drive 3, dunk 3, open-play 4, make-wide 5, net-close 2.
+  \`desktop-<name>-close.png\`: the same desktop frames cropped and enlarged around one player (the shooter, the
+  dunker, or the ball handler) to judge body motion.
 - \`video/\`: a real-time recording of open play (webm), when present.
 - \`probe/\`: \`probe.json\` and annotated frames. Green dots are floor samples, red dots crowd samples, cyan boxes
   players (feet to 6.2 ft), the yellow ring the ball surround, magenta boxes the rims.

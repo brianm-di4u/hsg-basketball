@@ -3,6 +3,8 @@
 // by the sim's actions. Display only: nothing here feeds back into the rules.
 /* global THREE */
 import { COURT } from '../court.js';
+import { mix, makePose, blendPose, MASKS } from './anim-mixer.js';
+import { solveLegs } from './ik.js';
 
 const TAU = Math.PI * 2;
 const MODEL_H = 1.86; // rest height of the Blender bodies, metres
@@ -322,6 +324,28 @@ export function makePlayer(build) {
     const model = b.getWorldQuaternion(new THREE.Quaternion()).premultiply(rigQInv);
     bones[n] = { b, rest: b.quaternion.clone(), model, inv: model.clone().invert() };
   }
+  // clips lower and raise the hips: model +y in the hips' parent frame, in rig units
+  const hb = bones.hips.b, hp = hb.parent;
+  const toParent = new THREE.Matrix4().copy(hp.matrixWorld).invert().multiply(rig.matrixWorld);
+  const hipUp = new THREE.Vector3(0, 1, 0).transformDirection(toParent).multiplyScalar(1 / new THREE.Vector3().setFromMatrixScale(toParent).x);
+  // the ball sits in the right palm: midway along the hand toward the knuckles, a ball's radius off the palm
+  const mPos = (name) => { const o = rig.getObjectByName(name); return o ? o.getWorldPosition(new THREE.Vector3()).applyMatrix4(new THREE.Matrix4().copy(rig.matrixWorld).invert()) : null; };
+  const hR = mPos('hand_R'), knR = mPos('middle_01_r') || mPos('forearm_R').sub(hR).multiplyScalar(-0.45).add(hR);
+  const sock = hR.clone().lerp(knR, 0.75).add(new THREE.Vector3(0.11, 0.0, 0.03));
+  const socket = sock.applyMatrix4(rig.matrixWorld).applyMatrix4(new THREE.Matrix4().copy(bones.hand_R.b.matrixWorld).invert());
+  // finger chains (HQ only): curl axis per segment in the model frame
+  const fingers = [];
+  for (const side of ['l', 'r']) for (const f of ['thumb', 'index', 'middle', 'ring', 'pinky']) {
+    for (let k = 1; k <= 3; k++) {
+      const b = rig.getObjectByName(`${f}_0${k}_${side}`); if (!b) continue;
+      const a0 = mPos(b.name), a1 = k < 3 ? mPos(`${f}_0${k + 1}_${side}`) : a0.clone().add(a0.clone().sub(mPos(`${f}_0${k - 1}_${side}`)));
+      const dir = a1.sub(a0).normalize();
+      const palm = new THREE.Vector3(side === 'l' ? -1 : 1, 0, 0.25).normalize(); // palms face the thighs in the rest pose
+      const axis = new THREE.Vector3().crossVectors(palm, dir).normalize();
+      const model = b.getWorldQuaternion(new THREE.Quaternion()).premultiply(rigQInv);
+      fingers.push({ b, rest: b.quaternion.clone(), model, inv: model.clone().invert(), axis, thumb: f === 'thumb', k, side });
+    }
+  }
   const hairMat = new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0 });
   const numMatF = new THREE.MeshStandardMaterial({ transparent: true, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -2, depthWrite: false });
   const numMatB = numMatF.clone();
@@ -330,7 +354,8 @@ export function makePlayer(build) {
   const front = new THREE.Mesh(plane, numMatF); front.position.set(...(meta ? meta.numFront : [0, 1.32, 0.15]));
   const back = new THREE.Mesh(plane, numMatB); back.position.set(...(meta ? meta.numBack : [0, 1.35, -0.136])); back.rotation.y = Math.PI;
   attach(rig, 'chest', front); attach(rig, 'chest', back);
-  const pm = { root, rig, mesh, mat, bones, build, hq: P3.hq, meta, hair: null, hairMat, front, back, numMatF, numMatB, key: '', st: null };
+  const pm = { root, rig, mesh, mat, bones, build, hq: P3.hq, meta, hair: null, hairMat, front, back, numMatF, numMatB, key: '', st: null,
+    hipRest: hb.position.clone(), hipUp, socket, fingers, proc: makePose(), ankH: mPos('foot_L').y };
   return pm;
 }
 
@@ -373,6 +398,36 @@ function applyPose(pm, pose) {
     q.setFromEuler(e);
     q.premultiply(B.inv).multiply(B.model);
     B.b.quaternion.copy(B.rest).multiply(q);
+  }
+}
+
+// the same, from a clip pose (quaternion turns per bone, a hips height change in model metres)
+function applyPoseQ(pm, pose) {
+  const q = P3.tmpQ;
+  for (const n of BONES) {
+    const B = pm.bones[n];
+    q.copy(pose.q[n]).premultiply(B.inv).multiply(B.model);
+    B.b.quaternion.copy(B.rest).multiply(q);
+  }
+  pm.bones.hips.b.position.copy(pm.hipRest).addScaledVector(pm.hipUp, pose.dy);
+}
+// Euler poses (poseFor) as quaternions, to layer the procedural parts over the clips
+function eulerToQ(P, out) {
+  const e = P3.tmpE;
+  for (const n of BONES) { const d = P[n]; if (d) { e.set(d[0], d[1], d[2], 'YXZ'); out.q[n].setFromEuler(e); } else out.q[n].identity(); }
+  out.dy = 0; out.c = 0;
+  return out;
+}
+// fingers: a relaxed curl, closing around the ball when it is in the hand (HQ bodies have finger bones)
+const _fq = { q: null };
+function poseFingers(pm, grip, gripL) {
+  if (!pm.fingers.length) return;
+  const q = _fq.q || (_fq.q = new THREE.Quaternion());
+  for (const F of pm.fingers) {
+    const g = F.side === 'r' ? grip : gripL;
+    const a = F.thumb ? 0.15 + 0.25 * g : (F.k === 1 ? 0.25 + 0.35 * g : 0.35 + 0.3 * g);
+    q.setFromAxisAngle(F.axis, a).premultiply(F.inv).multiply(F.model);
+    F.b.quaternion.copy(F.rest).multiply(q);
   }
 }
 
@@ -491,8 +546,23 @@ export function updatePlayer(pm, ctx) {
   pm.root.position.set(pl.x - COURT.L / 2, pl.y || 0, pl.z - COURT.W / 2);
   pm.root.rotation.y = st.head;
   pm.root.scale.setScalar(sc);
-  applyPose(pm, poseFor(pm, ctx));
-  const hand = pm.bones.hand_R.b;
+  const P = poseFor(pm, ctx);
+  st.hash = st.hash ?? ((ctx.r.num || 0) * 7 + (ctx.r.id ? String(ctx.r.id).length : 3));
+  ctx.hash = st.hash;
+  const clipPose = pm.noClips ? null : mix(st, ctx, sc);
+  if (clipPose) {
+    // the procedural layers the clips don't cover: defensive hands, the two-hand hold, the head turned to the ball
+    const proc = eulerToQ(P, pm.proc);
+    if (ctx.defending && !ctx.chasing && !ctx.pl.act?.match(/jump|steal/)) blendPose(clipPose, proc, 0.85, MASKS.UPPER);
+    if (ctx.holdBall) blendPose(clipPose, proc, 1, MASKS.UPPER);
+    const e = P3.tmpE, q = P3.tmpQ;
+    for (const n of ['neck', 'head']) { e.set(0, ctx.lookYaw * 0.35, 0, 'YXZ'); q.setFromEuler(e); clipPose.q[n].premultiply(q); }
+    applyPoseQ(pm, clipPose);
+    st.dy = clipPose.dy; st.c = clipPose.c;
+  } else { applyPose(pm, P); pm.bones.hips.b.position.copy(pm.hipRest); st.c = -1; }
+  poseFingers(pm, ctx.hasBall ? 1 : 0, ctx.hasBall && (ctx.holdBall || ctx.pl.act === 'shoot' || ctx.pl.act === 'layup') ? 0.8 : 0);
   pm.root.updateMatrixWorld(true);
-  return hand.getWorldPosition(P3.tmpV);
+  if (clipPose) solveLegs(pm, st, ctx);
+  const hand = pm.bones.hand_R.b;
+  return P3.tmpV.copy(pm.socket).applyMatrix4(hand.matrixWorld);
 }

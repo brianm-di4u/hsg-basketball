@@ -8,7 +8,7 @@
 // Without --gpu (software WebGL) only the first still is taken, to keep `npm test` fast.
 import fs from 'node:fs';
 import path from 'node:path';
-import { FORCE_3D, ready3d, SEEDS, shotFromInPage, cshot, meta, saveMeta, burst } from './helpers.mjs';
+import { FORCE_3D, ready3d, hqSettled, SEEDS, shotFromInPage, cshot, meta, saveMeta, burst } from './helpers.mjs';
 
 const G = (t, fn, ...a) => t.page.evaluate(fn, a);
 // a big step(n) draws a single frame; a second of short steps lets the camera settle as it does in real play
@@ -46,7 +46,7 @@ export const tests = [
       await ready3d(t);
       await installShotFrom(t);
       // streamed HQ art settles first (or fails, or is off): every still shows the build the player gets
-      await t.page.waitForFunction(() => { const h = window.__game.getState().gfx.hq; return h && !['off', 'loading'].includes(h.state); }, null, { timeout: 60000 });
+      await hqSettled(t);
       await t.page.waitForTimeout(1200); // the title's attract camera settles in real time
       await cshot(t, 'c01-title');
       if (!t.gpu) { t.log('software GL: first still only; run with --gpu for the full capture'); return; }
@@ -121,6 +121,7 @@ export const tests = [
     async run(t) {
       if (!t.gpu) return;
       await ready3d(t);
+      await hqSettled(t);
       await installShotFrom(t);
       // the jumper: gather → set point → release → flight → rim
       await setJumper(t);
@@ -128,7 +129,11 @@ export const tests = [
       // a drive to the rim (layup or dunk, whichever the sim picks)
       await liveGame(t, { seed: 12, home: 'hot-springs', away: 'lakeside' });
       await G(t, () => { const g = window.__game; g.act('give', 0, 0); g.act('place', 0, 0, 80, 22); for (let s = 0; s < 5; s++) g.act('place', 1, s, 40, 5 + s * 10); g.step(1); g.act('input', { mx: 1, mz: 0.3 }); });
-      await burst(t, 'drive', { frames: 16, every: 3, onFrame: (k) => k === 4 && G(t, () => { window.__game.act('input', { mx: 0, mz: 0 }); window.__game.act('shootAt', 1); }) });
+      await burst(t, 'drive', { frames: 16, every: 3, onFrame: (k) => k === 6 && G(t, () => { window.__game.act('input', { mx: 0, mz: 0 }); window.__game.act('shootAt', 1); }) });
+      // a dunk: the center at speed just outside the restricted area (the sim picks a dunk for a fast, long reach)
+      await liveGame(t, { seed: 12, home: 'hot-springs', away: 'lakeside', user: 'none' });
+      await G(t, () => { const g = window.__game; g.act('give', 0, 4); g.act('place', 0, 4, 84.6, 25); for (let s = 0; s < 5; s++) g.act('place', 1, s, 40, 5 + s * 10); g.act('push', 0, 4, 14, 0); g.act('shootAt', 1); });
+      await burst(t, 'dunk', { frames: 16, every: 3 });
       // open play: running, dribbling, defensive slides
       await liveGame(t, { seed: 14, home: 'lake-hamilton', away: 'hot-springs', user: 'none' });
       await t.game('step', 240);

@@ -7,7 +7,7 @@ import { createSeason, teamFor, nextGame, recordResult, simCurrent } from './sea
 import { createShootout, shootoutTick, forceShootoutShot, SPOTS } from './shootout.js';
 import { challenge } from './challenges.js';
 import { R, initRender, resize, draw, pop, burst, shake, netHit, rimHit, confetti, is3d } from './render.js';
-import { G3, load3d, pickTier, info3d, glProbe, resize3d, setTier } from './gl/scene3d.js';
+import { G3, load3d, pickTier, info3d, glProbe, resize3d, setTier, animCtl } from './gl/scene3d.js';
 import { startHQ, hqInfo } from './gl/hq.js';
 import { CREST_KEYS, crestURL } from './art.js';
 import { I, initInput, initTouch, setEnabled, drain } from './input.js';
@@ -377,8 +377,8 @@ function endShootout() {
 const REC = { buf: [], max: 240 };
 function record(m) {
   REC.buf.push({
-    b: [m.ball.x, m.ball.y, m.ball.z, m.ball.state, m.ball.holder],
-    p: m.p.map((q) => [q.x, q.z, q.y, q.vx, q.vz, q.act, q.meter, q.face, q.run]),
+    b: [m.ball.x, m.ball.y, m.ball.z, m.ball.state, m.ball.holder, m.ball.dp],
+    p: m.p.map((q) => [q.x, q.z, q.y, q.vx, q.vz, q.act, q.meter, q.face, q.run, q.actT, q.stype]),
     poss: m.poss, phase: m.phase,
   });
   if (REC.buf.length > REC.max) REC.buf.shift();
@@ -413,10 +413,10 @@ function endReplay() {
 function replayScene(m) {
   const rp = state.replay;
   const fr = rp.frames[Math.min(rp.frames.length - 1, Math.floor(rp.f))];
-  const ball = { x: fr.b[0], y: fr.b[1], z: fr.b[2], state: fr.b[3], holder: fr.b[4] };
+  const ball = { x: fr.b[0], y: fr.b[1], z: fr.b[2], state: fr.b[3], holder: fr.b[4], dp: fr.b[5] };
   const players = m.p.map((q, i) => {
     const d = fr.p[i];
-    const pl = { idx: q.idx, t: q.t, x: d[0], z: d[1], y: d[2], vx: d[3], vz: d[4], act: d[5], meter: d[6], face: d[7], run: d[8] };
+    const pl = { idx: q.idx, t: q.t, x: d[0], z: d[1], y: d[2], vx: d[3], vz: d[4], act: d[5], meter: d[6], face: d[7], run: d[8], actT: d[9], stype: d[10] };
     pl.hasBall = ball.holder === q.idx; pl.defending = fr.poss !== q.t && fr.phase === 'live';
     const T = m.teams[q.t];
     return { pl, r: T.roster[q.r], kit: T.kit, home: q.t === 0, user: false };
@@ -832,6 +832,7 @@ const HOOKS = {
       case 'input': { const x = a[0] || {}; I.mx = x.mx || 0; I.mz = x.mz || 0; if (x.shoot != null) { if (x.shoot && !I.shoot) I.shootP = true; if (!x.shoot && I.shoot) I.shootR = true; I.shoot = !!x.shoot; } if (x.pass) I.passP = true; if (x.switch) I.switchP = true; return true; }
       case 'shootAt': { if (!m) return false; const h = m.ball.holder; if (h < 0) return false; return forceShot(m, h, a[0]); }
       case 'give': if (!m) return false; give(m, a[0] * 5 + a[1]); return true;
+      case 'push': { if (!m) return false; const p = m.p[a[0] * 5 + a[1]]; p.vx = a[2]; p.vz = a[3]; return true; } // test: give a placed player speed
       case 'place': { if (!m) return false; const p = m.p[a[0] * 5 + a[1]]; p.x = p.tx = a[2]; p.z = p.tz = a[3]; p.vx = p.vz = 0; return true; }
       case 'foul': if (!m) return false; commitFoul(m, a[0], a[1] || 'reach'); return true;
       case 'ftStop': if (!m || !m.ft) return false; m.ft.force = a[0]; return true;
@@ -867,6 +868,7 @@ const HOOKS = {
       }
       case 'gfx': Object.assign(G3.flags, a[0] || {}); if (a[1]) setTier(a[1]); drawFrame(0); return { ...G3.flags, tier: G3.tier };
       case 'cam': G3.camOverride = a[0] || null; R.snap = true; drawFrame(0); return true;
+      case 'anim': { const r = animCtl(a[0]); drawFrame(0); return r; } // 'proc' | 'mixer' | a lab pose { clip, t, mirror } | null
       case 'replay': { if (!m) return false; state.replayPending = { kind: a[0] || 'THREE', side: a[1] ?? rimSide(m.ball.x) }; const ok = startReplay(); if (ok && a[2] != null) state.replay.f = a[2] * (state.replay.frames.length - 1); drawFrame(0); return ok; }
       case 'endReplay': if (state.replay) endReplay(); drawFrame(0); return true;
       case 'roster': return makeRoster(a[0], a[1], a[2] || team(a[0]).cls, a[3] || 1);

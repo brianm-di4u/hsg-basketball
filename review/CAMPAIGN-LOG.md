@@ -265,3 +265,28 @@ crowd's style clash. Those are M4-M6.
   - officials: a body preset, so no shorts silhouette over slacks
   - the close-camera foreground hand; the mobile card margin (12 of 32 device px)
   - spacing in player clumps
+
+## M5: animation (in progress)
+- **Sources:** 20 CMU mocap takes (BVH, Hahne 2010 conversion; free for any use, credited in
+  `art-src/anim/SOURCES.md`), fetched into the ignored `art-src/anim/cmu/`.
+- **Retarget** (`art-src/blender/anim/retarget_cmu.py`, Blender headless on `players-hq.blend`): per bone and
+  frame, the performer's world change with the take's smoothed heading removed, corrected from their T-pose to our
+  A-pose rest direction, then made local (Δ = T(parent)⁻¹ · T(bone)). Stored in the runtime's own pose space (turns
+  in the character frame on top of rest), so the same data drives the HQ bodies and the lite mannequins. Loops are
+  closed by spreading the seam error over the cycle. Hips height and foot contacts come with each clip.
+- **Clips:** CMU jog, run, defensive slide (legs), dribble and crossover (upper body), jump shot (legs, trunk,
+  timing), jump (block base). Keyed (`art-src/anim/keyed.mjs`): idle, defensive stance, layup, one- and two-hand
+  dunks, chest pass, steal, block arms, jump-shot arms (the CMU performer shot a set shot from the chin),
+  3 celebrations. 20 clips, 98 KB in the streamed `anims` package.
+- **Runtime:** `anim-mixer.js` (stance ↔ jog ↔ run by speed with one stride phase, slide mirrored by direction,
+  dribble layer timed to the sim's bounce, crossover on cut-backs, one-shots timed by the shot meter to the release
+  then real time, crossfades 0.12-0.15 s); procedural layers kept for defensive hands, the two-hand hold and the
+  head turned to the ball; finger curl and grip on HQ hands; the ball seated in the right palm. `ik.js`: two-bone
+  leg IK holds planted feet (horizontal lock, the clip's heel height) and keeps feet out of the floor.
+- **Replays:** snapshots now carry `actT`, `stype` and the bounce phase; replays and close-ups get depth of field
+  focused on the shooter, a camera-motion blur rebuilt from depth (high, cut-aware) and a vignette.
+- **Gates** (`tests/anim.test.mjs`, GPU): clips load and drive players; foot-lock residual 0 cm (< 4); ball in
+  the palm < 6 cm; a drive plays a layup or dunk clip; the procedural fallback renders; mixer 0.67 ms per frame for
+  12 players at 4× CPU throttle (≤ 1.5).
+- **Tools:** `tools/build-anims.mjs` (also run by build-hq), `tests/animlab.test.mjs` (pose sheets per clip),
+  `tools/strip.mjs` (burst strips cropped to one player).

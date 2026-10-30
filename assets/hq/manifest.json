@@ -50,6 +50,19 @@
      "players-hq.9a354206.glb"
     ]
    }
+  },
+  "anims": {
+   "prio": 4,
+   "tiers": {
+    "high": [
+     "anims.a5314179.json",
+     "anims.272169b8.bin"
+    ],
+    "medium": [
+     "anims.a5314179.json",
+     "anims.272169b8.bin"
+    ]
+   }
   }
  },
  "files": {
@@ -85,6 +98,12 @@
   },
   "players-hq.9a354206.glb": {
    "bytes": 2258008
+  },
+  "anims.a5314179.json": {
+   "bytes": 12384
+  },
+  "anims.272169b8.bin": {
+   "bytes": 88008
   }
  }
 }

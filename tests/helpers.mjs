@@ -83,6 +83,11 @@ import path from 'node:path';
 // "Graphics: 3D gym" through saved settings: the harness's software GL would otherwise keep the 2D court.
 export const FORCE_3D = () => { try { localStorage.setItem('hsg-hoops-v1', JSON.stringify({ v: 1, settings: { graphics: '3d' } })); } catch (e) { /* storage blocked */ } };
 
+// streamed HQ art settles (or fails, or is off) before a capture: every frame shows the build the player gets
+export async function hqSettled(t) {
+  await t.page.waitForFunction(() => { const h = window.__game.getState().gfx.hq; return h && !['off', 'loading'].includes(h.state); }, null, { timeout: 60000 });
+}
+
 export async function ready3d(t) {
   await t.page.waitForFunction(() => {
     const g = window.__game && window.__game.getState().gfx;

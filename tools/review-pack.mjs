@@ -20,6 +20,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+// Benchmark screenshots (git-ignored): the workspace's shared reference/benchmarks/basketball/, else benchmarks/ here.
+const BENCH = [path.resolve(root, '..', '..', 'reference', 'benchmarks', 'basketball'), BENCH].find((d) => fs.existsSync(d)) || BENCH;
 const args = process.argv.slice(2);
 const ms = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--prev');
 const prev = args.includes('--prev') ? args[args.indexOf('--prev') + 1] : null;
@@ -65,7 +67,7 @@ for (const vp of ['desktop', 'mobile']) {
   }
   copyDir(path.join(dir, 'video'), path.join(out, 'video'));
 }
-const bench = path.join(root, 'benchmarks');
+const bench = BENCH;
 if (fs.existsSync(bench)) {
   const imgs = fs.readdirSync(bench).filter((f) => /\.(jpe?g|png)$/i.test(f)).sort().map((f) => path.join(bench, f));
   for (let i = 0; i < imgs.length; i += 6) await tile(imgs.slice(i, i + 6), 2, 760, path.join(out, 'benchmarks', `benchmarks-${String(i / 6 + 1).padStart(2, '0')}.png`));

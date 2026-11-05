@@ -1,3 +1,4 @@
+import { validSave } from './save-policy.js';
 // Small shared helpers: seeded RNG, math, hashing and guarded storage.
 
 // mulberry32 stepped on a plain object ({rs}) so the RNG state lives inside JSON game state.
@@ -49,6 +50,15 @@ export function loadSave() {
     const raw = window.localStorage.getItem(KEY);
     return raw ? JSON.parse(raw) : null;
   } catch (e) { store.ok = false; return null; }
+}
+// Read failures and unsupported records never grant permission to overwrite storage.
+export function readSaveSnapshot() {
+  try {
+    const raw = window.localStorage.getItem(KEY);
+    if (raw === null) return { kind: 'absent', value: null };
+    let value; try { value = JSON.parse(raw); } catch { return { kind: 'invalid', value: null }; }
+    return validSave(value) ? { kind: 'current', value } : { kind: 'invalid', value: null };
+  } catch { store.ok = false; return { kind: 'unavailable', value: null }; }
 }
 export function writeSave(obj) {
   try { window.localStorage.setItem(KEY, JSON.stringify(obj)); store.ok = true; return true; }

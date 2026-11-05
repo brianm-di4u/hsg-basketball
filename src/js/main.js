@@ -13,7 +13,8 @@ import { CREST_KEYS, crestURL } from './art.js';
 import { I, initInput, initTouch, setEnabled, drain } from './input.js';
 import { AU, unlock, play, setVolume, setOn } from './audio.js';
 import { DIFF, meterQuality } from './rules.js';
-import { loadSave, writeSave, store, fmtClock, hash } from './util.js';
+import { loadSave, writeSave, readSaveSnapshot, store, fmtClock, hash } from './util.js';
+import { mergeSave, seasonText } from './save-policy.js';
 import * as UI from './ui.js';
 
 const $ = (s) => document.querySelector(s);
@@ -29,14 +30,84 @@ const IN_PLAY = new Set(['game', 'shootout']);
 const OVER_GAME = new Set(['game', 'pause', 'break', 'final', 'shootout', 'shootoutEnd', 'champion']);
 
 // ---------------------------------------------------------------- saves
-function persist() {
-  writeSave({ v: 1, settings: state.settings, season: state.season, trophies: state.save.trophies, unlocks: state.save.unlocks, best: state.save.best, challenges: state.save.challenges });
+let seasonBase = seasonText(null), setupSeasonBase = null, setupSeason = null, saveNotice = '';
+const pendingSave = { settings: {}, score: null, challenges: [], unlocks: [], trophies: [], season: null };
+const copy = x => JSON.parse(JSON.stringify(x));
+const currentSnapshot = r => r.kind === 'current' || r.kind === 'absent';
+function persist(intent = {}) {
+  Object.assign(pendingSave.settings, intent.settings || {});
+  if (Number.isFinite(intent.score) && intent.score >= 0) pendingSave.score = Math.max(pendingSave.score ?? 0, intent.score);
+  for (const k of ['challenges', 'unlocks', 'trophies']) if (intent[k]) pendingSave[k].push(...intent[k]);
+  if (intent.season) pendingSave.season = { ...intent.season, value: copy(intent.season.value) };
+  const read = readSaveSnapshot();
+  if (!currentSnapshot(read)) {
+    saveNotice = read.kind === 'invalid' ? 'The saved data could not be read safely and was left unchanged. Progress is in this tab only.' : 'Saving is unavailable. Progress is in this tab only.';
+    return { saved: false, seasonConflict: false, previousBest: null };
+  }
+  const previousBest = read.value?.best?.shootout || 0;
+  const result = mergeSave(read.value, DEFAULTS, pendingSave);
+  if (!writeSave(result.value)) {
+    // This new award passed the fresh whole-season check; retain it if durability fails.
+    if (result.seasonAccepted) for (const award of pendingSave.season.trophies || []) {
+      if (!pendingSave.trophies.some(old => seasonText(old) === seasonText(award))) pendingSave.trophies.push(copy(award));
+    }
+    saveNotice = 'Saving is unavailable. Progress is in this tab only.';
+    return { saved: false, seasonConflict: false, previousBest };
+  }
+  // Failed read/write does not consume an earned intent or advance this tab's season base.
+  state.settings = { ...DEFAULTS, ...(result.value.settings || {}) };
+  applySettings();
+  state.save.trophies = result.value.trophies || [];
+  state.save.unlocks = { throwback: false, ...(result.value.unlocks || {}) };
+  state.save.best = { shootout: 0, ...(result.value.best || {}) };
+  state.save.challenges = result.value.challenges || {};
+  pendingSave.settings = {}; pendingSave.score = null;
+  pendingSave.challenges = []; pendingSave.unlocks = []; pendingSave.trophies = [];
+  if (result.seasonAccepted) {
+    seasonBase = seasonText(result.value.season);
+    pendingSave.season = null;
+  }
+  if (result.seasonConflict) {
+    pendingSave.season.blocked = true;
+    saveNotice = 'This season changed in another tab. Its saved progress was kept. Reload to continue that season.';
+  } else saveNotice = '';
+  return { saved: true, seasonConflict: result.seasonConflict, seasonAccepted: result.seasonAccepted, previousBest };
+}
+function prepareSeasonSetup() {
+  const read = readSaveSnapshot();
+  setupSeason = currentSnapshot(read) ? read.value?.season || null : state.season;
+  setupSeasonBase = currentSnapshot(read) ? seasonText(setupSeason) : null;
+}
+function seasonWritable() {
+  const read = readSaveSnapshot();
+  const expected = pendingSave.season ? pendingSave.season.base : seasonBase;
+  if (pendingSave.season?.blocked || (currentSnapshot(read) && seasonText(read.value?.season) !== expected)) {
+    if (pendingSave.season) pendingSave.season.blocked = true;
+    saveNotice = 'This season changed in another tab. Its saved progress was kept. Reload to continue that season.';
+    render(); return false;
+  }
+  return true; // Memory play remains available; persist refuses any unsafe write.
+}
+function advanceSeason(change, awardKind) {
+  if (!seasonWritable()) return false;
+  const before = copy(state.season);
+  change();
+  const S = state.season, awards = [];
+  if (S.champion && (awardKind === 'played' || (awardKind === 'sim' && !state.save.trophies.some(t => t.seasonSeed === S.seed && t.school === S.school)))) {
+    const award = { school: S.school, program: S.program, cls: S.cls, label: 'Season ' + (state.save.trophies.length + 1) + ' state champions', record: S.w + '-' + S.l };
+    if (awardKind === 'sim') award.seasonSeed = S.seed;
+    awards.push(award); state.save.trophies.push(award);
+  }
+  const result = persist({ season: { base: pendingSave.season ? pendingSave.season.base : seasonBase, value: S, trophies: awards } });
+  if (result.seasonConflict) { state.season = before; return false; }
+  return true;
 }
 function restore() {
   const s = loadSave();
   if (!s || s.v !== 1) return;
   Object.assign(state.settings, s.settings || {});
   state.season = s.season || null;
+  seasonBase = seasonText(state.season);
   state.save.trophies = s.trophies || [];
   state.save.unlocks = { throwback: false, ...(s.unlocks || {}) };
   state.save.best = { shootout: 0, ...(s.best || {}) };
@@ -135,10 +206,22 @@ function enterGame() {
 
 // ---------------------------------------------------------------- season flow
 function startSeason(o = {}) {
-  const p = state.pick;
+  const read = readSaveSnapshot(), inSetup = state.scene === 'seasonSetup';
+  const stored = currentSnapshot(read) ? read.value?.season || null : null;
+  const actualBase = currentSnapshot(read) ? seasonText(stored) : null;
+  if (inSetup && currentSnapshot(read) && ((setupSeasonBase !== null && setupSeasonBase !== actualBase) || (setupSeasonBase === null && stored !== null))) {
+    setupSeason = stored; setupSeasonBase = actualBase;
+    saveNotice = 'The season changed in another tab while setup was open. Review the current-season warning, then Start season again only if you want to replace it.';
+    render(); return false;
+  }
+  const p = state.pick, before = state.season;
   state.season = createSeason({ school: o.school || p.school, program: o.program || p.program, length: o.length || p.length, seed: o.seed ?? (state.seed || (Date.now() & 0xfff)) });
-  persist();
-  go('hub', false);
+  const result = persist({ season: { base: actualBase, value: state.season } });
+  if (result.seasonConflict) {
+    state.season = before;
+    prepareSeasonSetup(); go('seasonSetup', false); return false;
+  }
+  go('hub', false); return true;
 }
 function playSeasonGame(o = {}) {
   const S = state.season, g = nextGame(S);
@@ -152,11 +235,7 @@ function playSeasonGame(o = {}) {
 function finishSeasonGame() {
   const m = state.match, S = state.season, ut = m.user.team;
   const wasFinal = S.phase === 'bracket' && S.bracket.round === 2;
-  recordResult(S, m.teams[ut].score, m.teams[1 - ut].score);
-  if (S.champion && wasFinal) {
-    state.save.trophies.push({ school: S.school, program: S.program, cls: S.cls, label: `Season ${state.save.trophies.length + 1} state champions`, record: `${S.w}-${S.l}` });
-  }
-  persist();
+  advanceSeason(() => recordResult(state.season, m.teams[ut].score, m.teams[1 - ut].score), wasFinal ? 'played' : null);
 }
 
 // ---------------------------------------------------------------- challenges
@@ -186,7 +265,7 @@ function challengeResult() {
   if (ok && !more) {
     state.save.challenges[c.id] = true;
     if (c.unlock) state.save.unlocks[c.unlock] = true;
-    persist();
+    persist({ challenges: [c.id], unlocks: c.unlock ? [c.unlock] : [] });
   }
   return { ok, more, note, c };
 }
@@ -220,7 +299,7 @@ function screenHTML() {
   switch (state.scene) {
     case 'title': return UI.titleScreen(st);
     case 'select': return UI.selectScreen(st);
-    case 'seasonSetup': return UI.seasonSetupScreen(st);
+    case 'seasonSetup': return UI.seasonSetupScreen({ ...st, season: setupSeason });
     case 'hub': return state.season ? UI.hubScreen(st, UI.pickFact(state.season.w * 3 + state.season.l * 7 + state.season.seed)) : UI.titleScreen(st);
     case 'roster': { const rv = state.rosterView; return UI.rosterScreen(st, rv.key, rv.program, makeRoster(rv.key, rv.program, rv.cls, rv.seed)); }
     case 'bracket': return state.season && state.season.bracket ? UI.bracketScreen(st) : '';
@@ -266,7 +345,8 @@ function render() {
   const overlay = !IN_PLAY.has(sc);
   scr.hidden = !overlay;
   if (overlay) {
-    scr.innerHTML = html;
+    const notice = saveNotice ? '<p class="warn" role="status">' + UI.esc(saveNotice) + '</p>' : '';
+    scr.innerHTML = notice ? html.replace(/(<div class="panel[^"]*">)/, '$1' + notice) : html;
     scr.classList.remove('enter'); void scr.offsetWidth; scr.classList.add('enter');
     moreCue(scr);
     state.busy = reducedMotion() ? 0 : performance.now() + 220;
@@ -362,8 +442,10 @@ function onFinal() {
 function endShootout() {
   const so = state.so;
   if (state.scene !== 'shootout') return;
-  so.newBest = so.score > (state.save.best.shootout || 0);
-  if (so.newBest) { state.save.best.shootout = so.score; persist(); }
+  const memoryBest = state.save.best.shootout || 0;
+  state.save.best.shootout = Math.max(memoryBest, so.score);
+  const saved = persist({ score: so.score });
+  so.newBest = so.score > (saved.previousBest ?? memoryBest);
   play(so.newBest ? 'win' : 'buzzer');
   announce(`Time. ${so.score} points.`);
   go('shootoutEnd', false);
@@ -664,7 +746,7 @@ const ACT = {
   back,
   hub: () => { state.stack = []; go('hub', false); },
   select: () => go('select'),
-  seasonSetup: () => go('seasonSetup'),
+  seasonSetup: () => { prepareSeasonSetup(); go('seasonSetup'); },
   continueSeason: () => { state.stack = ['title']; go('hub', false); },
   shootoutSetup: () => go('shootoutSetup'),
   challenges: () => go('challenges'),
@@ -697,7 +779,7 @@ const ACT = {
   rematch: () => { state.match = startMatch({ ...state.lastOpts, seed: undefined }); enterGame(); },
   startSeason: () => startSeason(),
   playSeason: () => playSeasonGame(),
-  simSeason: () => { simCurrent(state.season); persist(); if (state.season.champion) { addSimTrophy(); go('champion', false); } else render(); },
+  simSeason: () => { if (!advanceSeason(() => simCurrent(state.season), 'sim')) return; if (state.season.champion) go('champion', false); else render(); },
   afterSeasonGame: () => { state.match = null; if (state.season.champion && state.season.done) go('champion', false); else { state.stack = ['title']; go('hub', false); } },
   playChallenge: (a) => { const [id, prog] = a.split('|'); startChallenge(id, prog); },
   afterChallenge: () => { const cr = state.chalResult; state.chalResult = null; if (cr && cr.more) startChallenge(state.chal.id, state.chal.program, state.chal.step + 1); else { state.match = null; state.stack = ['title']; go('challenges', false); } },
@@ -708,14 +790,7 @@ const ACT = {
   quit: () => { state.match = null; state.paused = false; if (state.mode === 'season') { state.stack = ['title']; go('hub', false); } else ACT.title(); },
   continueGame: () => { const m = state.match; startNextPeriod(m); state.paused = false; go('game', false); },
 };
-function addSimTrophy() {
-  const S = state.season;
-  if (!state.save.trophies.some((t) => t.seasonSeed === S.seed && t.school === S.school)) {
-    state.save.trophies.push({ school: S.school, program: S.program, cls: S.cls, label: `Season ${state.save.trophies.length + 1} state champions`, record: `${S.w}-${S.l}`, seasonSeed: S.seed });
-    persist();
-  }
-}
-function setSetting(k, v) { state.settings[k] = v; applySettings(); persist(); render(); }
+function setSetting(k, v) { state.settings[k] = v; persist({ settings: { [k]: v } }); applySettings(); render(); }
 function pauseGame() {
   if (state.replay) endReplay();
   if (state.scene === 'game') { state.paused = true; go('pause', false); }
@@ -806,7 +881,7 @@ const HOOKS = {
   seed(n) { state.seed = n | 0; return n; },
   getState: sumState,
   setState(s) {
-    if (s.settings) { Object.assign(state.settings, s.settings); applySettings(); persist(); }
+    if (s.settings) { Object.assign(state.settings, s.settings); persist({ settings: s.settings }); applySettings(); }
     if (s.pick) Object.assign(state.pick, s.pick);
     if (s.unlocks) Object.assign(state.save.unlocks, s.unlocks);
     const m = state.match;
@@ -833,6 +908,7 @@ const HOOKS = {
   pause() { state.paused = true; return true; },
   resume() { state.paused = false; wantLoop(); return true; },
   scene(name) {
+    if (name === 'seasonSetup') prepareSeasonSetup();
     if (['game', 'pause', 'break', 'final'].includes(name) && !state.match) newExhibition({ seed: state.seed || 1 });
     if (name === 'hub' && !state.season) startSeason({ seed: state.seed || 1 });
     if (name === 'roster' && state.season) { const S = state.season; state.rosterView = { key: S.school, program: S.program, cls: S.cls, seed: S.seed }; }
@@ -905,7 +981,7 @@ const HOOKS = {
       case 'endReplay': if (state.replay) endReplay(); drawFrame(0); return true;
       case 'roster': return makeRoster(a[0], a[1], a[2] || team(a[0]).cls, a[3] || 1);
       case 'storage': return store.ok;
-      case 'seasonResult': if (!state.season) return false; recordResult(state.season, a[0], a[1]); if (state.season.champion) addSimTrophy(); persist(); render(); return sumState().season;
+      case 'seasonResult': if (!state.season) return false; advanceSeason(() => recordResult(state.season, a[0], a[1]), 'sim'); render(); return sumState().season;
       case 'confetti': confetti(['#D4A017', '#F4F1EA', '#1F4E9C']); return true;
       case 'spots': return SPOTS;
       case 'meterQuality': return meterQuality(a[0], a[1] || 1, a[2] || 'jumper');

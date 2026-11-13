@@ -59,3 +59,31 @@ export const tests = [
     },
   },
 ];
+
+export const quitTests = [
+  {
+    name: 'S2-05: Quit needs a second press and says the game will be lost',
+    viewports: ['desktop', 'mobile'],
+    async run(t) {
+      await exhibition(t, { seed: 71 });
+      await t.game('scene', 'pause');
+      await t.page.click('[data-act="quit"]');
+      let s = await t.state();
+      t.equal(s.scene, 'pause', 'one press does not quit');
+      t.expect(s.match != null, 'the match is still there after one press');
+      const text = await t.page.textContent('#screen');
+      t.expect(/lost/i.test(text), 'the screen says the game will be lost');
+      await t.page.click('[data-act="resume"]');
+      await t.game('scene', 'pause');
+      t.expect(!/lost/i.test(await t.page.textContent('#screen')), 'the warning does not carry over after Resume');
+      await t.page.click('[data-act="quit"]');
+      s = await t.state();
+      t.equal(s.scene, 'pause', 'the first press after Resume asks again');
+      await t.page.click('[data-act="quit"]');
+      s = await t.state();
+      t.equal(s.scene, 'title', 'second press quits to the menu');
+      t.equal(s.match, null, 'the match is discarded');
+    },
+  },
+];
+tests.push(...quitTests);

@@ -24,7 +24,7 @@ const state = {
   save: { trophies: [], unlocks: { throwback: false }, best: { shootout: 0 }, challenges: {} },
   mode: null, match: null, so: null, demo: null, paused: false, showBox: false, helpTab: 'controls', seed: 0,
   pick: { program: 'girls', home: 'hot-springs', away: 'lakeside', side: 'home', school: 'hot-springs', length: 'short', throwback: false },
-  chal: null, lastOpts: null, rosterView: null, busy: 0, factSeed: 1, finalShown: false,
+  chal: null, lastOpts: null, rosterView: null, busy: 0, factSeed: 1, finalShown: false, quitArmed: false,
 };
 const IN_PLAY = new Set(['game', 'shootout']);
 const OVER_GAME = new Set(['game', 'pause', 'break', 'final', 'shootout', 'shootoutEnd', 'champion']);
@@ -340,6 +340,7 @@ function moreCue(scr) {
 function render() {
   const sc = state.scene;
   document.body.dataset.scene = sc;
+  if (sc !== 'pause') state.quitArmed = false;
   const scr = $('#screen');
   const html = screenHTML();
   const overlay = !IN_PLAY.has(sc);
@@ -784,10 +785,10 @@ const ACT = {
   playChallenge: (a) => { const [id, prog] = a.split('|'); startChallenge(id, prog); },
   afterChallenge: () => { const cr = state.chalResult; state.chalResult = null; if (cr && cr.more) startChallenge(state.chal.id, state.chal.program, state.chal.step + 1); else { state.match = null; state.stack = ['title']; go('challenges', false); } },
   startShootout: () => startShootout(),
-  resume: () => { state.paused = false; go('game', false); },
+  resume: () => { state.quitArmed = false; state.paused = false; go('game', false); },
   pause: () => pauseGame(),
   toggleBox: () => { state.showBox = !state.showBox; render(); },
-  quit: () => { state.match = null; state.paused = false; if (state.mode === 'season') { state.stack = ['title']; go('hub', false); } else ACT.title(); },
+  quit: () => { if (!state.quitArmed) { state.quitArmed = true; render(); return; } state.quitArmed = false; state.match = null; state.paused = false; if (state.mode === 'season') { state.stack = ['title']; go('hub', false); } else ACT.title(); },
   continueGame: () => { const m = state.match; startNextPeriod(m); state.paused = false; go('game', false); },
 };
 function setSetting(k, v) { state.settings[k] = v; persist({ settings: { [k]: v } }); applySettings(); render(); }

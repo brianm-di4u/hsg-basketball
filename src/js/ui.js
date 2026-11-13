@@ -162,7 +162,8 @@ const scoreLine = (m) => `<div class="final-score"><span>${crest(m.teams[0], 40)
 export function pauseScreen(st, m, showBox) {
   return `<div class="panel">
     <h2>Paused</h2>${scoreLine(m)}
-    <nav class="menu">${btn('resume', 'Resume', { cls: 'primary' })}${btn('toggleBox', showBox ? 'Hide box score' : 'Box score')}${btn('help', 'How to play')}${btn('settings', 'Settings')}${btn('quit', st.mode === 'season' ? 'Quit game (not recorded)' : 'Quit to menu')}</nav>
+    <nav class="menu">${btn('resume', 'Resume', { cls: 'primary' })}${btn('toggleBox', showBox ? 'Hide box score' : 'Box score')}${btn('help', 'How to play')}${btn('settings', 'Settings')}${btn('quit', st.quitArmed ? 'Yes, quit and lose this game' : st.mode === 'season' ? 'Quit game (not recorded)' : 'Quit to menu')}</nav>
+    ${st.quitArmed ? `<p class="warn" role="status">${st.mode === 'season' ? 'This game will be lost and is not recorded. You can play it again from the season hub.' : 'This game will be lost. Press Quit again to leave, or Resume to keep playing.'}</p>` : ''}
     ${showBox ? teamTotals(m) + boxTable(m, m.user.team >= 0 ? m.user.team : 0) : ''}
   </div>`;
 }

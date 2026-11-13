@@ -283,6 +283,8 @@ export const tests = [
       await t.page.click('#b-pause');
       t.equal((await t.state()).scene, 'pause', 'pause button');
       await click(t, 'quit');
+      t.equal((await t.state()).scene, 'pause', 'the first Quit press asks for confirmation');
+      await click(t, 'quit');
       t.equal((await t.state()).scene, 'title', 'quit to the title');
     },
   },

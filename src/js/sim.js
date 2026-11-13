@@ -175,6 +175,10 @@ function doSubs(m, keep = -1) {
 }
 
 // ---------------------------------------------------------------- actions (used by AI and the user)
+// Drop a shot the user is still gathering (focus lost mid-hold): no release, no attempt.
+export function cancelShot(m) {
+  for (const p of m.p) if ((p.act === 'shoot' || p.act === 'layup') && isUserCtrl(m, p.idx) && m.ball.holder === p.idx) { p.act = 'idle'; p.meter = 0; }
+}
 export function startShot(m, i) {
   const p = m.p[i];
   if (m.ball.holder !== i || p.act === 'shoot' || p.act === 'layup') return false;

@@ -2,16 +2,16 @@
 import { COUNTY, team, kitFor, banners, FACTS_LIST, FINALS } from './data.js';
 import { makeRoster, fullName } from './roster.js';
 import { COURT, rimFor, sx, sy } from './court.js';
-import { DT, createMatch, tick, startNextPeriod, summary, forceShot, give, commitFoul, topPerformer, startAt } from './sim.js';
+import { DT, createMatch, tick, startNextPeriod, summary, forceShot, give, commitFoul, topPerformer, startAt, cancelShot } from './sim.js';
 import { createSeason, teamFor, nextGame, recordResult, simCurrent } from './season.js';
-import { createShootout, shootoutTick, forceShootoutShot, SPOTS } from './shootout.js';
+import { createShootout, shootoutTick, forceShootoutShot, cancelShootoutShot, SPOTS } from './shootout.js';
 import { challenge } from './challenges.js';
 import { R, initRender, resize, draw, pop, burst, shake, netHit, rimHit, confetti, is3d } from './render.js';
 import { G3, load3d, pickTier, info3d, glProbe, resize3d, setTier, animCtl } from './gl/scene3d.js';
 import { startHQ, hqInfo } from './gl/hq.js';
 import { CREST_KEYS, crestURL } from './art.js';
-import { I, initInput, initTouch, setEnabled, drain } from './input.js';
-import { AU, unlock, play, setVolume, setOn } from './audio.js';
+import { I, initInput, initTouch, setEnabled, drain, cancelHeld } from './input.js';
+import { AU, unlock, play, setVolume, setOn, suspendAudio } from './audio.js';
 import { DIFF, meterQuality } from './rules.js';
 import { writeSave, readSaveSnapshot, resetSave, store, fmtClock, hash } from './util.js';
 import { mergeSave, seasonText } from './save-policy.js';
@@ -866,6 +866,15 @@ function pauseGame() {
   else if (state.scene === 'shootout') { state.paused = !state.paused; wantLoop(); }
 }
 
+// Tab hidden, window blurred or page leaving: stop play, drop a held shot (never fire it) and quiet the audio.
+function interrupt() {
+  cancelHeld();
+  suspendAudio();
+  const sc = state.scene;
+  if (sc === 'game' && state.match) { cancelShot(state.match); pauseGame(); }
+  else if (sc === 'shootout' && state.so) { cancelShootoutShot(state.so); if (!state.paused) pauseGame(); }
+}
+
 function onClick(e) {
   const b = e.target.closest('[data-act]');
   if (!b || b.disabled) return;
@@ -900,6 +909,9 @@ function boot() {
   document.addEventListener('pointerdown', () => unlock(), { passive: true });
   $('#b-pause').addEventListener('click', () => pauseGame());
   window.addEventListener('resize', () => { layout(); wantLoop(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) interrupt(); });
+  window.addEventListener('blur', interrupt);
+  window.addEventListener('pagehide', interrupt);
   window.addEventListener('error', onFault);
   window.addEventListener('unhandledrejection', onFault);
   for (const q of ['(prefers-color-scheme: dark)', '(prefers-reduced-motion: reduce)']) {

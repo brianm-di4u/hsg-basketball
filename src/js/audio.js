@@ -14,6 +14,8 @@ export function unlock() {
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
   } catch (e) { AU.ctx = null; }
 }
+// Called when the page is hidden or loses focus; unlock() resumes it on the next gesture.
+export function suspendAudio() { try { if (AU.ctx && AU.ctx.state === 'running') AU.ctx.suspend().catch(() => {}); } catch (e) { /* no audio */ } }
 export function setVolume(v) { AU.vol = v; if (AU.master) AU.master.gain.value = v * 0.6; }
 export function setOn(on) { AU.on = on; }
 

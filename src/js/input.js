@@ -5,6 +5,8 @@ const keys = new Set();
 let enabled = false;
 export function setEnabled(on) { enabled = on; if (!on) { keys.clear(); I.shoot = false; I.stick.x = I.stick.z = 0; recompute(); } }
 export function isEnabled() { return enabled; }
+// The window lost focus or the page is going away: forget held keys and a held shot without releasing it.
+export function cancelHeld() { keys.clear(); I.shoot = I.shootP = I.shootR = false; recompute(); }
 
 function recompute() {
   let x = 0, z = 0;
@@ -35,7 +37,7 @@ export function initInput(onKey) {
     if (e.code === 'Space' && I.shoot) { I.shoot = false; I.shootR = true; }
     recompute();
   });
-  window.addEventListener('blur', () => { keys.clear(); if (I.shoot) { I.shoot = false; I.shootR = true; } recompute(); });
+  window.addEventListener('blur', cancelHeld);
 }
 
 // Touch controls: a virtual stick plus three buttons (pointer events cover touch, pen and mouse).

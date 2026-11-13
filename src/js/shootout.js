@@ -106,6 +106,10 @@ function end(so) {
   say(so, 'end', { score: so.score });
 }
 
+export function cancelShootoutShot(so) {
+  if (so.sh.act === 'shoot' && so.ball.state === 'held') { so.sh.act = 'idle'; so.sh.meter = 0; }
+}
+
 export function forceShootoutShot(so, q) {
   if (so.phase === 'ready') { so.phase = 'live'; }
   if (so.ball.state !== 'held' || so.moveT > 0) return false;

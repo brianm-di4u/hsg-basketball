@@ -263,3 +263,65 @@ export const faultTests = [
   },
 ];
 tests.push(...faultTests);
+
+const hide = (t) => t.page.evaluate(() => { Object.defineProperty(document, 'hidden', { value: true, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+const show = (t) => t.page.evaluate(() => { Object.defineProperty(document, 'hidden', { value: false, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+
+export const lifecycleTests = [
+  {
+    name: 'S6-04: a hidden tab, a blur or a pagehide pauses a live game',
+    viewports: ['desktop'],
+    async run(t) {
+      for (const how of ['hidden', 'blur', 'pagehide']) {
+        await exhibition(t, { seed: 21 });
+        await t.game('resume');
+        await t.page.waitForTimeout(300);
+        t.equal((await t.state()).scene, 'game', `${how}: playing before`);
+        if (how === 'hidden') await hide(t);
+        else await t.page.evaluate((e) => window.dispatchEvent(new Event(e)), how);
+        const s = await t.state();
+        t.equal(s.scene, 'pause', `${how}: the game is paused`);
+        t.equal(s.paused, true, `${how}: the clock is stopped`);
+        await show(t);
+        t.equal((await t.state()).scene, 'pause', `${how}: coming back does not resume by itself`);
+      }
+    },
+  },
+  {
+    name: 'S6-04: a blur cancels a held shot instead of releasing it',
+    viewports: ['desktop'],
+    async run(t) {
+      await exhibition(t, { difficulty: 0, seed: 17 });
+      await stepUntil(t, (x) => x.match.phase === 'live', 600, 10, 'live');
+      await t.game('act', 'give', 0, 0);
+      await t.game('act', 'place', 0, 0, 62, 25);
+      for (let s = 1; s < 5; s++) await t.game('act', 'place', 0, s, 8, 5 + s * 8);
+      for (let s = 0; s < 5; s++) await t.game('act', 'place', 1, s, 12, 4 + s * 10);
+      await t.game('act', 'input', { shoot: true });
+      await t.game('step', 8);
+      let s = await t.state();
+      t.equal(s.match.players[0].act, 'shoot', 'the shot is gathering');
+      await t.page.evaluate(() => window.dispatchEvent(new Event('blur')));
+      t.equal((await t.state()).scene, 'pause', 'paused by the blur');
+      await t.page.click('[data-act="resume"]');
+      await t.game('step', 25);
+      s = await t.state();
+      t.equal(s.match.ball.state, 'held', 'no shot was taken');
+      t.equal(s.match.ball.holder, 0, 'the player still has the ball');
+      t.expect(s.match.players[0].act !== 'shoot', 'the gather was cancelled');
+    },
+  },
+  {
+    name: 'S6-04: hidden and blur together pause Hot Streak once and do not unpause it',
+    viewports: ['desktop'],
+    async run(t) {
+      await t.game('newGame', { mode: 'shootout', seed: 7 });
+      await t.game('step', 5);
+      t.equal((await t.state()).paused, false, 'running before');
+      await hide(t);
+      await t.page.evaluate(() => window.dispatchEvent(new Event('blur')));
+      t.equal((await t.state()).paused, true, 'paused, not toggled back');
+    },
+  },
+];
+tests.push(...lifecycleTests);

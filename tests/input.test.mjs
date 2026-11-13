@@ -73,6 +73,10 @@ export const tests = [
       await t.page.keyboard.press('c');
       await t.game('step', 2);
       t.expect((await t.state()).match.user.ctrl !== c0, 'C switches defender');
+      // a steal press only swipes when the ball handler is in reach (S1-10): put the defender next to him
+      let q = await t.state();
+      const hp = q.match.players[5];
+      await t.game('act', 'place', 0, q.match.user.ctrl, hp.x - 2, hp.z);
       await t.page.keyboard.press('x');
       await t.game('step', 2);
       const s = await t.state();

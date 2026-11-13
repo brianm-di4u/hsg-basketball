@@ -171,6 +171,14 @@ function start3d() {
   const st = $('#stage').getBoundingClientRect();
   state.busy3d = true;
   G3.onLost = () => { document.body.classList.remove('gl'); R.snap = true; R.key = ''; layout(); drawFrame(0); };
+  // a restored context starts the 3D view over on a fresh canvas, after a short delay
+  G3.onRestored = () => setTimeout(() => {
+    if (G3.state !== 'lost') return;
+    try { G3.renderer.dispose(); } catch (e) { /* already gone */ }
+    if (G3.canvas) G3.canvas.remove();
+    G3.state = 'off';
+    start3d();
+  }, 300);
   load3d($('#stage'), pickTier(st.width, st.height)).then(() => {
     state.busy3d = false;
     if (G3.state === 'ready') {

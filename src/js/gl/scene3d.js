@@ -91,6 +91,7 @@ function init(stage) {
   r.info.autoReset = false; // the composer renders several passes a frame; draw3d resets the counters once
   // a lost context (driver reset, memory pressure on a phone) drops back to the classic 2D court
   cv.addEventListener('webglcontextlost', (e) => { e.preventDefault(); G3.state = 'lost'; G3.err = 'WebGL context lost'; cv.style.visibility = 'hidden'; if (G3.onLost) G3.onLost(); });
+  cv.addEventListener('webglcontextrestored', () => { if (G3.state === 'lost' && G3.onRestored) G3.onRestored(); });
   r.outputColorSpace = THREE.SRGBColorSpace;
   r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 0.97;
   r.shadowMap.enabled = G3.tier === 'high';

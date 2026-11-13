@@ -325,3 +325,28 @@ export const lifecycleTests = [
   },
 ];
 tests.push(...lifecycleTests);
+
+export const contextTests = [
+  {
+    name: 'S6-15: the 3D view comes back after a WebGL context loss and restore',
+    viewports: ['desktop'],
+    initScript: () => { try { localStorage.setItem('hsg-hoops-v1', JSON.stringify({ v: 1, settings: { graphics: '3d' } })); } catch (e) { /* storage blocked */ } },
+    async run(t) {
+      const gfx = () => t.page.evaluate(() => window.__game.getState().gfx);
+      await t.page.waitForFunction(() => ['ready', 'failed', 'unsupported'].includes(window.__game.getState().gfx.state), null, { timeout: 30000 });
+      t.equal((await gfx()).mode, '3d', '3D is active to begin with');
+      await t.page.evaluate(() => { const ext = document.querySelector('#gl').getContext('webgl2').getExtension('WEBGL_lose_context'); window.__lose = ext; ext.loseContext(); });
+      await t.page.waitForFunction(() => window.__game.getState().gfx.mode === '2d', null, { timeout: 5000 });
+      t.equal((await gfx()).mode, '2d', 'the classic court takes over while the context is lost');
+      await t.page.evaluate(() => window.__lose.restoreContext());
+      await t.page.waitForFunction(() => window.__game.getState().gfx.mode === '3d' && window.__game.getState().gfx.state === 'ready', null, { timeout: 20000 }).catch(() => {});
+      const g = await gfx();
+      t.equal(g.state, 'ready', 'the renderer is ready again');
+      t.equal(g.mode, '3d', 'the 3D view is back');
+      await t.game('newGame', { mode: 'exhibition', seed: 5, paused: true });
+      await t.game('step', 20);
+      await t.shot('s6-15-restored');
+    },
+  },
+];
+tests.push(...contextTests);

@@ -148,7 +148,10 @@ function restore() {
 // ---------------------------------------------------------------- settings application
 const mq = (q) => { try { return window.matchMedia(q).matches; } catch (e) { return false; } };
 const reducedMotion = () => state.settings.motion === 'on' || (state.settings.motion === 'auto' && mq('(prefers-reduced-motion: reduce)'));
-const touchOn = () => state.settings.touch === 'on' || (state.settings.touch === 'auto' && (mq('(pointer: coarse)') || (navigator.maxTouchPoints || 0) > 0));
+// Auto: a touch-first device always shows the pad; a laptop with a touch screen shows it after a real touch and drops it on the next key press
+let touchSeen = false;
+const touchOn = () => state.settings.touch === 'on' || (state.settings.touch === 'auto' && (mq('(pointer: coarse)') || touchSeen));
+function setTouchSeen(v) { if (touchSeen === v) return; touchSeen = v; $('#pad').hidden = !(IN_PLAY.has(state.scene) && touchOn()); layout(); }
 function applySettings() {
   const s = state.settings;
   document.documentElement.style.fontSize = `${s.text}%`;
@@ -917,6 +920,8 @@ function boot() {
   document.addEventListener('pointerdown', () => unlock(), { passive: true });
   $('#b-pause').addEventListener('click', () => pauseGame());
   window.addEventListener('resize', () => { layout(); wantLoop(); });
+  window.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') setTouchSeen(true); }, { capture: true, passive: true });
+  window.addEventListener('keydown', () => setTouchSeen(false), { capture: true, passive: true });
   document.addEventListener('visibilitychange', () => { if (document.hidden) interrupt(); });
   window.addEventListener('blur', interrupt);
   window.addEventListener('pagehide', interrupt);

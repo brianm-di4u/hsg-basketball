@@ -45,4 +45,23 @@ export const tests = [
       t.equal(gov.length, before, `a single 600 ms hitch is outvoted (${gov.join(', ')})`);
     },
   },
+  {
+    name: 'S1-22: a mouse-and-keyboard machine with a touch screen has no pad until the first touch',
+    viewports: ['desktop'],
+    initScript: () => { Object.defineProperty(Navigator.prototype, 'maxTouchPoints', { get: () => 5 }); },
+    async run(t) {
+      await exhibition(t, { seed: 19 });
+      const padHidden = () => t.page.evaluate(() => document.querySelector('#pad').hidden);
+      t.equal(await t.page.evaluate(() => navigator.maxTouchPoints), 5, 'the machine reports a touch screen');
+      t.equal(await t.page.evaluate(() => matchMedia('(pointer: coarse)').matches), false, 'its main pointer is fine');
+      t.equal(await padHidden(), true, 'no pad while playing with the keyboard');
+      t.equal((await t.game('act', 'layout')).stick, null, 'the court keeps the whole screen');
+      await t.page.evaluate(() => window.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', bubbles: true })));
+      t.equal(await padHidden(), false, 'the first real touch shows the pad');
+      await t.page.keyboard.press('c');
+      t.equal(await padHidden(), true, 'a key press hides it again');
+      await t.page.evaluate(() => { window.__game.act('setTouch', 'on'); });
+      t.equal((await t.state()).touch, true, 'the Always setting still forces it on');
+    },
+  },
 ];

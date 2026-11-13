@@ -60,7 +60,7 @@ export const tests = [
       t.equal(await padHidden(), false, 'the first real touch shows the pad');
       await t.page.keyboard.press('c');
       t.equal(await padHidden(), true, 'a key press hides it again');
-      await t.page.evaluate(() => { window.__game.act('setTouch', 'on'); });
+      await t.game('setState', { settings: { touch: 'on' } });
       t.equal((await t.state()).touch, true, 'the Always setting still forces it on');
     },
   },

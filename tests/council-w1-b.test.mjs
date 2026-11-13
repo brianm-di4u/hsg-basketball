@@ -82,4 +82,51 @@ export const tests = [
       await t.page.setViewportSize({ width: 1280, height: 800 });
     },
   },
+  {
+    name: 'S1-10: a steal press with nobody in range costs no cooldown and plays no swipe',
+    viewports: ['desktop'],
+    async run(t) {
+      await exhibition(t, { difficulty: 0, seed: 17 });
+      await stepUntil(t, (x) => x.match.phase === 'live', 600, 10, 'live');
+      await t.game('act', 'give', 1, 0);
+      await t.game('act', 'place', 1, 0, 70, 25);
+      for (let k = 1; k < 5; k++) await t.game('act', 'place', 1, k, 80, 4 + k * 10);
+      for (let k = 0; k < 5; k++) await t.game('act', 'place', 0, k, 20, 4 + k * 10);
+      await t.game('step', 1);
+      await t.game('act', 'input', { pass: true });
+      await t.game('step', 1);
+      let s = await t.state();
+      const ctrl = s.match.players[s.match.user.ctrl];
+      t.expect(s.match.user.ctrl < 5 && ctrl.act !== 'steal', `no swipe when the holder is far away (act ${ctrl.act})`);
+      // the cooldown was not spent: a second press right away still works once the holder is close
+      await t.game('act', 'place', 0, s.match.user.ctrl, 69, 25);
+      await t.game('act', 'input', { pass: true });
+      await t.game('step', 1);
+      s = await t.state();
+      t.equal(s.match.players[s.match.user.ctrl].act, 'steal', 'a steal press in range still swipes at once');
+    },
+  },
+  {
+    name: 'S1-10: X pressed by the passer while the pass is in flight does not swipe or pass again',
+    viewports: ['desktop'],
+    async run(t) {
+      await exhibition(t, { difficulty: 0, seed: 17 });
+      await stepUntil(t, (x) => x.match.phase === 'live', 600, 10, 'live');
+      await t.game('act', 'give', 0, 0);
+      await t.game('act', 'place', 0, 0, 50, 25);
+      await t.game('act', 'place', 0, 1, 62, 14);
+      for (let s = 2; s < 5; s++) await t.game('act', 'place', 0, s, 8, 5 + s * 8);
+      for (let s = 0; s < 5; s++) await t.game('act', 'place', 1, s, 12, 4 + s * 10);
+      await t.game('act', 'input', { pass: true });
+      await t.game('step', 2);
+      let s = await t.state();
+      t.equal(s.match.ball.state, 'pass', 'the pass is in the air');
+      const to = s.match.ball.passTo;
+      await t.game('act', 'input', { pass: true });
+      await t.game('step', 1);
+      s = await t.state();
+      t.expect(s.match.players[0].act !== 'steal', `the passer does not swipe (act ${s.match.players[0].act})`);
+      t.equal(s.match.ball.passTo, to, 'the pass was not redirected');
+    },
+  },
 ];

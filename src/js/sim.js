@@ -278,11 +278,12 @@ export function doPass(m, i, j) {
 export function trySteal(m, i) {
   const p = m.p[i];
   if (p.cool > 0 || m.phase !== 'live') return false;
-  p.cool = 0.8; p.act = 'steal'; p.actT = 0;
   const h = m.ball.holder;
   if (h < 0 || m.p[h].t === p.t) return false;
   const hp = m.p[h];
-  if (Math.hypot(hp.x - p.x, hp.z - p.z) > 3.6 || hp.act === 'shoot' || hp.act === 'layup') return false;
+  if (Math.hypot(hp.x - p.x, hp.z - p.z) > 3.6) return false; // nothing to swipe at: no cooldown, no animation
+  p.cool = 0.8; p.act = 'steal'; p.actT = 0;
+  if (hp.act === 'shoot' || hp.act === 'layup') return false;
   const rs = R(m, i), rh = R(m, h);
   const chance = clamp(0.1 + 0.32 * (rs.def - rh.hnd * 0.7), 0.04, 0.38);
   const roll = rnd(m);
@@ -473,7 +474,7 @@ function controlTick(m) {
       else { const j = bestPassTarget(m, i, inp.mx, inp.mz); if (j >= 0) doPass(m, i, j); }
     }
   } else {
-    if (inp.passP) trySteal(m, i);
+    if (inp.passP && !(b.state === 'pass' && mine(b.passTo))) trySteal(m, i); // the passer's own X is not a steal
     if (inp.shootP) {
       if (b.state === 'pass' && mine(b.passTo)) u.shootBuf = m.time; // buffered for the catch, not a jump
       else jump(m, i);

@@ -87,3 +87,85 @@ export const quitTests = [
   },
 ];
 tests.push(...quitTests);
+
+const KEY = 'hsg-hoops-v1';
+const put = (t, v) => t.page.evaluate(([k, s]) => localStorage.setItem(k, typeof s === 'string' ? s : JSON.stringify(s)), [KEY, v]);
+const rawSave = (t) => t.page.evaluate((k) => localStorage.getItem(k), KEY);
+async function loadWith(t, v) { await put(t, v); await t.reload(); }
+
+export const hostileSaveTests = [
+  {
+    name: 'S6-01: a season with an unknown school boots to the title and is not loaded',
+    viewports: ['desktop'],
+    async run(t) {
+      const bad = JSON.stringify({ v: 1, season: { school: 'nope', seed: 1, games: [{}] } });
+      await loadWith(t, bad);
+      const s = await t.state();
+      t.equal(s.scene, 'title', 'the title appears');
+      t.equal(s.season, null, 'the unusable season is not loaded');
+      t.equal(await rawSave(t), bad, 'the stored record is left untouched');
+      await t.page.click('[data-act="settings"]');
+      t.equal((await t.state()).scene, 'settings', 'menus still work');
+    },
+  },
+  {
+    name: 'S6-01: a season with a bad schedule entry or bracket is not loaded',
+    viewports: ['desktop'],
+    async run(t) {
+      const ok = await (async () => { await t.game('newGame', { mode: 'season', school: 'hot-springs', program: 'girls', length: 'short', seed: 5 }); return (await t.page.evaluate((k) => JSON.parse(localStorage.getItem(k)).season, KEY)); })();
+      t.expect(ok && ok.games.length > 0, 'a real season was saved to start from');
+      const variants = {
+        'game without opponent': { ...ok, games: [{}] },
+        'unknown opponent': { ...ok, games: ok.games.map((g) => ({ ...g, opp: 'nowhere' })) },
+        'bad phase': { ...ok, phase: 7 },
+        'bracket phase without a bracket': { ...ok, phase: 'bracket', bracket: null },
+        'bad program': { ...ok, program: 'dogs' },
+      };
+      for (const [name, season] of Object.entries(variants)) {
+        await loadWith(t, { v: 1, season });
+        const s = await t.state();
+        t.equal(s.scene, 'title', `${name}: title appears`);
+        t.equal(s.season, null, `${name}: season dropped`);
+      }
+      await loadWith(t, { v: 1, season: ok });
+      t.equal((await t.state()).season && (await t.state()).season.school, 'hot-springs', 'a good season still loads');
+    },
+  },
+  {
+    name: 'S6-01: wrong-typed settings fall back to defaults and a match still plays',
+    viewports: ['desktop'],
+    async run(t) {
+      await loadWith(t, { v: 1, settings: { vol: 'loud', shotClock: 'x', text: 'big', difficulty: 9, qLen: {}, sound: 'yes', touch: 3, assist: 'no', theme: null, motion: 5, graphics: [], replays: 1 } });
+      let s = await t.state();
+      t.equal(s.settings.vol, 0.5, 'volume back to default');
+      t.equal(s.settings.shotClock, 35, 'shot clock back to default');
+      t.equal(s.settings.text, 100, 'text size back to default');
+      t.equal(s.settings.difficulty, 1, 'difficulty back to default');
+      t.equal(s.settings.qLen, 120, 'quarter length back to default');
+      t.equal(s.settings.sound, true, 'sound back to default');
+      await t.page.click('[data-act="select"]'); // a click unlocks audio, which used to throw on the NaN volume
+      await t.game('newGame', { mode: 'exhibition', seed: 3, paused: true });
+      await t.game('step', 30);
+      s = await t.state();
+      t.expect(Number.isFinite(s.match.shot), 'the shot clock is a number');
+      await t.game('setState', { settings: { sound: false } });
+      s = await t.state();
+      t.equal(s.settings.vol, 0.5, 'a later settings save does not bring the bad value back');
+    },
+  },
+  {
+    name: 'S6-01: trophies without a valid school do not crash the Trophy Room',
+    viewports: ['desktop'],
+    async run(t) {
+      await loadWith(t, { v: 1, trophies: [{ label: 'x' }, { school: 'hot-springs', program: 'girls', cls: '5A', label: 'Legacy', record: '6-0' }, { school: 'nowhere' }] });
+      await t.game('scene', 'trophies');
+      const s = await t.state();
+      t.equal(s.scene, 'trophies', 'the Trophy Room opens');
+      t.expect((await t.page.textContent('#screen')).includes('Legacy'), 'the good banner is listed');
+      await t.game('setState', { settings: { sound: false } });
+      await t.game('scene', 'trophies');
+      t.equal((await t.state()).scene, 'trophies', 'still opens after a later save');
+    },
+  },
+];
+tests.push(...hostileSaveTests);

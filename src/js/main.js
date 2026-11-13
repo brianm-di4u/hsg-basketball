@@ -13,7 +13,7 @@ import { CREST_KEYS, crestURL } from './art.js';
 import { I, initInput, initTouch, setEnabled, drain } from './input.js';
 import { AU, unlock, play, setVolume, setOn } from './audio.js';
 import { DIFF, meterQuality } from './rules.js';
-import { loadSave, writeSave, readSaveSnapshot, store, fmtClock, hash } from './util.js';
+import { writeSave, readSaveSnapshot, store, fmtClock, hash } from './util.js';
 import { mergeSave, seasonText } from './save-policy.js';
 import * as UI from './ui.js';
 
@@ -55,9 +55,9 @@ function persist(intent = {}) {
     return { saved: false, seasonConflict: false, previousBest };
   }
   // Failed read/write does not consume an earned intent or advance this tab's season base.
-  state.settings = { ...DEFAULTS, ...(result.value.settings || {}) };
+  state.settings = cleanSettings(result.value.settings);
   applySettings();
-  state.save.trophies = result.value.trophies || [];
+  state.save.trophies = cleanTrophies(result.value.trophies);
   state.save.unlocks = { throwback: false, ...(result.value.unlocks || {}) };
   state.save.best = { shootout: 0, ...(result.value.best || {}) };
   state.save.challenges = result.value.challenges || {};
@@ -102,17 +102,47 @@ function advanceSeason(change, awardKind) {
   if (result.seasonConflict) { state.season = before; return false; }
   return true;
 }
+// Stored records are untrusted: take only values the game itself can produce, drop what it cannot use.
+const SETTING_OK = {
+  sound: (v) => typeof v === 'boolean', vol: (v) => [0.25, 0.5, 0.8].includes(v), motion: (v) => ['auto', 'on', 'off'].includes(v),
+  text: (v) => [100, 115, 130].includes(v), theme: (v) => ['auto', 'light', 'dark'].includes(v), difficulty: (v) => [0, 1, 2].includes(v),
+  qLen: (v) => [120, 240, 480].includes(v), shotClock: (v) => [0, 35].includes(v), assist: (v) => typeof v === 'boolean',
+  touch: (v) => ['auto', 'on', 'off'].includes(v), graphics: (v) => ['auto', '3d', '2d'].includes(v), replays: (v) => typeof v === 'boolean',
+};
+function cleanSettings(raw) {
+  const s = raw && typeof raw === 'object' ? raw : {}, out = { ...DEFAULTS };
+  for (const k of Object.keys(DEFAULTS)) if (SETTING_OK[k](s[k])) out[k] = s[k];
+  return out;
+}
+const cleanTrophies = (list) => (Array.isArray(list) ? list : []).filter((x) => x && typeof x === 'object' && typeof x.school === 'string' && team(x.school));
+function goodSeason(S) {
+  const known = (k) => typeof k === 'string' && !!team(k), obj = (x) => !!x && typeof x === 'object' && !Array.isArray(x), num = Number.isFinite;
+  if (!obj(S) || !known(S.school) || !['boys', 'girls'].includes(S.program) || typeof S.cls !== 'string' || !['short', 'full'].includes(S.length)) return false;
+  if (!['regular', 'bracket', 'done'].includes(S.phase) || ![S.seed, S.idx, S.w, S.l].every(num)) return false;
+  if (!Array.isArray(S.games) || !S.games.length || S.idx < 0 || S.idx > S.games.length) return false;
+  if (!S.games.every((g) => obj(g) && known(g.opp) && typeof g.month === 'string' && (g.result == null || (obj(g.result) && num(g.result.us) && num(g.result.them))))) return false;
+  if (!Array.isArray(S.fictPool) || !S.fictPool.every(known)) return false;
+  const B = S.bracket;
+  if (B == null) return S.phase !== 'bracket';
+  if (!obj(B) || !Number.isInteger(B.round) || B.round < 0 || B.round > 2 || !Array.isArray(B.seeds) || !B.seeds.every(known)) return false;
+  if (!Array.isArray(B.rounds) || B.rounds.length <= B.round) return false;
+  return B.rounds.every((r) => Array.isArray(r) && r.every((x) => obj(x) && known(x.a) && known(x.b) && (x.winner == null || known(x.winner))));
+}
 function restore() {
-  const s = loadSave();
-  if (!s || s.v !== 1) return;
-  Object.assign(state.settings, s.settings || {});
-  state.season = s.season || null;
-  seasonBase = seasonText(state.season);
-  state.save.trophies = s.trophies || [];
-  state.save.unlocks = { throwback: false, ...(s.unlocks || {}) };
-  state.save.best = { shootout: 0, ...(s.best || {}) };
-  state.save.challenges = s.challenges || {};
-  if (state.season) { state.pick.school = state.season.school; state.pick.program = state.season.program; }
+  try {
+    const read = readSaveSnapshot();
+    if (read.kind !== 'current') return;
+    const s = read.value;
+    const season = goodSeason(s.season) ? s.season : null; // an unusable season stays in storage untouched
+    Object.assign(state.settings, cleanSettings(s.settings));
+    state.season = season;
+    seasonBase = seasonText(state.season);
+    state.save.trophies = cleanTrophies(s.trophies);
+    state.save.unlocks = { throwback: false, ...(s.unlocks || {}) };
+    state.save.best = { shootout: 0, ...(s.best || {}) };
+    state.save.challenges = s.challenges || {};
+    if (state.season) { state.pick.school = state.season.school; state.pick.program = state.season.program; }
+  } catch (e) { /* unreadable record: boot with defaults */ }
 }
 
 // ---------------------------------------------------------------- settings application

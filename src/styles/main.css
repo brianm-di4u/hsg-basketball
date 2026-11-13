@@ -302,3 +302,14 @@ b.w { color: var(--ok); } b.l { color: var(--accent); }
   .tbl .opt { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { #screen.enter .panel { animation: none; } }
+
+/* title menu on a landscape phone: two columns and a smaller logo, so every entry stays in view */
+@media (orientation: landscape) and (max-height: 520px) {
+  .title-panel { max-width: 640px; padding-top: 10px; padding-bottom: 10px; }
+  .title-panel .logo { flex-direction: row; gap: 12px; align-items: baseline; justify-content: center; margin: 0; }
+  .title-panel .logo .l1 { font-size: 1.2rem; letter-spacing: .3em; padding-left: 0; }
+  .title-panel .logo .l2 { font-size: 2.6rem; text-shadow: 2px 2px 0 #A9432C; }
+  .title-panel .sub { margin: 2px 0; }
+  .title-panel .menu { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; margin: 8px 0; }
+  .title-panel .menu .menu-row { display: contents; }
+}

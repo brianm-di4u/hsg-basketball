@@ -64,4 +64,22 @@ export const tests = [
       t.equal((await t.state()).touch, true, 'the Always setting still forces it on');
     },
   },
+  {
+    name: 'S2-12: the title menu fits a landscape phone without scrolling',
+    viewports: ['desktop'],
+    async run(t) {
+      for (const [w, h] of [[844, 390], [667, 375]]) {
+        await t.page.setViewportSize({ width: w, height: h });
+        await t.game('scene', 'title');
+        await t.page.waitForTimeout(400);
+        const r = await t.page.evaluate(() => {
+          const sc = document.querySelector('#screen');
+          return { H: innerHeight, scroll: sc.scrollHeight - sc.clientHeight, out: [...sc.querySelectorAll('.menu .btn')].filter((b) => b.getBoundingClientRect().bottom > innerHeight + 1).map((b) => b.textContent.trim()) };
+        });
+        t.equal(r.out.length, 0, `${w}x${h}: every menu button is inside the viewport (outside: ${r.out.join(', ')})`);
+        await t.shot(`s2-12-title-${w}x${h}`);
+      }
+      await t.page.setViewportSize({ width: 1280, height: 800 });
+    },
+  },
 ];

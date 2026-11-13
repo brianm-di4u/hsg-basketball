@@ -576,7 +576,8 @@ function drawShotClock3(dg, txt) {
 const GOV = { t: 0, slow: 0, frames: 0, steps: [] };
 function govern(ms, dt) {
   // test hooks (step(n)) draw frames whose dt is not a frame time at all
-  if (!dt || dt > 0.2 || G3.hooked || G3.tier === 'low' || G3.camOverride) return;
+  if (!dt || G3.hooked || G3.tier === 'low' || G3.camOverride) return;
+  dt = Math.min(dt, 0.25); // a long frame is a slow frame (one hitch in a window of frames is still outvoted)
   GOV.t += dt; GOV.frames++;
   if (dt > 1 / 40) GOV.slow++;
   if (GOV.t < 2.5) return;

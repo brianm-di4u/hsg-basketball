@@ -56,9 +56,19 @@ export function readSaveSnapshot() {
   try {
     const raw = window.localStorage.getItem(KEY);
     if (raw === null) return { kind: 'absent', value: null };
-    let value; try { value = JSON.parse(raw); } catch { return { kind: 'invalid', value: null }; }
-    return validSave(value) ? { kind: 'current', value } : { kind: 'invalid', value: null };
+    let value; try { value = JSON.parse(raw); } catch { return { kind: 'invalid', value: null, newer: false }; }
+    if (validSave(value)) return { kind: 'current', value };
+    return { kind: 'invalid', value: null, newer: !!value && typeof value === 'object' && Number.isFinite(value.v) && value.v > 1 }; // newer: written by a later version, never reset
   } catch { store.ok = false; return { kind: 'unavailable', value: null }; }
+}
+// Copy the stored string to a .bak key, then clear it. Nothing is cleared unless the copy was kept.
+export function resetSave() {
+  try {
+    const raw = window.localStorage.getItem(KEY);
+    if (raw !== null) window.localStorage.setItem(KEY + '.bak', raw);
+    window.localStorage.removeItem(KEY);
+    return true;
+  } catch (e) { store.ok = false; return false; }
 }
 export function writeSave(obj) {
   try { window.localStorage.setItem(KEY, JSON.stringify(obj)); store.ok = true; return true; }

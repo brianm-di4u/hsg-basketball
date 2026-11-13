@@ -322,7 +322,10 @@ export function helpScreen(st, tab = 'controls') {
   </div>`;
 }
 
-export function settingsScreen(st, storageOk) {
+const saveNote = (saving) => (saving === 'unavailable' ? '<p class="warn" role="status">Saving is unavailable in this browser, so progress lasts only until you close the page.</p>'
+  : saving === 'unreadable' ? `<p class="warn" role="status">The saved data on this device is unreadable, so new progress is not being saved. Resetting keeps a copy of the old data and starts a fresh save.</p><div class="row">${btn('resetSave', 'Reset saved data')}</div>`
+  : saving === 'newer' ? '<p class="warn" role="status">The saved data was written by a newer version of the game, so it is left alone and new progress is not being saved here.</p>' : '');
+export function settingsScreen(st, saving) {
   const s = st.settings;
   return `<div class="panel wide">
     <h2>Settings</h2>
@@ -338,7 +341,7 @@ export function settingsScreen(st, storageOk) {
     ${seg('setTouch', [['auto', 'Auto'], ['on', 'Always'], ['off', 'Never']], s.touch, 'Touch controls')}
     ${seg('setGraphics', [['auto', 'Auto'], ['3d', '3D gym'], ['2d', 'Classic 2D']], s.graphics || 'auto', 'Graphics')}
     ${seg('setReplays', [[1, 'On'], [0, 'Off']], s.replays === false ? 0 : 1, 'Highlight replays')}
-    ${storageOk ? '' : '<p class="warn" role="status">Saving is unavailable in this browser, so progress lasts only until you close the page.</p>'}
+    ${saveNote(saving)}
     <div class="row end">${btn('back', 'Done', { cls: 'primary' })}</div>
   </div>`;
 }

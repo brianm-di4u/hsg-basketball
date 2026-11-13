@@ -13,7 +13,7 @@ import { CREST_KEYS, crestURL } from './art.js';
 import { I, initInput, initTouch, setEnabled, drain } from './input.js';
 import { AU, unlock, play, setVolume, setOn } from './audio.js';
 import { DIFF, meterQuality } from './rules.js';
-import { writeSave, readSaveSnapshot, store, fmtClock, hash } from './util.js';
+import { writeSave, readSaveSnapshot, resetSave, store, fmtClock, hash } from './util.js';
 import { mergeSave, seasonText } from './save-policy.js';
 import * as UI from './ui.js';
 
@@ -41,7 +41,7 @@ function persist(intent = {}) {
   if (intent.season) pendingSave.season = { ...intent.season, value: copy(intent.season.value) };
   const read = readSaveSnapshot();
   if (!currentSnapshot(read)) {
-    saveNotice = read.kind === 'invalid' ? 'The saved data could not be read safely and was left unchanged. Progress is in this tab only.' : 'Saving is unavailable. Progress is in this tab only.';
+    saveNotice = read.kind === 'invalid' ? 'The saved data could not be read safely and was left unchanged. Progress is in this tab only.' + (read.newer ? '' : ' You can reset it in Settings.') : 'Saving is unavailable. Progress is in this tab only.';
     return { saved: false, seasonConflict: false, previousBest: null };
   }
   const previousBest = read.value?.best?.shootout || 0;
@@ -342,9 +342,15 @@ function screenHTML() {
     case 'challenges': return UI.challengesScreen(st);
     case 'trophies': return UI.trophiesScreen(st);
     case 'help': return UI.helpScreen(st, state.helpTab);
-    case 'settings': return UI.settingsScreen(st, store.ok);
+    case 'settings': return UI.settingsScreen(st, saveStatus());
     default: return '';
   }
+}
+// What the Settings screen says about saving: ok, unavailable (storage blocked or failing), unreadable (corrupt record) or newer (a later version's record).
+function saveStatus() {
+  const read = readSaveSnapshot();
+  if (read.kind === 'invalid') return read.newer ? 'newer' : 'unreadable';
+  return read.kind === 'unavailable' || !store.ok ? 'unavailable' : 'ok';
 }
 function finalHTML(st) {
   const m = state.match;
@@ -797,6 +803,14 @@ const ACT = {
   setQ: (a) => setSetting('qLen', +a),
   setClock: (a) => setSetting('shotClock', +a),
   setDiff: (a) => setSetting('difficulty', +a),
+  resetSave: () => {
+    const read = readSaveSnapshot();
+    if (read.kind !== 'invalid' || read.newer) return;
+    if (!resetSave()) { saveNotice = 'The unreadable data could not be backed up, so it was left as it is.'; render(); return; }
+    persist();
+    if (saveNotice === '') saveNotice = 'Saved data was reset. A copy of the old data was kept as hsg-hoops-v1.bak.';
+    render();
+  },
   setSound: (a) => setSetting('sound', a === '1'),
   setVol: (a) => setSetting('vol', +a),
   setMotion: (a) => setSetting('motion', a),

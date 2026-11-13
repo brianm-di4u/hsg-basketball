@@ -169,3 +169,46 @@ export const hostileSaveTests = [
   },
 ];
 tests.push(...hostileSaveTests);
+
+export const resetTests = [
+  {
+    name: 'S6-02: an unreadable save says so, and Reset saved data keeps a copy and unlocks saving',
+    viewports: ['desktop'],
+    async run(t) {
+      const bads = ['{"v":1,"best":{"shoot', 'null', '[]', JSON.stringify({ v: 1, best: { shootout: '33' } })];
+      for (const bad of bads) {
+        await loadWith(t, bad);
+        await t.page.click('[data-act="settings"]');
+        await t.page.click('[data-act="setText"][data-arg="115"]'); // a refused write
+        const text = await t.page.textContent('#screen');
+        t.expect(/unreadable/i.test(text), `says the data is unreadable (${bad.slice(0, 16)})`);
+        t.expect(!/unavailable in this browser/i.test(text), 'does not claim the browser cannot save');
+        t.equal(await rawSave(t), bad, 'the unreadable record is untouched until the player resets');
+        await t.page.click('[data-act="resetSave"]');
+        const fresh = JSON.parse(await rawSave(t));
+        t.equal(fresh.v, 1, 'a fresh record was written');
+        t.equal(fresh.settings.text, 115, 'the setting made in this tab is in it');
+        t.equal(await t.page.evaluate(() => localStorage.getItem('hsg-hoops-v1.bak')), bad, 'the old string was copied to the .bak key');
+        t.expect(!(await t.page.$('[data-act="resetSave"]')), 'the reset button is gone');
+        await t.page.click('[data-act="setText"][data-arg="130"]');
+        t.equal(JSON.parse(await rawSave(t)).settings.text, 130, 'saving works again');
+        await t.page.evaluate(() => localStorage.removeItem('hsg-hoops-v1.bak'));
+      }
+    },
+  },
+  {
+    name: 'S6-02: a save from a newer version is kept and has no reset',
+    viewports: ['desktop'],
+    async run(t) {
+      const newer = JSON.stringify({ v: 2, best: { shootout: 99 } });
+      await loadWith(t, newer);
+      await t.page.click('[data-act="settings"]');
+      await t.page.click('[data-act="setText"][data-arg="115"]');
+      t.expect(/newer version/i.test(await t.page.textContent('#screen')), 'says the data is from a newer version');
+      t.expect(!(await t.page.$('[data-act="resetSave"]')), 'no reset button');
+      await t.game('act', 'storage');
+      t.equal(await rawSave(t), newer, 'the newer record is untouched');
+    },
+  },
+];
+tests.push(...resetTests);

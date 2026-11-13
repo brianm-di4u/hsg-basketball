@@ -212,3 +212,54 @@ export const resetTests = [
   },
 ];
 tests.push(...resetTests);
+
+const oops = (t) => t.page.evaluate(() => !!document.querySelector('[data-act="recover"]') && !document.querySelector('#screen').hidden);
+
+export const faultTests = [
+  {
+    name: 'S6-03: an error in the frame loop shows a recovery panel that returns to the menu',
+    viewports: ['desktop'],
+    allowConsoleErrors: true,
+    async run(t) {
+      await exhibition(t, { seed: 9 });
+      await t.game('resume');
+      await t.page.evaluate(() => window.__game.act('input', { mx: { valueOf() { throw new Error('boom'); } } }));
+      await t.page.waitForFunction(() => !!document.querySelector('[data-act="recover"]'), null, { timeout: 5000 }).catch(() => {});
+      t.expect(await oops(t), 'the recovery panel is showing');
+      t.expect(/went wrong/i.test(await t.page.textContent('#screen')), 'it says something went wrong');
+      t.equal((await t.state()).paused, true, 'the failed match is stopped');
+      await t.page.click('[data-act="recover"]');
+      const s = await t.state();
+      t.equal(s.scene, 'title', 'Return to menu reaches the title');
+      t.equal(s.match, null, 'the match is cleared');
+      t.expect(await t.page.evaluate(() => !!document.querySelector('[data-act="select"]')), 'the title menu is back');
+    },
+  },
+  {
+    name: 'S6-03: an error in a click handler shows the panel instead of a half-switched screen',
+    viewports: ['desktop'],
+    allowConsoleErrors: true,
+    async run(t) {
+      await t.page.evaluate(() => document.body.insertAdjacentHTML('beforeend', '<button id="bad" data-act="playChallenge" data-arg="nope|girls">x</button>'));
+      await t.page.evaluate(() => document.querySelector('#bad').click());
+      t.expect(await oops(t), 'the recovery panel is showing');
+      await t.page.click('[data-act="recover"]');
+      t.equal((await t.state()).scene, 'title', 'back at the title');
+    },
+  },
+  {
+    name: 'S6-03: an uncaught error or rejected promise shows the panel',
+    viewports: ['desktop'],
+    allowConsoleErrors: true,
+    async run(t) {
+      await t.page.evaluate(() => { setTimeout(() => { throw new Error('late boom'); }, 0); });
+      await t.page.waitForTimeout(200);
+      t.expect(await oops(t), 'an uncaught error shows the panel');
+      await t.page.click('[data-act="recover"]');
+      await t.page.evaluate(() => { Promise.reject(new Error('rejected')); });
+      await t.page.waitForTimeout(200);
+      t.expect(await oops(t), 'an unhandled rejection shows the panel');
+    },
+  },
+];
+tests.push(...faultTests);

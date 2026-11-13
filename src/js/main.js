@@ -178,7 +178,7 @@ function start3d() {
       startHQ(G3.renderer, { tier: G3.tier, software: probe.software && state.settings.graphics !== '3d' }); // high-quality art streams in behind the lite gym
     }
     wantLoop(); drawFrame(0);
-  });
+  }).catch(() => { state.busy3d = false; R.use3d = false; document.body.classList.remove('gl'); wantLoop(); drawFrame(0); }); // any 3D start-up fault leaves the classic court
 }
 
 // ---------------------------------------------------------------- match setup
@@ -420,14 +420,37 @@ function wantLoop() {
 }
 function frame(ts) {
   raf = 0;
-  const dt = Math.min(0.25, Math.max(0, (ts - last) / 1000)); last = ts;
-  if (state.replay) stepReplay(dt);
-  else if (!state.paused) {
-    acc += dt; let n = 0; while (acc >= DT && n < 30 && !state.replay) { stepOnce(); acc -= DT; n++; } if (n >= 30) acc = 0;
-    if (state.replayPending && state.match && state.match.time - state.replayPending.at > 0.7 && state.scene === 'game') startReplay();
+  try {
+    const dt = Math.min(0.25, Math.max(0, (ts - last) / 1000)); last = ts;
+    if (state.replay) stepReplay(dt);
+    else if (!state.paused) {
+      acc += dt; let n = 0; while (acc >= DT && n < 30 && !state.replay) { stepOnce(); acc -= DT; n++; } if (n >= 30) acc = 0;
+      if (state.replayPending && state.match && state.match.time - state.replayPending.at > 0.7 && state.scene === 'game') startReplay();
+    }
+    drawFrame(dt);
+  } catch (e) {
+    state.paused = true; if (state.scene === 'title') state.demo = null; // stop stepping whatever failed
+    fail(e);
   }
-  drawFrame(dt);
   if (loopNeeded()) raf = requestAnimationFrame(frame);
+}
+
+// A thrown error never leaves a frozen or half-switched screen: log it once and offer a way back to the menu.
+let failed = false;
+function fail(e) {
+  if (!failed) { failed = true; try { console.error('Spa City Hoops error:', e); } catch (x) { /* no console */ } }
+  const scr = $('#screen');
+  if (!scr) return;
+  scr.hidden = false;
+  scr.innerHTML = '<div class="panel" role="alert"><h2>Something went wrong</h2><p>The game hit an unexpected problem. Your saved data is not affected.</p><nav class="menu"><button class="btn primary" data-act="recover">Return to menu</button></nav></div>';
+  const b = scr.querySelector('button');
+  if (b) b.focus({ preventScroll: true });
+}
+function onFault(ev) {
+  const e = ev.reason !== undefined ? ev.reason : ev.error || ev.message;
+  if (e && (e.name === 'AbortError' || e.name === 'NotAllowedError')) return; // media and fullscreen refusals are not game faults
+  if (typeof e === 'string' && /ResizeObserver/.test(e)) return;
+  fail(e);
 }
 
 // Portrait phones in 3D look down the court toward the basket the user's team attacks (it flips at halftime).
@@ -779,6 +802,7 @@ function layout() {
 
 // ---------------------------------------------------------------- actions
 const ACT = {
+  recover: () => { try { ACT.title(); } catch (e) { location.reload(); } },
   title: () => { state.stack = []; state.match = null; state.so = null; state.paused = false; go('title', false); },
   back,
   hub: () => { state.stack = []; go('hub', false); },
@@ -848,7 +872,7 @@ function onClick(e) {
   unlock();
   play('click');
   const f = ACT[b.dataset.act];
-  if (f) f(b.dataset.arg);
+  try { if (f) f(b.dataset.arg); } catch (err) { fail(err); }
 }
 
 function onKey(e) {
@@ -876,12 +900,16 @@ function boot() {
   document.addEventListener('pointerdown', () => unlock(), { passive: true });
   $('#b-pause').addEventListener('click', () => pauseGame());
   window.addEventListener('resize', () => { layout(); wantLoop(); });
+  window.addEventListener('error', onFault);
+  window.addEventListener('unhandledrejection', onFault);
   for (const q of ['(prefers-color-scheme: dark)', '(prefers-reduced-motion: reduce)']) {
     try { window.matchMedia(q).addEventListener('change', () => { applySettings(); render(); }); } catch (e) { /* old browsers */ }
   }
   render();
   window.__game = HOOKS;
-  requestAnimationFrame(() => start3d());
+  requestAnimationFrame(() => {
+    try { start3d(); } catch (e) { state.busy3d = false; R.use3d = false; document.body.classList.remove('gl'); drawFrame(0); } // the classic court stays if 3D start-up throws
+  });
 }
 
 // ---------------------------------------------------------------- test hooks
@@ -1035,4 +1063,4 @@ const HOOKS = {
   },
 };
 
-boot();
+try { boot(); } catch (e) { fail(e); }

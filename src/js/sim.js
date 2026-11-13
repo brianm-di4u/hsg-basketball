@@ -6,6 +6,7 @@ import { decide, nearestDef, bestPassTarget, spots } from './ai.js';
 import { DIFF, TEAM_AI, meterTime, meterQuality, contestFactor, shotChance, ftChance, SWEET } from './rules.js';
 
 export const DT = 1 / 60;
+const SHOOT_BUFFER = 0.15; // s a shoot press before the catch stays valid
 const BALL_R = 0.4;
 const STAT0 = () => ({ pts: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, reb: 0, ast: 0, stl: 0, blk: 0, to: 0, pf: 0, sec: 0 });
 
@@ -27,7 +28,7 @@ export function createMatch(opts) {
     poss: 0, possAt: 0, dir: [1, -1], arrow: 0, help: [-1, -1],
     clock: { q: 1, t: rules.qLen, shot: rules.shotClock, shotOff: !rules.shotClock, running: false },
     phase: 'tipoff', phaseT: 0, time: 0, pend: null, ft: null, inb: null, tip: null,
-    user: { team: opts.user ?? -1, ctrl: -1, lock: 0, lastSwitch: 0, idle: 0, auto: false, meterLabel: null, meterLabelT: 0 },
+    user: { team: opts.user ?? -1, ctrl: -1, lock: 0, lastSwitch: 0, idle: 0, auto: false, meterLabel: null, meterLabelT: 0, shootBuf: -9 },
     input: { mx: 0, mz: 0, shoot: false, shootP: false, shootR: false, passP: false, switchP: false },
     autoBreak: !!opts.autoBreak, breakReady: false, winner: -1, ev: [], log: [], buzzerPending: false, run: { team: -1, pts: 0 },
     noFouls: !!opts.noFouls, scenario: opts.scenario || null, scVio: [0, 0],
@@ -309,6 +310,12 @@ function gainBall(m, i, how) {
   if (how === 'reb') { R(m, i).st.reb++; say(m, 'reb', { i }); }
   if (m.poss !== p.t) setPoss(m, p.t);
   if (m.user.team === p.t) m.user.ctrl = i; // control moves with the catch, not a tick later
+  if (how === 'catch' && m.user.team === p.t && !m.user.auto) {
+    // a shoot press made while the pass was in flight (recent, or still held) starts the shot on the catch
+    const early = m.user.shootBuf >= m.ball.passAt && (m.time - m.user.shootBuf <= SHOOT_BUFFER || m.input.shoot);
+    m.user.shootBuf = -9;
+    if (early && m.phase === 'live') startShot(m, i);
+  }
   if (how === 'catch' && m.phase === 'inbound') { m.phase = 'live'; m.phaseT = 0; m.clock.running = m.clock.t > 0; m.inb = null; }
   if (how !== 'catch' && m.phase === 'live' && prev !== p.t) m.run.lastChange = m.time;
 }
@@ -463,7 +470,10 @@ function controlTick(m) {
     }
   } else {
     if (inp.passP) trySteal(m, i);
-    if (inp.shootP) jump(m, i);
+    if (inp.shootP) {
+      if (b.state === 'pass' && mine(b.passTo)) u.shootBuf = m.time; // buffered for the catch, not a jump
+      else jump(m, i);
+    }
   }
 }
 

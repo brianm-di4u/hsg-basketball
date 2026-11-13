@@ -331,6 +331,7 @@ export function settingsScreen(st, saving) {
     <h2>Settings</h2>
     ${seg('setSound', [[1, 'On'], [0, 'Off']], s.sound ? 1 : 0, 'Sound')}
     ${seg('setVol', [[0.25, 'Low'], [0.5, 'Medium'], [0.8, 'High']], s.vol, 'Volume')}
+    ${seg('setAmbience', [[1, 'On'], [0, 'Off']], s.ambience === false ? 0 : 1, 'Crowd ambience')}
     ${seg('setMotion', [['auto', 'Follow system'], ['on', 'Reduce'], ['off', 'Full']], s.motion, 'Reduced motion')}
     ${seg('setText', [[100, '100%'], [115, '115%'], [130, '130%']], s.text, 'Text size')}
     ${seg('setTheme', [['auto', 'Default (night)'], ['light', 'Day'], ['dark', 'Night']], s.theme, 'Menu theme')}

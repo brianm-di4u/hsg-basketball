@@ -11,14 +11,14 @@ import { G3, load3d, pickTier, info3d, glProbe, resize3d, setTier, animCtl } fro
 import { startHQ, hqInfo } from './gl/hq.js';
 import { CREST_KEYS, crestURL } from './art.js';
 import { I, initInput, initTouch, setEnabled, drain, cancelHeld } from './input.js';
-import { AU, unlock, play, setVolume, setOn, suspendAudio } from './audio.js';
-import { DIFF, meterQuality } from './rules.js';
+import { AU, unlock, play, setVolume, setOn, setAmbience, setScene, setPaused, setCrowd, duck, suspendAudio, audioList, audioRender } from './audio.js';
+import { DIFF, meterQuality, SWEET } from './rules.js';
 import { writeSave, readSaveSnapshot, resetSave, store, fmtClock, hash } from './util.js';
 import { mergeSave, seasonText } from './save-policy.js';
 import * as UI from './ui.js';
 
 const $ = (s) => document.querySelector(s);
-const DEFAULTS = { sound: true, vol: 0.5, motion: 'auto', text: 100, theme: 'auto', difficulty: 1, qLen: 120, shotClock: 35, assist: false, touch: 'auto', graphics: 'auto', replays: true };
+const DEFAULTS = { sound: true, vol: 0.5, motion: 'auto', text: 100, theme: 'auto', difficulty: 1, qLen: 120, shotClock: 35, assist: false, touch: 'auto', graphics: 'auto', replays: true, ambience: true };
 const state = {
   scene: 'title', stack: [], settings: { ...DEFAULTS }, season: null,
   save: { trophies: [], unlocks: { throwback: false }, best: { shootout: 0 }, challenges: {} },
@@ -107,7 +107,7 @@ const SETTING_OK = {
   sound: (v) => typeof v === 'boolean', vol: (v) => [0.25, 0.5, 0.8].includes(v), motion: (v) => ['auto', 'on', 'off'].includes(v),
   text: (v) => [100, 115, 130].includes(v), theme: (v) => ['auto', 'light', 'dark'].includes(v), difficulty: (v) => [0, 1, 2].includes(v),
   qLen: (v) => [120, 240, 480].includes(v), shotClock: (v) => [0, 35].includes(v), assist: (v) => typeof v === 'boolean',
-  touch: (v) => ['auto', 'on', 'off'].includes(v), graphics: (v) => ['auto', '3d', '2d'].includes(v), replays: (v) => typeof v === 'boolean',
+  touch: (v) => ['auto', 'on', 'off'].includes(v), graphics: (v) => ['auto', '3d', '2d'].includes(v), replays: (v) => typeof v === 'boolean', ambience: (v) => typeof v === 'boolean',
 };
 function cleanSettings(raw) {
   const s = raw && typeof raw === 'object' ? raw : {}, out = { ...DEFAULTS };
@@ -161,7 +161,7 @@ function applySettings() {
   document.body.classList.toggle('reduced', reducedMotion());
   R.reduced = reducedMotion();
   R.use3d = s.graphics !== '2d' && !NO_GL;
-  setOn(s.sound); setVolume(s.vol);
+  setOn(s.sound); setVolume(s.vol); setAmbience(s.ambience !== false);
 }
 const NO_GL = /[?&]gl=0\b/.test(location.search);
 
@@ -403,6 +403,7 @@ function render() {
     scr.scrollTop = 0;
   }
   const showSB = OVER_GAME.has(sc) && (state.match || state.so);
+  syncAudio();
   $('#sb').hidden = !showSB;
   $('#b-pause').hidden = !IN_PLAY.has(sc);
   $('#pad').hidden = !(IN_PLAY.has(sc) && touchOn());
@@ -411,7 +412,7 @@ function render() {
   if (sc === 'title') ensureDemo();
   document.body.classList.toggle('gl', is3d());
   layout();
-  if (sc === 'champion' && !state.confettiShown) { state.confettiShown = true; play('win'); confetti(['#D4A017', '#F4F1EA', team(state.season.school).colors.primary, team(state.season.school).colors.secondary]); }
+  if (sc === 'champion' && !state.confettiShown) { state.confettiShown = true; play('win'); duck(6, 1200); confetti(['#D4A017', '#F4F1EA', team(state.season.school).colors.primary, team(state.season.school).colors.secondary]); }
   if (sc !== 'champion') state.confettiShown = false;
   updateScoreboard(true);
   wantLoop();
@@ -484,6 +485,7 @@ function stepOnce() {
     drain(state.so.input);
     shootoutTick(state.so);
     soEvents(state.so);
+    crowdBed(CROWD_REST + 0.1 * ((state.so.mult || 1) - 1));
     if (state.so.phase === 'end' && state.so.phaseT > 0.8) endShootout();
     return;
   }
@@ -495,6 +497,8 @@ function stepOnce() {
   tick(m);
   record(m);
   matchEvents(m);
+  meterTick(m);
+  crowdBed(CROWD_REST + CROWD_HOME * (m.crowdTeam >= 0 ? m.crowd : 0.3));
   if (m.phase === 'qend' && m.breakReady && !m.autoBreak) { state.paused = true; go('break', false); }
   else if (m.phase === 'final' && m.phaseT > 1.4 && !state.finalShown) onFinal();
 }
@@ -503,7 +507,7 @@ function onFinal() {
   const m = state.match;
   state.finalShown = true; state.paused = true;
   const ut = m.user.team;
-  if (ut >= 0) play(m.winner === ut ? 'win' : 'groan');
+  if (ut >= 0) { play(m.winner === ut ? 'win' : 'groan'); if (m.winner === ut) duck(6, 1200); }
   announce(`Final: ${m.teams[0].short} ${m.teams[0].score}, ${m.teams[1].short} ${m.teams[1].score}.`);
   if (state.mode === 'season') finishSeasonGame();
   if (state.mode === 'challenge') state.chalResult = challengeResult();
@@ -517,7 +521,7 @@ function endShootout() {
   state.save.best.shootout = Math.max(memoryBest, so.score);
   const saved = persist({ score: so.score });
   so.newBest = so.score > (saved.previousBest ?? memoryBest);
-  play(so.newBest ? 'win' : 'buzzer');
+  play(so.newBest ? 'win' : 'buzzer'); duck(6, 1200);
   announce(`Time. ${so.score} points.`);
   go('shootoutEnd', false);
 }
@@ -593,6 +597,32 @@ function replayScene(m) {
 
 // ---------------------------------------------------------------- events → sound, effects, announcements
 function rimSide(x) { return x > COURT.L / 2 ? 1 : 0; }
+// Sound follows the screen: left of the court pans left. In the portrait 3D view the court runs up the screen, so cues stay centred.
+const panAt = (m, x) => (verticalDir(m) ? 0 : Math.max(-0.7, Math.min(0.7, (x / COURT.L - 0.5) * 1.4)));
+const isUserBall = (m, i) => m.user.team === m.p[i].t && m.user.ctrl === i;
+const mineSide = (m, t) => m.user.team < 0 || m.user.team === t;
+// Crowd excitement 0..1: bumped by what happens, it settles back over a few seconds. It drives the ambience bed.
+let excite = 0, meterAcc = 0.1;
+const CROWD_REST = 0.22, CROWD_HOME = 0.3, CROWD_RISE = 0.55, EXCITE_TAU = 2.5; // resting level, weight of the home-crowd meter, weight of excitement, seconds to settle
+const bump = (x) => { excite = Math.min(1, excite + x); };
+function crowdBed(level) { excite *= Math.exp(-DT / EXCITE_TAU); setCrowd(Math.min(1, level + excite * CROWD_RISE)); }
+// Which ambience bed sounds for this screen, and whether it is held (the pause card).
+function syncAudio() {
+  const sc = state.scene, m = state.match;
+  const inMatch = m && (sc === 'game' || sc === 'pause' || sc === 'break' || sc === 'final');
+  setScene(inMatch ? (m.venue === 'arena' ? 'arena' : 'gym') : sc === 'shootout' || sc === 'shootoutEnd' ? 'gym' : '');
+  setPaused(sc === 'pause' || (sc === 'shootout' && state.paused));
+  if (sc === 'break') { excite = 0; setCrowd(CROWD_REST + CROWD_HOME * 0.3); }
+}
+// The meter ticks while the user holds a shot, faster and higher toward the top of the jump.
+function meterTick(m) {
+  const u = m.user, p = u.team >= 0 && u.ctrl >= 0 ? m.p[u.ctrl] : null;
+  if (p && (p.act === 'shoot' || p.act === 'layup') && m.ball.holder === p.idx && !u.auto) {
+    const v = Math.max(0, Math.min(1, p.meter / SWEET));
+    meterAcc += DT;
+    if (meterAcc >= 0.17 - 0.11 * v) { meterAcc = 0; play('meter', { p: v }); }
+  } else meterAcc = 0.1;
+}
 const WHY = { shotclock: 'SHOT CLOCK', oob: 'OUT OF BOUNDS', reach: 'FOUL', shoot: 'SHOOTING FOUL', '5sec': '5 SECONDS' };
 function matchEvents(m) {
   for (const e of m.ev) {
@@ -601,25 +631,38 @@ function matchEvents(m) {
         const side = rimSide(rimFor(m.dir[e.t]));
         pop(`+${e.pts}`, COURT.rimX[side], 14.8, 25, '#FFF6E0', e.pts === 3); // above the backboard, never on the rim
         if (e.pts === 3) { burst('steam', COURT.rimX[side], 10, 25, 10, ['#fff']); G3.refSignal = 1.4; }
-        play('cheer', { big: e.pts === 3 || m.teams[e.t].isUser });
+        { // your basket gets the full roar, theirs a polite murmur and a groan from your crowd; taking the lead brings the house down
+          const mine = mineSide(m, e.t), pan = panAt(m, COURT.rimX[side]), diff = m.teams[0].score - m.teams[1].score, before = diff - (e.t === 0 ? e.pts : -e.pts);
+          play('cheer', { big: e.pts === 3 || m.teams[e.t].isUser, mine, pan });
+          if (!mine) play('groan', { pan: -pan * 0.5 });
+          if (mine && before * diff < 0) play('roar', { pan: 0 });
+          bump(mine ? (e.pts === 3 ? 0.8 : 0.55) : 0.3);
+        }
         state.cheer = e.pts === 3 ? 1 : 0.75; state.cheerTeam = e.t; state.cheerAt = { m, t: m.time, x: rimFor(m.dir[e.t]) };
         // the sim says 'score' before 'swish' in the same tick: the shot type comes from this tick's swish
         { const sw = m.ev.find((x) => x.k === 'swish' && x.t === e.t); const lm = { ...(state.lastMake || {}), dunk: sw ? sw.type === 'dunk' : false, side: sw ? rimSide(rimFor(m.dir[e.t])) : (state.lastMake || {}).side }; if (e.pts === 3 || lm.dunk || lm.buzzer) { state.slam = { m, text: lm.buzzer ? 'BUZZER BEATER' : lm.dunk ? 'SLAM DUNK' : '3 POINTS', color: m.teams[e.t].colors.primary, sub: m.teams[e.t].short.toUpperCase(), at: m.time, side }; } if (e.pts === 3 || lm.dunk || lm.buzzer) queueReplay(m, lm.dunk ? 'DUNK' : lm.buzzer ? 'BUZZER BEATER' : 'THREE', lm.side ?? rimSide(m.ball.x)); state.lastMake = null; }
         announce(`${m.teams[e.t].short} scores ${e.pts}. ${m.teams[0].short} ${m.teams[0].score}, ${m.teams[1].short} ${m.teams[1].score}.`);
         break;
       }
-      case 'swish': netHit(rimSide(m.ball.x)); play('swish'); if (e.type === 'dunk') shake(0.6); state.lastMake = { dunk: e.type === 'dunk', buzzer: !!(m.ball.shot && m.ball.shot.buzzer), side: rimSide(m.ball.x) }; break;
-      case 'rim': rimHit(rimSide(m.ball.x)); play('rim', e); break;
-      case 'bounce': play('bounce'); break;
-      case 'floor': play('floor'); break;
-      case 'whistle': play('whistle'); if (WHY[e.why]) pop(WHY[e.why], m.ball.x, 8, m.ball.z, '#FFB4A8'); if (e.why === 'shotclock') announce('Shot-clock violation.'); break;
-      case 'buzzer': play('buzzer'); break;
-      case 'steal': pop('STEAL!', m.p[e.i].x, 7, m.p[e.i].z, '#FFD84D'); play('steal'); break;
-      case 'block': pop('BLOCKED!', m.p[e.i].x, 9, m.p[e.i].z, '#FFD84D'); play('block'); shake(0.4); state.cheer = 0.6; state.cheerTeam = m.p[e.i].t; break;
+      case 'swish': netHit(rimSide(m.ball.x)); play('swish', { pan: panAt(m, m.ball.x) }); if (e.type === 'dunk') shake(0.6); state.lastMake = { dunk: e.type === 'dunk', buzzer: !!(m.ball.shot && m.ball.shot.buzzer), side: rimSide(m.ball.x) }; break;
+      case 'rim': rimHit(rimSide(m.ball.x)); play('rim', { hard: e.hard, v: m.ball.z < COURT.rimZ - 0.2 ? 0 : m.ball.z > COURT.rimZ + 0.2 ? 1 : 2, pan: panAt(m, m.ball.x) }); if (state.lastShot && m.time - state.lastShot < 2.5) { play('ooh', { pan: panAt(m, m.ball.x) }); bump(0.2); } break;
+      case 'bounce': play('bounce', { pan: panAt(m, m.ball.x), far: e.i == null || !isUserBall(m, e.i) }); break;
+      case 'floor': play('floor', { pan: panAt(m, m.ball.x) }); break;
+      case 'whistle': play('whistle'); duck(5, 700); if (WHY[e.why]) pop(WHY[e.why], m.ball.x, 8, m.ball.z, '#FFB4A8'); if (e.why === 'shotclock') announce('Shot-clock violation.'); break;
+      case 'buzzer': play('buzzer'); duck(6, 1000); break;
+      case 'steal': pop('STEAL!', m.p[e.i].x, 7, m.p[e.i].z, '#FFD84D'); play('steal', { pan: panAt(m, m.p[e.i].x) }); bump(0.15); break;
+      case 'block': pop('BLOCKED!', m.p[e.i].x, 9, m.p[e.i].z, '#FFD84D'); play('block', { pan: panAt(m, m.p[e.i].x) }); bump(0.3); shake(0.4); state.cheer = 0.6; state.cheerTeam = m.p[e.i].t; break;
       case 'andone': pop('AND ONE!', m.p[e.i].x, 8, m.p[e.i].z, '#5FD38A', true); break;
       case 'fouledout': pop('FOULED OUT', m.ball.x, 8, m.ball.z, '#FFB4A8'); announce('A player has fouled out.'); break;
       case 'tip': play('squeak'); break;
-      case 'airball': pop('AIRBALL', m.ball.x, 6, m.ball.z, '#FFB4A8'); break;
+      case 'airball': pop('AIRBALL', m.ball.x, 6, m.ball.z, '#FFB4A8'); play('sigh', { pan: panAt(m, m.ball.x) }); state.lastShot = 0; break;
+      case 'gather': if (isUserBall(m, e.i)) { play('meter', { p: 0 }); meterAcc = 0; } break;
+      case 'shot': state.lastShot = e.three ? m.time : 0; play('release', { three: e.three, pan: panAt(m, m.p[e.i].x), far: !isUserBall(m, e.i) }); if (e.three) bump(0.25); break;
+      case 'pass': play('pass', { pan: panAt(m, m.p[e.i].x), far: m.p[e.i].t !== m.user.team }); break;
+      case 'catch': play('catch', { pan: panAt(m, m.p[e.i].x), far: m.p[e.i].t !== m.user.team }); break;
+      case 'jump': if (isUserBall(m, e.i)) play('jump', { pan: panAt(m, m.p[e.i].x) }); break;
+      case 'reb': play('reb', { pan: panAt(m, m.p[e.i].x), far: m.p[e.i].t !== m.user.team }); bump(0.1); break;
+      case 'sub': play('sub', { far: e.t !== m.user.team }); break;
       case 'qend': announce(m.clock.q === 2 ? 'Halftime.' : `End of quarter ${m.clock.q}.`); break;
       case 'period': announce(m.clock.q > 4 ? 'Overtime.' : `Quarter ${m.clock.q}.`); break;
       default: break;
@@ -629,8 +672,8 @@ function matchEvents(m) {
 }
 function soEvents(so) {
   for (const e of so.ev) {
-    if (e.k === 'make') { pop(e.mult > 1 ? `+${e.pts} x${e.mult}` : `+${e.pts}`, e.x, 11.5, e.z, e.mult > 1 ? '#FFD84D' : '#FFF6E0', e.mult > 1); netHit(1); play('swish'); if (e.mult > 1) burst('steam', e.x, 10, e.z, 8, ['#fff']); }
-    if (e.k === 'miss') { rimHit(1); play('rim'); }
+    if (e.k === 'make') { pop(e.mult > 1 ? `+${e.pts} x${e.mult}` : `+${e.pts}`, e.x, 11.5, e.z, e.mult > 1 ? '#FFD84D' : '#FFF6E0', e.mult > 1); netHit(1); play('swish', { p: Math.min(1, ((e.mult || 1) - 1) / 2) }); bump(0.3); if (e.mult > 1) burst('steam', e.x, 10, e.z, 8, ['#fff']); }
+    if (e.k === 'miss') { rimHit(1); play('rim'); play('ooh'); }
     if (e.k === 'start') play('buzzer');
   }
   so.ev.length = 0;
@@ -848,6 +891,7 @@ const ACT = {
   },
   setSound: (a) => setSetting('sound', a === '1'),
   setVol: (a) => setSetting('vol', +a),
+  setAmbience: (a) => setSetting('ambience', a === '1'),
   setMotion: (a) => setSetting('motion', a),
   setText: (a) => setSetting('text', +a),
   setTheme: (a) => setSetting('theme', a),
@@ -874,7 +918,7 @@ function setSetting(k, v) { state.settings[k] = v; persist({ settings: { [k]: v 
 function pauseGame() {
   if (state.replay) endReplay();
   if (state.scene === 'game') { state.paused = true; go('pause', false); }
-  else if (state.scene === 'shootout') { state.paused = !state.paused; wantLoop(); }
+  else if (state.scene === 'shootout') { state.paused = !state.paused; syncAudio(); wantLoop(); }
 }
 
 // Tab hidden, window blurred or page leaving: stop play, drop a held shot (never fire it) and quiet the audio.
@@ -949,7 +993,7 @@ function sumState() {
     challenge: state.chal, chalResult: state.chalResult ? { ok: state.chalResult.ok, more: state.chalResult.more, note: state.chalResult.note } : null,
     trophies: state.save.trophies, unlocks: state.save.unlocks, best: state.save.best, challenges: state.save.challenges,
     replay: state.replay ? { kind: state.replay.kind, f: Math.floor(state.replay.f), n: state.replay.frames.length } : null,
-    pick: { ...state.pick }, audio: { ctx: !!AU.ctx, on: AU.on }, reduced: R.reduced, touch: touchOn(), fx: R.fx.parts.length, loop: !!raf,
+    pick: { ...state.pick }, audio: { ctx: !!AU.ctx, on: AU.on, ambience: AU.ambOn, bed: AU.kit && AU.kit.amb.scene && AU.scene ? AU.scene : '', held: !!(AU.kit && AU.kit.held), state: AU.ctx ? AU.ctx.state : null, crowd: AU.crowd ?? null, count: { ...AU.count } }, reduced: R.reduced, touch: touchOn(), fx: R.fx.parts.length, loop: !!raf,
     view: R.v ? { W: R.v.W, H: R.v.H, s: +R.v.s.toFixed(2), camX: +R.v.camX.toFixed(2) } : null,
     gfx: { mode: is3d() ? '3d' : '2d', gl: state.gl || null, ...info3d(), hq: hqInfo() },
     hud: hudState(),
@@ -977,6 +1021,8 @@ function stepN(n) {
 
 const HOOKS = {
   seed(n) { state.seed = n | 0; return n; },
+  audioList,
+  audioRender,
   getState: sumState,
   setState(s) {
     if (s.settings) { Object.assign(state.settings, s.settings); persist({ settings: s.settings }); applySettings(); }

@@ -301,6 +301,7 @@ export function jump(m, i) {
   const p = m.p[i];
   if (p.y > 0 || p.act === 'shoot' || p.act === 'layup') return false;
   p.vy = 12 + 4 * R(m, i).jmp; p.act = 'jump'; p.actT = 0;
+  say(m, 'jump', { i });
   return true;
 }
 
@@ -313,6 +314,7 @@ function gainBall(m, i, how) {
   p.holdT = 0; p.drive = 0;
   if (p.act === 'shoot' || p.act === 'layup') { p.act = 'idle'; p.meter = 0; }
   if (how === 'reb') { R(m, i).st.reb++; say(m, 'reb', { i }); }
+  else if (how === 'catch') say(m, 'catch', { i });
   if (m.poss !== p.t) setPoss(m, p.t);
   if (m.user.team === p.t) m.user.ctrl = i; // control moves with the catch, not a tick later
   if (how === 'catch' && m.user.team === p.t && !m.user.auto) {

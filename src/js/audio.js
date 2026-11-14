@@ -17,9 +17,12 @@ function limiter(ctx, dest) {
   c.threshold.value = -4; c.knee.value = 0; c.ratio.value = 20; c.attack.value = 0.002; c.release.value = 0.12;
   c.connect(dest); return c;
 }
+const NOISE_SEED = 0x5eed1;
 function noiseBuffer(ctx) {
   const len = ctx.sampleRate * 2, b = ctx.createBuffer(1, len, ctx.sampleRate), d = b.getChannelData(0);
-  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  // A fixed seed: white noise sounds the same whichever numbers it is made of, and the cue-level measurements repeat exactly.
+  let a = NOISE_SEED;
+  for (let i = 0; i < len; i++) { a = (a + 0x6D2B79F5) >>> 0; let x = Math.imul(a ^ (a >>> 15), a | 1); x ^= x + Math.imul(x ^ (x >>> 7), x | 61); d[i] = ((x ^ (x >>> 14)) >>> 0) / 2147483648 - 1; }
   return b;
 }
 
@@ -98,8 +101,8 @@ AU.noiseFor = (ctx) => { let b = noiseCache.get(ctx); if (!b) { b = noiseBuffer(
 // it). Every play gets its own jitter J: pitch +/- cents, gain down by up to a couple of dB, and a different place in
 // the noise buffer, so no two repeats are sample-identical. o = { pan, v (variant), p (0..1 state), big, mine, hard, far }.
 // Per-cue level trims, measured so each gameplay cue peaks between 0.2 and 0.45 at Medium volume
-// even at the quietest jitter draw (the jitter takes up to 1.5 dB off).
-const TRIM = { fake: 1.8, sprint: 2.3, cross: 0.88, reb: 0.9, tick: 0.9, streak: 1.3, swish: 1.2, floor: 1.15, rim: 1.15, whistle: 1.1, cheer: 1.2, groan: 5.4, ooh: 5.3, sigh: 4.0, block: 0.7, release: 1.82, pass: 1.32, catch: 1.15, jump: 2.5, sub: 1.63 };
+// even at the quietest jitter draw (the jitter takes up to 1.5 dB off). The noise buffer has a fixed seed, so the worst draw over 150 seeds is a repeatable number: 0.205 to 0.45.
+const TRIM = { fake: 1.95, sprint: 2.55, cross: 0.88, reb: 0.9, tick: 0.9, streak: 1.3, swish: 1.2, floor: 1.15, rim: 1.15, whistle: 1.1, cheer: 1.2, groan: 5.4, ooh: 5.3, sigh: 4.0, block: 0.7, release: 1.82, pass: 1.32, catch: 1.15, jump: 2.5, sub: 1.63 };
 const JIT = { default: [20, 1.5], click: [8, 0.6], whistle: [18, 1.2], buzzer: [6, 0.6], meter: [4, 0.4], win: [6, 0.8] };
 
 export function makeCues(ctx, master, kit) {

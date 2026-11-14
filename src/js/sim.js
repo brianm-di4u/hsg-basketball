@@ -8,6 +8,15 @@ import { DIFF, TEAM_AI, meterTime, meterQuality, contestFactor, shotChance, ftCh
 export const DT = 1 / 60;
 const SHOOT_BUFFER = 0.15; // s a shoot press before the catch stays valid
 const BALL_R = 0.4;
+// Move set (P-N01): sprint, pump fake and crossover. The AI uses all three under the same costs and cooldowns.
+export const SPRINT_MULT = 1.25;  // top speed while sprint is held
+const SPRINT_DRAIN = 3;           // energy drain while sprinting, as a multiple of running
+const SPRINT_MIN = 0.3;           // below this energy the boost cuts out
+const PUMP_TAP = 0.17;            // s: a Shoot tap shorter than this is a pump fake, not a shot
+const PUMP_T = 0.35, PUMP_CD = 0.8; // s a fake lasts, s before the next one
+const PUMP_STUN = 1.05;           // s a defender who bites is out of the play (in the air, then recovering)
+const CROSS_CD = 1.0, CROSS_STUN = 0.5, CROSS_RANGE = 5; // crossover cooldown, how long a beaten defender is slowed, how near he must be
+const CROSS_WINDOW = 0.3, CROSS_HOLD = 0.1, CROSS_MIN_SPEED = 5; // a reversal within this many s of the old direction, after it was held this long, at this speed
 const STAT0 = () => ({ pts: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, reb: 0, ast: 0, stl: 0, blk: 0, to: 0, pf: 0, sec: 0 });
 
 // opts: {mode, home, away (team objects with roster, kit), rules:{qLen, shotClock}, seed, user (0|1|-1), difficulty, assist, crowd (team idx or -1), venue}
@@ -28,13 +37,14 @@ export function createMatch(opts) {
     poss: 0, possAt: 0, dir: [1, -1], arrow: 0, help: [-1, -1],
     clock: { q: 1, t: rules.qLen, shot: rules.shotClock, shotOff: !rules.shotClock, running: false },
     phase: 'tipoff', phaseT: 0, time: 0, pend: null, ft: null, inb: null, tip: null,
-    user: { team: opts.user ?? -1, ctrl: -1, lock: 0, lastSwitch: 0, idle: 0, auto: false, meterLabel: null, meterLabelT: 0, shootBuf: -9 },
-    input: { mx: 0, mz: 0, shoot: false, shootP: false, shootR: false, passP: false, switchP: false },
+    user: { team: opts.user ?? -1, ctrl: -1, lock: 0, lastSwitch: 0, idle: 0, auto: false, meterLabel: null, meterLabelT: 0, shootBuf: -9, ref: null, refSince: 0, refLast: -9, sprintIdx: -1, spr: false },
+    input: { mx: 0, mz: 0, shoot: false, shootP: false, shootR: false, passP: false, switchP: false, sprint: false },
     autoBreak: !!opts.autoBreak, breakReady: false, winner: -1, ev: [], log: [], buzzerPending: false, run: { team: -1, pts: 0 },
     noFouls: !!opts.noFouls, scenario: opts.scenario || null, scVio: [0, 0],
+    fx: { sprint: [0, 0], pump: [0, 0], cross: [0, 0], hack: [0, 0] }, // move-set use per team (seconds of sprint, fakes, crossovers, deliberate fouls), for tests and tuning
   };
   for (let t = 0; t < 2; t++) for (let s = 0; s < 5; s++) {
-    m.p.push({ idx: t * 5 + s, t, slot: s, r: s, x: 47, z: 25, y: 0, vx: 0, vz: 0, vy: 0, face: t ? -1 : 1, act: 'idle', actT: 0, tx: 47, tz: 25, want: 1, aiT: 0, cool: 0, holdT: 0, drive: 0, cut: 0, meter: 0, relAt: 0, stype: '', run: 0 });
+    m.p.push({ idx: t * 5 + s, t, slot: s, r: s, x: 47, z: 25, y: 0, vx: 0, vz: 0, vy: 0, face: t ? -1 : 1, act: 'idle', actT: 0, tx: 47, tz: 25, want: 1, aiT: 0, cool: 0, holdT: 0, drive: 0, cut: 0, meter: 0, relAt: 0, stype: '', run: 0, sprint: false, stun: 0, crossCd: 0, pumpCd: 0, bite: false });
   }
   setupTipoff(m);
   return m;
@@ -224,8 +234,9 @@ function release(m, i) {
   const dist = distToRim(p.x, p.z, d);
   const three = type === 'jumper' && isThree(p.x, p.z, d);
   const nd = nearestDef(m, p.x, p.z, t);
-  const jumping = nd.idx >= 0 && m.p[nd.idx].y > 0.5;
-  const contest = contestFactor(nd.d, jumping);
+  const beaten = nd.idx >= 0 && m.p[nd.idx].stun > 0; // faked out or crossed over: he is not in the shooter's face
+  const jumping = nd.idx >= 0 && m.p[nd.idx].y > 0.5 && !beaten;
+  const contest = contestFactor(beaten ? nd.d + 2.5 : nd.d, jumping);
   const bonus = m.crowdTeam === t && m.crowd > 0.6 ? 1.05 : 1;
   const prob = shotChance({ dist, type, sht: r.sht, ins: r.ins, contest, quality, energy: r.energy, bonus });
   const make = rnd(m) < prob;
@@ -277,7 +288,7 @@ export function doPass(m, i, j) {
 
 export function trySteal(m, i) {
   const p = m.p[i];
-  if (p.cool > 0 || m.phase !== 'live') return false;
+  if (p.cool > 0 || p.stun > 0 || m.phase !== 'live') return false;
   const h = m.ball.holder;
   if (h < 0 || m.p[h].t === p.t) return false;
   const hp = m.p[h];
@@ -305,7 +316,45 @@ export function jump(m, i) {
   return true;
 }
 
-const A = { startShot, doPass, trySteal, jump };
+// A pump fake: the shot is not taken, the ball comes back down. Defenders near him may bite and leave their feet.
+export function pumpFake(m, i) {
+  const p = m.p[i];
+  if (m.ball.holder !== i || m.phase !== 'live' || p.pumpCd > 0 || p.act === 'layup') return false;
+  p.act = 'pump'; p.actT = 0; p.meter = 0; p.pumpCd = PUMP_CD; p.vy = Math.min(p.vy, 0);
+  for (let k = (1 - p.t) * 5; k < (1 - p.t) * 5 + 5; k++) {
+    const q = m.p[k];
+    if (Math.hypot(q.x - p.x, q.z - p.z) > 4.5 || q.y > 0 || isUserCtrl(m, k)) continue; // a person steering a defender chooses for himself
+    const bite = clamp(0.78 - 0.55 * R(m, k).def, 0.15, 0.85);
+    if (rnd(m) < bite) { q.jumpIn = 0.03 + rnd(m) * 0.07; q.bite = true; }
+    else q.jumpIn = null;
+  }
+  m.fx.pump[p.t]++;
+  say(m, 'pump', { i });
+  return true;
+}
+
+// A crossover: the ball handler changes direction at once, and a defender close by may be left behind.
+export function crossover(m, i, dx, dz) {
+  const p = m.p[i];
+  if (m.ball.holder !== i || m.phase !== 'live' || p.crossCd > 0 || p.y > 0 || p.act === 'shoot' || p.act === 'layup') return false;
+  const L = Math.hypot(dx, dz) || 1, r = R(m, i);
+  const max = (14 + 6 * r.spd) * (0.85 + 0.15 * r.energy) * 0.92 * (spriting(m, i) ? SPRINT_MULT : 1);
+  p.vx = dx / L * max * 0.9; p.vz = dz / L * max * 0.9;
+  p.act = 'cross'; p.actT = 0; p.crossCd = CROSS_CD;
+  let fooled = false;
+  for (let k = (1 - p.t) * 5; k < (1 - p.t) * 5 + 5; k++) {
+    const q = m.p[k];
+    if (q.y > 0 || Math.hypot(q.x - p.x, q.z - p.z) > CROSS_RANGE) continue;
+    if (rnd(m) < clamp(0.4 + 0.9 * (r.hnd - R(m, k).def), 0.1, 0.85)) { q.stun = Math.max(q.stun, CROSS_STUN); fooled = true; }
+  }
+  m.fx.cross[p.t]++;
+  say(m, 'cross', { i, fooled });
+  return true;
+}
+// Sprint is on while it is asked for in live play and the legs are not spent.
+const spriting = (m, i) => m.p[i].sprint && m.phase === 'live' && R(m, i).energy > SPRINT_MIN;
+
+const A = { startShot, doPass, trySteal, jump, pump: pumpFake, cross: crossover };
 
 function gainBall(m, i, how) {
   const p = m.p[i];
@@ -383,14 +432,14 @@ export function tick(m) {
   controlTick(m);
   for (let i = 0; i < 10; i++) {
     const p = m.p[i];
-    p.cool = Math.max(0, p.cool - DT);
+    p.cool = Math.max(0, p.cool - DT); p.stun = Math.max(0, p.stun - DT); p.crossCd = Math.max(0, p.crossCd - DT); p.pumpCd = Math.max(0, p.pumpCd - DT);
     p.holdT += DT;
     if (p.drive > 0) p.drive -= DT;
     if (isUserCtrl(m, i)) continue;
     if (p.drive > 0 && m.ball.holder === i && distToRim(p.x, p.z, m.dir[p.t]) < 4.2) startShot(m, i);
     p.aiT -= DT;
     if (p.aiT <= 0) decide(m, i, A, aiOf(m, p.t));
-    if (p.jumpIn != null) { p.jumpIn -= DT; if (p.jumpIn <= 0) { p.jumpIn = null; if (m.ball.state === 'shot' || (m.ball.holder >= 0 && (m.p[m.ball.holder].act === 'shoot' || m.p[m.ball.holder].act === 'layup'))) jump(m, i); } }
+    if (p.jumpIn != null) { p.jumpIn -= DT; if (p.jumpIn <= 0) { p.jumpIn = null; if (p.bite) { p.bite = false; if (jump(m, i)) p.stun = PUMP_STUN; } else if (m.ball.state === 'shot' || (m.ball.holder >= 0 && (m.p[m.ball.holder].act === 'shoot' || m.p[m.ball.holder].act === 'layup'))) jump(m, i); } }
   }
   shooterTick(m);
   if (m.phase === 'inbound') inboundTick(m);
@@ -461,6 +510,18 @@ function controlTick(m) {
   const r = R(m, i);
   const mag = Math.hypot(inp.mx, inp.mz);
   u.idle = mag < 0.1 ? u.idle + DT : 0;
+  if (u.sprintIdx !== i) { if (u.sprintIdx >= 0) m.p[u.sprintIdx].sprint = false; u.sprintIdx = i; }
+  p.sprint = !!inp.sprint;
+  if (p.sprint && !u.spr && mag > 0.1 && m.phase === 'live') say(m, 'sprint', { i });
+  u.spr = p.sprint;
+  if (b.holder === i && m.phase === 'live' && mag > 0.6) { // a hard reversal of the stick or keys while dribbling is a crossover
+    const ux = inp.mx / mag, uz = inp.mz / mag, ref = u.ref;
+    if (ref && ref.x * ux + ref.z * uz > 0.7) u.refLast = m.time; // same way: keep counting how long it has been held
+    else {
+      if (ref && ref.x * ux + ref.z * uz < -0.2 && m.time - u.refLast < CROSS_WINDOW && u.refLast - u.refSince >= CROSS_HOLD && Math.hypot(p.vx, p.vz) > CROSS_MIN_SPEED) crossover(m, i, ux, uz);
+      u.ref = { x: ux, z: uz }; u.refSince = u.refLast = m.time;
+    }
+  }
   // movement intent
   const spd = (14 + 6 * r.spd) * (0.85 + 0.15 * r.energy) * (b.holder === i ? 0.92 : 1);
   if (m.phase === 'ft' || m.phase === 'tipoff' || (m.phase === 'inbound' && m.inb && m.inb.by === i)) { p.tx = p.x; p.tz = p.z; p.want = 0; }
@@ -499,6 +560,7 @@ function shooterTick(m) {
       p.tx = rimFor(d) - d * 1.5; p.tz = 25; p.want = 0.6;
     }
     if (p.forceQ != null && p.meter >= SWEET) { release(m, i); continue; }
+    if (user && p.forceQ == null && p.stype === 'jumper' && p.actT < PUMP_TAP && (m.input.shootR || !m.input.shoot) && p.actT > 0.02) { pumpFake(m, i); continue; } // a quick tap is a pump fake
     if (user ? (m.input.shootR || !m.input.shoot || p.meter >= 1.18) && p.actT > 0.06 : p.meter >= p.relAt) release(m, i);
   }
 }
@@ -574,7 +636,7 @@ function integrate(m) {
       const frozen = p.act === 'shoot' || (m.phase === 'ft') || (m.phase === 'tipoff');
       if (!frozen) {
         const dx = p.tx - p.x, dz = p.tz - p.z, dd = Math.hypot(dx, dz);
-        const max = (14 + 6 * r.spd) * (0.85 + 0.15 * r.energy) * (m.ball.holder === i ? 0.92 : 1) * (p.want ?? 1);
+        const max = (14 + 6 * r.spd) * (0.85 + 0.15 * r.energy) * (m.ball.holder === i ? 0.92 : 1) * (p.want ?? 1) * (spriting(m, i) ? SPRINT_MULT : 1) * (p.stun > 0 ? 0.25 : 1);
         if (dd > 0.25) { const sp = Math.min(max, dd * 3.2); dvx = dx / dd * sp; dvz = dz / dd * sp; }
       }
       const acc = 46 * DT;
@@ -594,7 +656,9 @@ function integrate(m) {
     const moving = Math.hypot(p.vx, p.vz);
     // energy is paced to the quarter length so subs come about once a quarter at any setting
     const k = 0.5 / m.rules.qLen;
-    if (m.clock.running) { r.energy = Math.max(0.2, r.energy - DT * k * (0.5 + 0.5 * Math.min(1, moving / 15))); r.st.sec += DT; }
+    const spr = spriting(m, i) && moving > 8;
+    if (spr) m.fx.sprint[p.t] += DT;
+    if (m.clock.running) { r.energy = Math.max(0.2, r.energy - DT * k * (0.5 + 0.5 * Math.min(1, moving / 15)) * (spr ? SPRINT_DRAIN : 1)); r.st.sec += DT; }
   }
   // bench recovery
   if (m.clock.running) { const k = 1.4 / m.rules.qLen; for (const T of m.teams) T.roster.forEach((r, j) => { if (!T.onCourt.includes(j)) r.energy = Math.min(1, r.energy + DT * k); }); }
@@ -618,6 +682,7 @@ function animate(m) {
   for (const p of m.p) {
     p.actT += p.act === 'shoot' || p.act === 'layup' ? 0 : DT;
     if ((p.act === 'pass' || p.act === 'steal') && p.actT > 0.25) p.act = 'idle';
+    if ((p.act === 'pump' && p.actT > PUMP_T) || (p.act === 'cross' && p.actT > 0.3)) p.act = 'idle';
     p.run = (p.run + Math.hypot(p.vx, p.vz) * DT * 0.55) % (Math.PI * 2);
   }
 }
@@ -642,6 +707,8 @@ function ballTick(m) {
     const moving = Math.hypot(p.vx, p.vz) > 1.5;
     b.x = p.x + p.face * 0.9; b.z = p.z + 0.3;
     if (shooting) { b.y = hFt(m, b.holder) + p.y + 0.6; b.x = p.x + p.face * 0.35; }
+    else if (p.act === 'pump') { b.y = hFt(m, b.holder) + p.y + 0.4; b.x = p.x + p.face * 0.4; }
+    else if (p.act === 'cross') { b.y = hFt(m, b.holder) * 0.45; b.z = p.z + 0.3 + 1.3 * Math.cos(Math.PI * Math.min(1, p.actT / 0.3)); }
     else if (m.phase === 'inbound' || m.phase === 'ft' || m.phase === 'dead') b.y = hFt(m, b.holder) * 0.55;
     else if (moving || p.holdT > 0.5) {
       b.dp = (b.dp || 0) + DT * 8.5;
@@ -696,7 +763,7 @@ function ballTick(m) {
       for (let k = (1 - s.team) * 5; k < (1 - s.team) * 5 + 5; k++) {
         if (b.tried.includes(k)) continue;
         const q = m.p[k];
-        if (q.y > 0.4 && Math.hypot(q.x - b.x, q.z - b.z) < 1.9 && reach(m, k) >= b.y) {
+        if (q.y > 0.4 && q.stun <= 0 && Math.hypot(q.x - b.x, q.z - b.z) < 1.9 && reach(m, k) >= b.y) {
           b.tried.push(k);
           const ch = 0.02 + 0.1 * R(m, k).blk - (s.type === 'dunk' ? 0.015 : 0);
           if (rnd(m) < ch) {
@@ -897,7 +964,8 @@ export function summary(m) {
     teams: m.teams.map((T) => ({ key: T.key, name: T.name, abbr: T.abbr, isUser: T.isUser, tf: T.tf, kit: T.kit, onCourt: T.onCourt.slice(), fictional: T.fictional })),
     ball: { state: m.ball.state, holder: m.ball.holder, x: +m.ball.x.toFixed(2), y: +m.ball.y.toFixed(2), z: +m.ball.z.toFixed(2), shot: m.ball.shot ? { type: m.ball.shot.type, make: m.ball.shot.make, three: m.ball.shot.three, q: m.ball.shot.q, label: m.ball.shot.label } : null },
     user: { team: m.user.team, ctrl: m.user.ctrl, auto: m.user.auto, meterLabel: m.user.meterLabel },
-    players: m.p.map((p) => { const r = m.teams[p.t].roster[p.r]; return { i: p.idx, t: p.t, slot: p.slot, num: r.num, name: `${r.first} ${r.last}`, x: +p.x.toFixed(2), z: +p.z.toFixed(2), y: +p.y.toFixed(2), act: p.act, pf: r.st.pf, energy: +r.energy.toFixed(2), meter: +(p.meter || 0).toFixed(3) }; }),
+    players: m.p.map((p) => { const r = m.teams[p.t].roster[p.r]; return { i: p.idx, t: p.t, slot: p.slot, num: r.num, name: `${r.first} ${r.last}`, x: +p.x.toFixed(2), z: +p.z.toFixed(2), y: +p.y.toFixed(2), act: p.act, pf: r.st.pf, energy: +r.energy.toFixed(2), meter: +(p.meter || 0).toFixed(3), stun: +p.stun.toFixed(2), sprint: p.sprint }; }),
+    fx: m.fx,
     ft: m.ft ? { by: m.ft.by, team: m.ft.team, left: m.ft.left, total: m.ft.total, made: m.ft.made, state: m.ft.state, mv: +m.ft.mv.toFixed(3), label: m.ft.label } : null,
     inb: m.inb ? { team: m.inb.team, kind: m.inb.kind, by: m.inb.by, recv: m.inb.recv, ready: m.inb.ready } : null,
     stats: boxScore(m), log: m.log.slice(-25), scVio: m.scVio, pend: m.pend ? m.pend.k : null,

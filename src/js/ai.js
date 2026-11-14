@@ -67,8 +67,20 @@ function setTarget(p, x, z, want = 1) {
   p.tx = clamp(x, 0.8, COURT.L - 0.8); p.tz = clamp(z, 0.8, COURT.W - 0.8); p.want = want;
 }
 
+// Sprint (P-N01): the AI runs flat out when it has a long way to go and the legs for it, the same boost and cost as the user's.
+const SPRINT_DIST = 9, SPRINT_ENERGY = 0.6, SPRINT_ODDS = 0.8; // ft to the target before it is worth it, energy it keeps in hand, chance it chooses to
+const FAKE_ODDS = 0.4, CROSS_ODDS = 0.7; // chance a contested shooter pumps instead of shooting, and a driver crosses over a defender in his way
+function sprintPlan(m, i) {
+  const p = m.p[i], r = m.teams[p.t].roster[p.r];
+  p.sprint = m.phase === 'live' && r.energy > SPRINT_ENERGY && Math.hypot(p.tx - p.x, p.tz - p.z) > SPRINT_DIST && rnd(m) < SPRINT_ODDS;
+}
+
 // Main per-player decision. ai = difficulty params for this team.
 export function decide(m, i, A, ai) {
+  decideMove(m, i, A, ai);
+  sprintPlan(m, i);
+}
+function decideMove(m, i, A, ai) {
   const p = m.p[i], t = p.t, d = m.dir[t], ball = m.ball;
   const rx = rimFor(d);
   const own = rimFor(-d); // the rim this team defends
@@ -169,8 +181,18 @@ function handler(m, i, A, ai) {
   const opts = [['shoot', shoot + n()], ['drive', drive + n()], ['pass', pass + n()], ['hold', hold + n()]];
   opts.sort((a, b) => b[1] - a[1]);
   const pickO = opts[0][0];
-  if (pickO === 'shoot' && shoot > 0) A.startShot(m, i);
-  else if (pickO === 'drive') { p.drive = 1.6; setTarget(p, rx - d * 2.5, 25, 1); }
+  const near = nearestDef(m, p.x, p.z, t);
+  if (pickO === 'shoot' && shoot > 0) {
+    if (near.d < 3.6 && p.pumpCd <= 0 && dist > 5 && rnd(m) < FAKE_ODDS) { A.pump(m, i); p.holdT = 0.1; } // a contested jumper: pump first
+    else A.startShot(m, i);
+  }
+  else if (pickO === 'drive') {
+    p.drive = 1.6; setTarget(p, rx - d * 2.5, 25, 1);
+    if (near.idx >= 0 && near.d < 5 && p.crossCd <= 0 && rnd(m) < CROSS_ODDS) { // cross him over, away from his side
+      const q = m.p[near.idx];
+      A.cross(m, i, d * 0.8, q.z > p.z ? -0.6 : 0.6);
+    }
+  }
   else if (pickO === 'pass' && pj >= 0) A.doPass(m, i, pj);
   else {
     const sp = spots(d)[p.slot];

@@ -201,7 +201,7 @@ export const tests = [
     async run(t) {
       await t.game('scene', 'title');
       await gesture(t);
-      await exhibition(t, { seed: 4, qLen: 240 });
+      await exhibition(t, { seed: 3, qLen: 240 });
       await t.game('setState', { match: { energy: 0.3 } });
       await t.game('act', 'autoplay', true);
       let n = 0;

@@ -279,6 +279,9 @@ export function helpScreen(st, tab = 'controls') {
     <tr><td>On defense: jump to block or rebound</td><td><kbd>Space</kbd></td><td>SHOOT</td></tr>
     <tr><td>Pass toward the stick (or to the most open teammate)</td><td><kbd>X</kbd> or <kbd>J</kbd></td><td>PASS</td></tr>
     <tr><td>On defense: steal</td><td><kbd>X</kbd> or <kbd>J</kbd></td><td>STEAL</td></tr>
+    <tr><td>Sprint: hold to run about a quarter faster (it tires you)</td><td><kbd>Shift</kbd></td><td>SPRINT (hold)</td></tr>
+    <tr><td>Pump fake: tap Shoot, do not hold it (a defender may jump)</td><td><kbd>Space</kbd> (tap)</td><td>SHOOT (tap)</td></tr>
+    <tr><td>Crossover: flip the stick the other way while dribbling</td><td>Arrows or WASD, flipped</td><td>Stick, flicked</td></tr>
     <tr><td>Switch to another defender</td><td><kbd>C</kbd> or <kbd>K</kbd></td><td>SWITCH</td></tr>
     <tr><td>Pause</td><td><kbd>P</kbd> or <kbd>Esc</kbd></td><td>❚❚</td></tr>
     <tr><td>Mute</td><td><kbd>M</kbd></td><td>Settings</td></tr></tbody></table>
@@ -287,6 +290,7 @@ export function helpScreen(st, tab = 'controls') {
     <h3>Free throws</h3><p>A marker swings across a bar. Press Shoot when it is in the green middle.</p>
     <h3>Tip-off</h3><p>Press Shoot as the tossed ball reaches its peak to jump for it. Good timing wins more tips.</p>
     <h3>Offense</h3><p>You control whoever has the ball. Pass to find open teammates, especially cutters heading to the rim. The 35-second shot clock is on the scoreboard.</p>
+    <h3>Sprint, fakes and crossovers</h3><p>Hold Sprint to run about a quarter faster; it wears your legs down, so use it in bursts. Tap Shoot quickly for a pump fake: a defender may jump at it and leave you open. Flip the stick the other way while you dribble to cross him over. Every team uses all three.</p>
     <h3>Defense</h3><p>You control the defender nearest the ball (marked <b>YOU</b> with a yellow chevron). Stay between your player and the rim. Time steals and blocks: reaching in can draw a foul. Switch defenders any time.</p>
     <h3>Telling teams apart</h3><p>Home players stand on a solid ring, away players on a dashed ring. Home wears light jerseys, away wears dark ones.</p>`;
   if (tab === 'rules') body = `<p>These are the game's rules. Only the 35-second shot clock is a sourced Arkansas rule; everything else is how this game plays.</p><ul class="plain bullets">

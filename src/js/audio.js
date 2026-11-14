@@ -99,7 +99,7 @@ AU.noiseFor = (ctx) => { let b = noiseCache.get(ctx); if (!b) { b = noiseBuffer(
 // the noise buffer, so no two repeats are sample-identical. o = { pan, v (variant), p (0..1 state), big, mine, hard, far }.
 // Per-cue level trims, measured so each gameplay cue peaks between 0.2 and 0.45 at Medium volume
 // even at the quietest jitter draw (the jitter takes up to 1.5 dB off).
-const TRIM = { tick: 0.9, streak: 1.3, swish: 1.2, floor: 1.15, rim: 1.15, whistle: 1.1, cheer: 1.2, groan: 5.4, ooh: 5.3, sigh: 4.0, block: 0.74, release: 1.82, pass: 1.32, catch: 1.15, jump: 2.5, sub: 1.63 };
+const TRIM = { fake: 1.6, sprint: 2.3, tick: 0.9, streak: 1.3, swish: 1.2, floor: 1.15, rim: 1.15, whistle: 1.1, cheer: 1.2, groan: 5.4, ooh: 5.3, sigh: 4.0, block: 0.74, release: 1.82, pass: 1.32, catch: 1.15, jump: 2.5, sub: 1.63 };
 const JIT = { default: [20, 1.5], click: [8, 0.6], whistle: [18, 1.2], buzzer: [6, 0.6], meter: [4, 0.4], win: [6, 0.8] };
 
 export function makeCues(ctx, master, kit) {
@@ -165,6 +165,10 @@ export function makeCues(ctx, master, kit) {
     // Low time: the shot clock ticks in its last five seconds (p 0..1 rises as it runs down), and the Hot Streak rises with its multiplier.
     tick(t, o) { const p = o.p || 0; osc('square', 1500 + 600 * p, t, 0.04, 0.3); osc('sine', 760 * (1 + 0.35 * p), t, 0.07, 0.4); nz(t, 0.02, 0.2, 'highpass', 3200); },
     streak(t, o) { const p = o.p || 0, base = 392 * (1 + 0.5 * p); nz(t, 0.55, 0.3, 'bandpass', 500 + 400 * p, 1.2, 3600); [0, 4, 7].forEach((st, k) => osc('triangle', base * 2 ** (st / 12), t + 0.08 * k, 0.3, 0.3)); },
+    // Move set: a pump fake whips the air, a crossover squeaks and slaps the floor, sprint scuffs off the mark.
+    fake(t) { nz(t, 0.09, 0.4, 'bandpass', 1300, 1.3, 2600); osc('sine', 300, t, 0.07, 0.2, 520); },
+    cross(t) { osc('sine', 2100, t, 0.06, 0.1, 3000); osc('sine', 140, t + 0.03, 0.09, 0.5, 60); nz(t + 0.03, 0.03, 0.2, 'highpass', 2600); },
+    sprint(t) { nz(t, 0.16, 0.34, 'bandpass', 1800, 1.1, 900); osc('sine', 2500, t + 0.02, 0.05, 0.08, 2900); },
     meter(t, o) { const p = o.p || 0; osc('sine', 880 + 880 * p, t, 0.05, 0.14); },
     jingle(t) { [523, 659, 784, 1047].forEach((f, k) => osc('triangle', f, t + k * 0.11, 0.22, 0.3)); },
     win(t) { [523, 659, 784, 1047, 1319].forEach((f, k) => osc('triangle', f, t + k * 0.13, 0.35, 0.34)); },
@@ -245,7 +249,7 @@ export function setTension(v) {
 export function duck(db = 5, ms = 600) { if (AU.kit && AU.kit.amb) { AU.kit.amb.duck(db, ms); AU.kit.music.duck(db, ms); } }
 
 // Rate-limited play by name.
-const GAPS = { bounce: 0.07, squeak: 0.4, catch: 0.06, meter: 0.04, ooh: 0.6, sigh: 0.6, roar: 1.5, groan: 0.5, cheer: 0.25 };
+const GAPS = { sprint: 0.6, fake: 0.3, cross: 0.3, bounce: 0.07, squeak: 0.4, catch: 0.06, meter: 0.04, ooh: 0.6, sigh: 0.6, roar: 1.5, groan: 0.5, cheer: 0.25 };
 export function play(name, o = {}) {
   if (!AU.on || !AU.ctx || AU.ctx.state !== 'running' || !AU.cues) return;
   const now = AU.ctx.currentTime;
@@ -257,7 +261,7 @@ export function play(name, o = {}) {
 }
 
 // ---------------------------------------------------------------- offline renders (test hooks and the owner's WAV previews)
-export function audioList() { return { music: Object.keys(SCORES), ambience: Object.keys(SCENES), cues: ['bounce', 'floor', 'swish', 'rim', 'whistle', 'buzzer', 'cheer', 'groan', 'ooh', 'sigh', 'roar', 'steal', 'block', 'release', 'pass', 'catch', 'jump', 'reb', 'sub', 'meter', 'squeak', 'click', 'win', 'tick', 'streak'] }; }
+export function audioList() { return { music: Object.keys(SCORES), ambience: Object.keys(SCENES), cues: ['bounce', 'floor', 'swish', 'rim', 'whistle', 'buzzer', 'cheer', 'groan', 'ooh', 'sigh', 'roar', 'steal', 'block', 'release', 'pass', 'catch', 'jump', 'reb', 'sub', 'meter', 'squeak', 'click', 'win', 'tick', 'streak', 'fake', 'cross', 'sprint'] }; }
 // Renders a piece by itself at the level the game ships (Medium volume), without touching the live audio or settings.
 // `name` is a music piece, an ambience scene, or 'cue:<name>' for one cue. `opt`: { crowd (0..1), tension (0..1, a scene's low hum; the heartbeat comes on from 0.5), cue (options for the cue), vol, seed (changes the jitter and the melody), mixCue (a cue to fire at 1 s on top), music (a piece to play under a scene or cue) }.
 // For a piece, `built` is the kit's variation count plus its tempo and the seconds before it repeats.

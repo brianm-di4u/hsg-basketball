@@ -1,12 +1,12 @@
 // Keyboard and touch input folded into one intent object read by the fixed step.
 // Edges (shootP/shootR/passP/switchP) latch until the step consumes them, so quick taps are never lost.
-export const I = { mx: 0, mz: 0, shoot: false, shootP: false, shootR: false, passP: false, switchP: false, stick: { x: 0, z: 0, id: null } };
+export const I = { mx: 0, mz: 0, shoot: false, shootP: false, shootR: false, passP: false, switchP: false, sprint: false, sprintBtn: false, stick: { x: 0, z: 0, id: null } };
 const keys = new Set();
 let enabled = false;
-export function setEnabled(on) { enabled = on; if (!on) { keys.clear(); I.shoot = false; I.stick.x = I.stick.z = 0; recompute(); } }
+export function setEnabled(on) { enabled = on; if (!on) { keys.clear(); I.shoot = false; I.sprintBtn = false; I.stick.x = I.stick.z = 0; recompute(); } }
 export function isEnabled() { return enabled; }
 // The window lost focus or the page is going away: forget held keys and a held shot without releasing it.
-export function cancelHeld() { keys.clear(); I.shoot = I.shootP = I.shootR = false; recompute(); }
+export function cancelHeld() { keys.clear(); I.shoot = I.shootP = I.shootR = false; I.sprintBtn = false; recompute(); }
 
 function recompute() {
   let x = 0, z = 0;
@@ -16,9 +16,10 @@ function recompute() {
   if (keys.has('ArrowDown') || keys.has('KeyS')) z += 1;
   if (I.stick.id != null) { x = I.stick.x; z = I.stick.z; }
   I.mx = x; I.mz = z;
+  I.sprint = keys.has('ShiftLeft') || keys.has('ShiftRight') || I.sprintBtn;
 }
 
-const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'KeyA', 'KeyD', 'KeyW', 'KeyS', 'Space', 'KeyX', 'KeyJ', 'KeyC', 'KeyK']);
+const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'KeyA', 'KeyD', 'KeyW', 'KeyS', 'Space', 'KeyX', 'KeyJ', 'KeyC', 'KeyK', 'ShiftLeft', 'ShiftRight']);
 
 export function initInput(onKey) {
   window.addEventListener('keydown', (e) => {
@@ -68,11 +69,12 @@ export function initTouch(stickEl, knobEl, btns) {
   hold(btns.shoot, () => { I.shoot = true; I.shootP = true; }, () => { I.shoot = false; I.shootR = true; });
   hold(btns.pass, () => { I.passP = true; });
   hold(btns.sw, () => { I.switchP = true; });
+  if (btns.sprint) hold(btns.sprint, () => { I.sprintBtn = true; recompute(); }, () => { I.sprintBtn = false; recompute(); });
 }
 
 // Copy the intent into a match input and clear the edges.
 export function drain(target) {
-  target.mx = I.mx; target.mz = I.mz; target.shoot = I.shoot;
+  target.mx = I.mx; target.mz = I.mz; target.shoot = I.shoot; target.sprint = I.sprint;
   target.shootP = target.shootP || I.shootP; target.shootR = target.shootR || I.shootR;
   target.passP = target.passP || I.passP; target.switchP = target.switchP || I.switchP;
   I.shootP = I.shootR = I.passP = I.switchP = false;

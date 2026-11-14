@@ -697,6 +697,9 @@ function matchEvents(m) {
       case 'shot': state.lastShot = e.three ? m.time : 0; play('release', { three: e.three, pan: panAt(m, m.p[e.i].x), far: !isUserBall(m, e.i) }); if (e.three) bump(0.25); break;
       case 'pass': play('pass', { pan: panAt(m, m.p[e.i].x), far: m.p[e.i].t !== m.user.team }); break;
       case 'catch': play('catch', { pan: panAt(m, m.p[e.i].x), far: m.p[e.i].t !== m.user.team }); break;
+      case 'pump': play('fake', { pan: panAt(m, m.p[e.i].x), far: !isUserBall(m, e.i) }); break;
+      case 'cross': play('cross', { pan: panAt(m, m.p[e.i].x), far: !isUserBall(m, e.i) }); if (e.fooled && isUserBall(m, e.i)) pop('CROSSED!', m.p[e.i].x, 7, m.p[e.i].z, '#8FD6C8'); break;
+      case 'sprint': play('sprint', { pan: panAt(m, m.p[e.i].x) }); break;
       case 'jump': if (isUserBall(m, e.i)) play('jump', { pan: panAt(m, m.p[e.i].x) }); break;
       case 'reb': play('reb', { pan: panAt(m, m.p[e.i].x), far: m.p[e.i].t !== m.user.team }); bump(0.1); break;
       case 'sub': play('sub', { far: e.t !== m.user.team }); break;
@@ -1006,7 +1009,7 @@ function boot() {
   applySettings();
   initRender($('#cv'));
   initInput(onKey);
-  initTouch($('#stick'), $('#knob'), { shoot: $('#b-shoot'), pass: $('#b-pass'), sw: $('#b-switch') });
+  initTouch($('#stick'), $('#knob'), { shoot: $('#b-shoot'), pass: $('#b-pass'), sw: $('#b-switch'), sprint: $('#b-sprint') });
   document.addEventListener('click', onClick);
   document.addEventListener('pointerdown', () => unlock(), { passive: true });
   $('#b-pause').addEventListener('click', () => pauseGame());
@@ -1124,8 +1127,9 @@ const HOOKS = {
     const m = state.match;
     switch (name) {
       case 'autoplay': if (m) m.user.auto = !!a[0]; return true;
-      case 'input': { const x = a[0] || {}; I.mx = x.mx || 0; I.mz = x.mz || 0; if (x.shoot != null) { if (x.shoot && !I.shoot) I.shootP = true; if (!x.shoot && I.shoot) I.shootR = true; I.shoot = !!x.shoot; } if (x.pass) I.passP = true; if (x.switch) I.switchP = true; return true; }
+      case 'input': { const x = a[0] || {}; I.mx = x.mx || 0; I.mz = x.mz || 0; if (x.shoot != null) { if (x.shoot && !I.shoot) I.shootP = true; if (!x.shoot && I.shoot) I.shootR = true; I.shoot = !!x.shoot; } if (x.pass) I.passP = true; if (x.switch) I.switchP = true; if (x.sprint != null) { I.sprintBtn = !!x.sprint; I.sprint = !!x.sprint; } return true; }
       case 'shootAt': { if (!m) return false; const h = m.ball.holder; if (h < 0) return false; return forceShot(m, h, a[0]); }
+      case 'tire': { if (!m) return false; const p = m.p[a[0] * 5 + a[1]]; m.teams[p.t].roster[p.r].energy = a[2]; return true; } // test: set a player's energy
       case 'give': if (!m) return false; give(m, a[0] * 5 + a[1]); return true;
       case 'push': { if (!m) return false; const p = m.p[a[0] * 5 + a[1]]; p.vx = a[2]; p.vz = a[3]; return true; } // test: give a placed player speed
       case 'place': { if (!m) return false; const p = m.p[a[0] * 5 + a[1]]; p.x = p.tx = a[2]; p.z = p.tz = a[3]; p.vx = p.vz = 0; return true; }
@@ -1153,7 +1157,7 @@ const HOOKS = {
       case 'banners': return banners(a[0], a[1]);
       case 'layout': {
         const rect = (s) => { const el = $(s); if (!el || el.hidden || !el.getClientRects().length) return null; const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; };
-        return { stick: rect('#stick'), shoot: rect('#b-shoot'), pass: rect('#b-pass'), sw: rect('#b-switch'), pause: rect('#b-pause'), stage: rect('#stage'), sb: rect('#sb') };
+        return { stick: rect('#stick'), shoot: rect('#b-shoot'), pass: rect('#b-pass'), sw: rect('#b-switch'), sprint: rect('#b-sprint'), pause: rect('#b-pause'), stage: rect('#stage'), sb: rect('#sb') };
       }
       case 'freeze': R.frozen = !!a[0]; return true;
       case 'project': { // court feet → stage pixels in the current view (camera-framing tests)

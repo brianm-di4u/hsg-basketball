@@ -43,7 +43,13 @@ export const tests = [
       s = await t.state();
       t.expect(s.match.ball.state === 'pass' || (s.match.ball.holder > 0 && s.match.ball.holder < 5), 'PASS button passes to a teammate');
       s = await stepUntil(t, (x) => x.match.ball.state === 'held', 120, 4, 'catch');
-      await t.tap(center(L.shoot));
+      // a quick tap is a pump fake (P-N01), so hold the button for a real shot
+      const cdp2 = await t.page.context().newCDPSession(t.page);
+      const [hx, hy] = center(L.shoot);
+      await cdp2.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: hx, y: hy, id: 5, radiusX: 4, radiusY: 4, force: 1 }] });
+      await t.game('step', 12);
+      await cdp2.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await cdp2.detach();
       await t.game('step', 3);
       s = await t.state();
       t.expect(s.match.ball.state === 'shot' || ['shoot', 'layup'].includes(s.match.players[s.match.user.ctrl].act), 'SHOOT button shoots');

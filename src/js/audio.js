@@ -1,12 +1,14 @@
 // WebAudio synthesis only. The context is created on the first user gesture; nothing plays before that.
 // Chain: cues and the kit's ambience bed -> master gain -> limiter -> speakers.
 import { makeAudioKit, measureAudio } from './audiokit.js';
+import { SCORES } from './music.js';
 
-export const AU = { ctx: null, master: null, kit: null, cues: null, on: true, vol: 0.5, ambOn: true, scene: '', paused: false, last: {}, count: {}, noise: null };
+export const AU = { ctx: null, master: null, kit: null, cues: null, on: true, vol: 0.5, ambOn: true, musOn: true, music: '', tension: 0, scene: '', paused: false, last: {}, count: {}, noise: null };
 
 // Master gain is vol * MASTER_GAIN. It was 0.6, which left the loudest cue at a peak of 0.1 at the speakers; 1.4 puts
 // the main cues at 0.25 to 0.45 at Medium and the limiter keeps cues, crowd and reactions under 0.95 on High.
 const MASTER_GAIN = 1.4; // was 0.6
+const MUSIC_LEVEL = 0.5; // music bus level when Music is On (the pieces' own gains are in music.js)
 const AMB_LEVEL = 1.5;   // ambience bus level when Ambience is On: puts the bed at about -50 dBFS (quiet crowd) to -40 (roaring) at Medium
 
 // The limiter sits between the master gain and the speakers so a pile-up of cues cannot clip.
@@ -39,6 +41,21 @@ const squeakFar = (ctx, dst, t, rnd, v) => {
   g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v * 0.5, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
   o.connect(g); g.connect(dst); o.start(t); o.stop(t + 0.12);
 };
+// Tension: `tension` (0..1) brings up a low, wavering hum (two narrow bands of noise a few hertz apart, so they beat), and
+// `beat` (0 or 1) switches on a slow heartbeat. main.js drives them from the clock and the score in the last minute.
+const heartbeat = (ctx, dst, t, rnd, v) => {
+  for (const [dt, f, k] of [[0, 62, 1], [0.17, 50, 0.7]]) {
+    const o = ctx.createOscillator(), g = ctx.createGain(), s = t + dt;
+    o.frequency.setValueAtTime(f, s); o.frequency.exponentialRampToValueAtTime(f * 0.6, s + 0.12);
+    g.gain.setValueAtTime(0.0001, s); g.gain.linearRampToValueAtTime(v * k, s + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, s + 0.16);
+    o.connect(g); g.connect(dst); o.start(s); o.stop(s + 0.2);
+  }
+};
+const TENSION_BEDS = [
+  { type: 'bandpass', freq: 55, q: 14, gain: 0.2, lfo: { rate: 0.15, depth: 0.5 }, param: 'tension', range: [0, 1] },
+  { type: 'bandpass', freq: 58.5, q: 14, gain: 0.2, pan: 0.2, lfo: { rate: 0.11, depth: 0.5 }, param: 'tension', range: [0, 1] },
+];
+const TENSION_SPOT = { make: heartbeat, every: [0.84, 0.84], gain: 0.022, pan: [-0.05, 0.05], param: 'beat' };
 export const SCENES = {
   gym: {
     beds: [
@@ -46,11 +63,13 @@ export const SCENES = {
       { type: 'bandpass', freq: 880, q: 0.7, gain: 0.014, pan: -0.3, lfo: { rate: 0.11, depth: 0.6 }, flfo: { rate: 0.05, depth: 160 }, param: 'crowd', range: [0.25, 1.7] },
       { type: 'bandpass', freq: 1450, q: 0.9, gain: 0.009, pan: 0.3, lfo: { rate: 0.09, depth: 0.7 }, flfo: { rate: 0.04, depth: 220 }, param: 'crowd', range: [0.15, 1.8] },
       { type: 'lowpass', freq: 150, q: 0.6, gain: 0.014 },
+      ...TENSION_BEDS,
     ],
     spots: [
       { make: 'swell', every: [5, 11], gain: 0.03, pan: [-0.6, 0.6], param: 'crowd' },
       { make: clap, every: [9, 20], gain: 0.045, pan: [-0.7, 0.7] },
       { make: squeakFar, every: [6, 15], gain: 0.05, pan: [-0.7, 0.7] },
+      TENSION_SPOT,
     ],
   },
   // The state-final arena: a bigger, darker room, a deeper murmur and longer swells.
@@ -60,11 +79,13 @@ export const SCENES = {
       { type: 'bandpass', freq: 760, q: 0.6, gain: 0.015, pan: -0.35, lfo: { rate: 0.08, depth: 0.6 }, flfo: { rate: 0.04, depth: 180 }, param: 'crowd', range: [0.25, 1.7] },
       { type: 'bandpass', freq: 1250, q: 0.8, gain: 0.01, pan: 0.35, lfo: { rate: 0.065, depth: 0.7 }, flfo: { rate: 0.03, depth: 240 }, param: 'crowd', range: [0.15, 1.8] },
       { type: 'lowpass', freq: 110, q: 0.6, gain: 0.018 },
+      ...TENSION_BEDS,
     ],
     spots: [
       { make: 'swell', every: [6, 13], gain: 0.034, pan: [-0.6, 0.6], param: 'crowd' },
       { make: clap, every: [8, 18], gain: 0.045, pan: [-0.7, 0.7] },
       { make: squeakFar, every: [9, 20], gain: 0.045, pan: [-0.7, 0.7] },
+      TENSION_SPOT,
     ],
   },
 };
@@ -78,7 +99,7 @@ AU.noiseFor = (ctx) => { let b = noiseCache.get(ctx); if (!b) { b = noiseBuffer(
 // the noise buffer, so no two repeats are sample-identical. o = { pan, v (variant), p (0..1 state), big, mine, hard, far }.
 // Per-cue level trims, measured so each gameplay cue peaks between 0.2 and 0.45 at Medium volume
 // even at the quietest jitter draw (the jitter takes up to 1.5 dB off).
-const TRIM = { swish: 1.2, floor: 1.15, rim: 1.15, whistle: 1.1, cheer: 1.2, groan: 5.4, ooh: 5.3, sigh: 4.0, block: 0.78, release: 1.82, pass: 1.32, catch: 1.15, jump: 2.5, sub: 1.63 };
+const TRIM = { tick: 0.9, streak: 1.3, swish: 1.2, floor: 1.15, rim: 1.15, whistle: 1.1, cheer: 1.2, groan: 5.4, ooh: 5.3, sigh: 4.0, block: 0.74, release: 1.82, pass: 1.32, catch: 1.15, jump: 2.5, sub: 1.63 };
 const JIT = { default: [20, 1.5], click: [8, 0.6], whistle: [18, 1.2], buzzer: [6, 0.6], meter: [4, 0.4], win: [6, 0.8] };
 
 export function makeCues(ctx, master, kit) {
@@ -141,6 +162,9 @@ export function makeCues(ctx, master, kit) {
     jump(t) { osc('sine', 210, t, 0.12, 0.2, 130); nz(t, 0.14, 0.2, 'lowpass', 600, 0.8); },
     reb(t) { nz(t, 0.07, 0.5, 'lowpass', 1300, 0.9); osc('sine', 170, t, 0.09, 0.5, 80); osc('sine', 2500, t + 0.02, 0.05, 0.1, 3100); },
     sub(t) { osc('sine', 740, t, 0.16, 0.22); osc('sine', 988, t + 0.14, 0.2, 0.22); },
+    // Low time: the shot clock ticks in its last five seconds (p 0..1 rises as it runs down), and the Hot Streak rises with its multiplier.
+    tick(t, o) { const p = o.p || 0; osc('square', 1500 + 600 * p, t, 0.04, 0.3); osc('sine', 760 * (1 + 0.35 * p), t, 0.07, 0.4); nz(t, 0.02, 0.2, 'highpass', 3200); },
+    streak(t, o) { const p = o.p || 0, base = 392 * (1 + 0.5 * p); nz(t, 0.55, 0.3, 'bandpass', 500 + 400 * p, 1.2, 3600); [0, 4, 7].forEach((st, k) => osc('triangle', base * 2 ** (st / 12), t + 0.08 * k, 0.3, 0.3)); },
     meter(t, o) { const p = o.p || 0; osc('sine', 880 + 880 * p, t, 0.05, 0.14); },
     jingle(t) { [523, 659, 784, 1047].forEach((f, k) => osc('triangle', f, t + k * 0.11, 0.22, 0.3)); },
     win(t) { [523, 659, 784, 1047, 1319].forEach((f, k) => osc('triangle', f, t + k * 0.13, 0.35, 0.34)); },
@@ -170,7 +194,8 @@ export function unlock() {
     if (!C) return;
     const ctx = new C();
     AU.master = ctx.createGain(); AU.master.gain.value = AU.vol * MASTER_GAIN; AU.master.connect(limiter(ctx, ctx.destination));
-    AU.kit = makeAudioKit(ctx, AU.master, { music: 0.5, ambience: AMB_LEVEL });
+    AU.kit = makeAudioKit(ctx, AU.master, { music: MUSIC_LEVEL, ambience: AMB_LEVEL });
+    AU.kit.amb.set('tension', 0, 0.01); AU.kit.amb.set('beat', 0, 0.01);
     AU.cues = makeCues(ctx, AU.master, AU.kit);
     AU.noise = AU.noiseFor(ctx);
     AU.ctx = ctx;
@@ -183,6 +208,7 @@ export function suspendAudio() { try { if (AU.ctx && AU.ctx.state === 'running')
 export function setVolume(v) { AU.vol = v; if (AU.master) AU.master.gain.value = v * MASTER_GAIN; }
 export function setOn(on) { AU.on = on; applyBeds(); }
 export function setAmbience(on) { AU.ambOn = on; applyBeds(); }
+export function setMusic(on) { AU.musOn = on; applyBeds(); }
 
 // Which bed should be sounding: the scene asked for, if Sound and Ambience are both on. While the pause card is up (or
 // Sound is off) the kit is held: it fades out and schedules nothing until released.
@@ -191,11 +217,15 @@ function applyBeds() {
   if (!kit) return;
   const want = AU.on && AU.ambOn && AU.scene && SCENES[AU.scene] ? SCENES[AU.scene] : null;
   if (want) kit.amb.play(want, { fade: 2.5 }); else if (kit.amb.scene) kit.amb.stop(1.2);
+  const tune = AU.on && AU.musOn && AU.music && SCORES[AU.music] ? SCORES[AU.music] : null;
+  if (tune) kit.music.play(tune, { fade: 1.8 }); else if (kit.music.score) kit.music.stop(1.2);
   const hold = !AU.on || AU.paused;
   if (hold && !kit.held) kit.hold(); else if (!hold && kit.held) kit.release();
 }
 // 'gym' | 'arena' | '' (no bed). Called as scenes change.
 export function setScene(name) { if (AU.scene === name) return; AU.scene = name; applyBeds(); }
+// A piece from music.js by name, or '' for none: the title and menus, a quarter break and the final screens have a tune; live play does not.
+export function setMusicTrack(name) { if (AU.music === name) return; AU.music = name; applyBeds(); }
 export function setPaused(p) { if (AU.paused === !!p) return; AU.paused = !!p; applyBeds(); }
 // 0..1 crowd excitement, throttled to ten updates a second of audio time.
 export function setCrowd(v) {
@@ -204,8 +234,15 @@ export function setCrowd(v) {
   if (AU.crowdAt != null && now - AU.crowdAt < 0.1) return;
   AU.crowdAt = now; AU.crowd = v; kit.amb.set('crowd', Math.max(0, Math.min(1, v)), 0.35);
 }
-// A big cue (whistle, buzzer, fanfare) pulls the crowd bed down a little for its length.
-export function duck(db = 5, ms = 600) { if (AU.kit && AU.kit.amb) AU.kit.amb.duck(db, ms); }
+// 0..1 tension (last minute of a close game, a Hot Streak): lifts the hum under the crowd; from 0.5 up the heartbeat starts.
+export function setTension(v) {
+  const kit = AU.kit; if (!kit || !AU.ctx) return;
+  v = Math.max(0, Math.min(1, v));
+  if (Math.abs(v - AU.tension) < 0.02 && (v === 0) === (AU.tension === 0)) return;
+  AU.tension = v; kit.amb.set('tension', v, 0.8); kit.amb.set('beat', v >= 0.5 ? 1 : 0, 0.1);
+}
+// A big cue (whistle, buzzer, fanfare) pulls the crowd bed and the music down a little for its length.
+export function duck(db = 5, ms = 600) { if (AU.kit && AU.kit.amb) { AU.kit.amb.duck(db, ms); AU.kit.music.duck(db, ms); } }
 
 // Rate-limited play by name.
 const GAPS = { bounce: 0.07, squeak: 0.4, catch: 0.06, meter: 0.04, ooh: 0.6, sigh: 0.6, roar: 1.5, groan: 0.5, cheer: 0.25 };
@@ -220,20 +257,26 @@ export function play(name, o = {}) {
 }
 
 // ---------------------------------------------------------------- offline renders (test hooks and the owner's WAV previews)
-export function audioList() { return { music: [], ambience: Object.keys(SCENES), cues: ['bounce', 'floor', 'swish', 'rim', 'whistle', 'buzzer', 'cheer', 'groan', 'ooh', 'sigh', 'roar', 'steal', 'block', 'release', 'pass', 'catch', 'jump', 'reb', 'sub', 'meter', 'squeak', 'click', 'win'] }; }
+export function audioList() { return { music: Object.keys(SCORES), ambience: Object.keys(SCENES), cues: ['bounce', 'floor', 'swish', 'rim', 'whistle', 'buzzer', 'cheer', 'groan', 'ooh', 'sigh', 'roar', 'steal', 'block', 'release', 'pass', 'catch', 'jump', 'reb', 'sub', 'meter', 'squeak', 'click', 'win', 'tick', 'streak'] }; }
 // Renders a piece by itself at the level the game ships (Medium volume), without touching the live audio or settings.
-// `name` is an ambience scene, or 'cue:<name>' for one cue. `opt`: { crowd (0..1), cue (options for the cue), vol, seed (changes the jitter), mixCue (a cue to fire at 1 s on top of a scene) }.
+// `name` is a music piece, an ambience scene, or 'cue:<name>' for one cue. `opt`: { crowd (0..1), tension (0..1, a scene's low hum; the heartbeat comes on from 0.5), cue (options for the cue), vol, seed (changes the jitter and the melody), mixCue (a cue to fire at 1 s on top), music (a piece to play under a scene or cue) }.
+// For a piece, `built` is the kit's variation count plus its tempo and the seconds before it repeats.
 export function audioRender(name, seconds = 30, wantWav = false, opt = {}) {
-  const isCue = String(name).startsWith('cue:'), id = isCue ? name.slice(4) : name;
-  if (isCue ? !audioList().cues.includes(id) : !SCENES[id]) return Promise.reject(new Error('unknown audio: ' + name));
+  const isCue = String(name).startsWith('cue:'), id = isCue ? name.slice(4) : name, isMusic = !isCue && !!SCORES[id];
+  if (isCue ? !audioList().cues.includes(id) : !isMusic && !SCENES[id]) return Promise.reject(new Error('unknown audio: ' + name));
+  if (opt.music && !SCORES[opt.music]) return Promise.reject(new Error('unknown music: ' + opt.music));
   return measureAudio((oc, dest) => {
     const master = oc.createGain(); master.gain.value = (opt.vol ?? 0.5) * MASTER_GAIN; master.connect(limiter(oc, dest));
-    const kit = makeAudioKit(oc, master, { seed: opt.seed ?? 11, ambience: AMB_LEVEL });
-    if (isCue) { makeCues(oc, master, kit).trigger(id, opt.cue || {}, 0.05); return null; }
-    kit.amb.set('crowd', opt.crowd ?? 0.5, 0.01);
-    kit.amb.play(SCENES[id], { at: 0, fade: 0.5 });
+    const kit = makeAudioKit(oc, master, { seed: opt.seed ?? 11, music: MUSIC_LEVEL, ambience: AMB_LEVEL });
+    const under = isMusic ? id : opt.music;
+    if (under) kit.music.play(SCORES[under], { at: 0, fade: 0.5 });
+    if (isCue) { makeCues(oc, master, kit).trigger(id, opt.cue || {}, 0.05); if (under) kit.scheduleUntil(seconds); return null; }
+    if (!isMusic) {
+      kit.amb.set('crowd', opt.crowd ?? 0.5, 0.01); kit.amb.set('tension', opt.tension ?? 0, 0.01); kit.amb.set('beat', (opt.tension ?? 0) >= 0.5 ? 1 : 0, 0.01);
+      kit.amb.play(SCENES[id], { at: 0, fade: 0.5 });
+    }
     if (opt.mixCue) makeCues(oc, master, kit).trigger(opt.mixCue, opt.cue || {}, 1);
     kit.scheduleUntil(seconds);
-    return null;
+    return isMusic ? () => { const sc = SCORES[id], info = kit.music.info(); return { ...info, bpm: sc.bpm, formSeconds: +(info.formBars * (sc.beats || 4) * 60 / sc.bpm).toFixed(1) }; } : null;
   }, seconds, { wav: wantWav });
 }

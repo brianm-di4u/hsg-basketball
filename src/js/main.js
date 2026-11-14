@@ -11,14 +11,14 @@ import { G3, load3d, pickTier, info3d, glProbe, resize3d, setTier, animCtl } fro
 import { startHQ, hqInfo } from './gl/hq.js';
 import { CREST_KEYS, crestURL } from './art.js';
 import { I, initInput, initTouch, setEnabled, drain, cancelHeld } from './input.js';
-import { AU, unlock, play, setVolume, setOn, setAmbience, setScene, setPaused, setCrowd, duck, suspendAudio, audioList, audioRender } from './audio.js';
+import { AU, unlock, play, setVolume, setOn, setAmbience, setMusic, setMusicTrack, setScene, setPaused, setCrowd, setTension, duck, suspendAudio, audioList, audioRender } from './audio.js';
 import { DIFF, meterQuality, SWEET } from './rules.js';
 import { writeSave, readSaveSnapshot, resetSave, store, fmtClock, hash } from './util.js';
 import { mergeSave, seasonText } from './save-policy.js';
 import * as UI from './ui.js';
 
 const $ = (s) => document.querySelector(s);
-const DEFAULTS = { sound: true, vol: 0.5, motion: 'auto', text: 100, theme: 'auto', difficulty: 1, qLen: 120, shotClock: 35, assist: false, touch: 'auto', graphics: 'auto', replays: true, ambience: true };
+const DEFAULTS = { sound: true, vol: 0.5, motion: 'auto', text: 100, theme: 'auto', difficulty: 1, qLen: 120, shotClock: 35, assist: false, touch: 'auto', graphics: 'auto', replays: true, ambience: true, music: true };
 const state = {
   scene: 'title', stack: [], settings: { ...DEFAULTS }, season: null,
   save: { trophies: [], unlocks: { throwback: false }, best: { shootout: 0 }, challenges: {} },
@@ -107,7 +107,7 @@ const SETTING_OK = {
   sound: (v) => typeof v === 'boolean', vol: (v) => [0.25, 0.5, 0.8].includes(v), motion: (v) => ['auto', 'on', 'off'].includes(v),
   text: (v) => [100, 115, 130].includes(v), theme: (v) => ['auto', 'light', 'dark'].includes(v), difficulty: (v) => [0, 1, 2].includes(v),
   qLen: (v) => [120, 240, 480].includes(v), shotClock: (v) => [0, 35].includes(v), assist: (v) => typeof v === 'boolean',
-  touch: (v) => ['auto', 'on', 'off'].includes(v), graphics: (v) => ['auto', '3d', '2d'].includes(v), replays: (v) => typeof v === 'boolean', ambience: (v) => typeof v === 'boolean',
+  touch: (v) => ['auto', 'on', 'off'].includes(v), graphics: (v) => ['auto', '3d', '2d'].includes(v), replays: (v) => typeof v === 'boolean', ambience: (v) => typeof v === 'boolean', music: (v) => typeof v === 'boolean',
 };
 function cleanSettings(raw) {
   const s = raw && typeof raw === 'object' ? raw : {}, out = { ...DEFAULTS };
@@ -161,7 +161,7 @@ function applySettings() {
   document.body.classList.toggle('reduced', reducedMotion());
   R.reduced = reducedMotion();
   R.use3d = s.graphics !== '2d' && !NO_GL;
-  setOn(s.sound); setVolume(s.vol); setAmbience(s.ambience !== false);
+  setOn(s.sound); setVolume(s.vol); setAmbience(s.ambience !== false); setMusic(s.music !== false);
 }
 const NO_GL = /[?&]gl=0\b/.test(location.search);
 
@@ -485,6 +485,7 @@ function stepOnce() {
     drain(state.so.input);
     shootoutTick(state.so);
     soEvents(state.so);
+    streakTension(state.so);
     crowdBed(CROWD_REST + 0.1 * ((state.so.mult || 1) - 1));
     if (state.so.phase === 'end' && state.so.phaseT > 0.8) endShootout();
     return;
@@ -498,7 +499,8 @@ function stepOnce() {
   record(m);
   matchEvents(m);
   meterTick(m);
-  crowdBed(CROWD_REST + CROWD_HOME * (m.crowdTeam >= 0 ? m.crowd : 0.3));
+  tickClock(m);
+  crowdBed(CROWD_REST + CROWD_HOME * (m.crowdTeam >= 0 ? m.crowd : 0.3) + CROWD_CLOSE * matchTension(m));
   if (m.phase === 'qend' && m.breakReady && !m.autoBreak) { state.paused = true; go('break', false); }
   else if (m.phase === 'final' && m.phaseT > 1.4 && !state.finalShown) onFinal();
 }
@@ -613,6 +615,19 @@ function syncAudio() {
   setScene(inMatch ? (m.venue === 'arena' ? 'arena' : 'gym') : sc === 'shootout' || sc === 'shootoutEnd' ? 'gym' : '');
   setPaused(sc === 'pause' || (sc === 'shootout' && state.paused));
   if (sc === 'break') { excite = 0; setCrowd(CROWD_REST + CROWD_HOME * 0.3); }
+  if (!(sc === 'game' || sc === 'pause' || sc === 'shootout')) { setTension(0); tickSec = 0; }
+  setMusicTrack(musicFor(sc, m));
+}
+// Which piece of music (music.js) goes with this screen. Live play has none: the crowd bed and the tension layers carry it.
+// A won game, the champion screen and a new Hot Streak best get the fanfare; a quarter break or a lost game, the quiet arrangement.
+function musicFor(sc, m) {
+  if (sc === 'game' || sc === 'pause' || (sc === 'shootout' && state.so && state.so.phase !== 'end')) return '';
+  if (sc === 'break') return 'breakRoom';
+  if (sc === 'final') return m && (m.user.team < 0 || m.winner === m.user.team) ? 'fanfare' : 'breakRoom';
+  if (sc === 'champion') return 'fanfare';
+  if (sc === 'shootout') return '';
+  if (sc === 'shootoutEnd') return state.so && state.so.newBest ? 'fanfare' : 'breakRoom';
+  return 'pepBand';
 }
 // The meter ticks while the user holds a shot, faster and higher toward the top of the jump.
 function meterTick(m) {
@@ -622,6 +637,28 @@ function meterTick(m) {
     meterAcc += DT;
     if (meterAcc >= 0.17 - 0.11 * v) { meterAcc = 0; play('meter', { p: v }); }
   } else meterAcc = 0.1;
+}
+// Tension. The shot clock ticks in its last five seconds (once a second, higher as it runs down); in the last minute of the
+// fourth quarter or overtime a low hum rises as the clock runs down, more so the closer the score, and from 0.5 up a heartbeat
+// starts. The crowd bed also lifts a little in a close late game. The Hot Streak does the same with its multiplier and its last seconds.
+const TENSE_SECS = 60, TENSE_BASE = 0.15, TENSE_LATE = 0.35, CLOSE_FULL = 2, CLOSE_NONE = 10, CROWD_CLOSE = 0.2; // seconds of the late window, tension floor in a late game, extra at the start of the window, a margin this small is full closeness, one this big none, crowd lift
+let tickSec = 0;
+function tensionOf(m) {
+  const c = m.clock;
+  if (c.q < 4 || m.phase === 'final' || m.phase === 'tipoff') return 0;
+  const close = Math.max(0, Math.min(1, 1 - (Math.abs(m.teams[0].score - m.teams[1].score) - CLOSE_FULL) / (CLOSE_NONE - CLOSE_FULL)));
+  const late = Math.max(0, Math.min(1, 1 - c.t / TENSE_SECS));
+  return (c.t < TENSE_SECS ? TENSE_LATE + (1 - TENSE_LATE) * late : TENSE_BASE) * (0.3 + 0.7 * close);
+}
+function tickClock(m) {
+  const c = m.clock, secs = m.rules.shotClock && !c.shotOff && c.running && m.phase === 'live' ? Math.ceil(c.shot - 0.001) : 0;
+  if (secs < 1 || secs > 5) { tickSec = 0; return; }
+  if (secs !== tickSec) { tickSec = secs; play('tick', { p: (5 - secs) / 4, far: m.poss !== m.user.team }); }
+}
+function matchTension(m) {
+  const T = tensionOf(m);
+  setTension(T);
+  return T;
 }
 const WHY = { shotclock: 'SHOT CLOCK', oob: 'OUT OF BOUNDS', reach: 'FOUL', shoot: 'SHOOTING FOUL', '5sec': '5 SECONDS' };
 function matchEvents(m) {
@@ -670,8 +707,17 @@ function matchEvents(m) {
   }
   m.ev.length = 0;
 }
+// Hot Streak: the hum follows the multiplier (x2 a little, x3 a lot) and the last ten seconds; the clock ticks in the last five.
+function streakTension(so) {
+  const left = so.phase === 'end' ? 0 : so.t, secs = left > 0 && left <= 5 ? Math.ceil(left) : 0;
+  if (secs && secs !== tickSec) play('tick', { p: (5 - secs) / 4 });
+  tickSec = secs;
+  setTension(Math.max(((so.mult || 1) - 1) * 0.3, left > 0 && left <= 10 ? 0.35 : 0) + (so.mult >= 3 && left <= 10 ? 0.15 : 0));
+}
 function soEvents(so) {
   for (const e of so.ev) {
+    if (e.k === 'make' && e.mult > 1 && e.mult > (so.lastMult || 1)) play('streak', { p: (e.mult - 2) / 1 });
+    if (e.k === 'make') so.lastMult = e.mult;
     if (e.k === 'make') { pop(e.mult > 1 ? `+${e.pts} x${e.mult}` : `+${e.pts}`, e.x, 11.5, e.z, e.mult > 1 ? '#FFD84D' : '#FFF6E0', e.mult > 1); netHit(1); play('swish', { p: Math.min(1, ((e.mult || 1) - 1) / 2) }); bump(0.3); if (e.mult > 1) burst('steam', e.x, 10, e.z, 8, ['#fff']); }
     if (e.k === 'miss') { rimHit(1); play('rim'); play('ooh'); }
     if (e.k === 'start') play('buzzer');
@@ -892,6 +938,7 @@ const ACT = {
   setSound: (a) => setSetting('sound', a === '1'),
   setVol: (a) => setSetting('vol', +a),
   setAmbience: (a) => setSetting('ambience', a === '1'),
+  setMusic: (a) => setSetting('music', a === '1'),
   setMotion: (a) => setSetting('motion', a),
   setText: (a) => setSetting('text', +a),
   setTheme: (a) => setSetting('theme', a),
@@ -993,7 +1040,7 @@ function sumState() {
     challenge: state.chal, chalResult: state.chalResult ? { ok: state.chalResult.ok, more: state.chalResult.more, note: state.chalResult.note } : null,
     trophies: state.save.trophies, unlocks: state.save.unlocks, best: state.save.best, challenges: state.save.challenges,
     replay: state.replay ? { kind: state.replay.kind, f: Math.floor(state.replay.f), n: state.replay.frames.length } : null,
-    pick: { ...state.pick }, audio: { ctx: !!AU.ctx, on: AU.on, ambience: AU.ambOn, bed: AU.kit && AU.kit.amb.scene && AU.scene ? AU.scene : '', held: !!(AU.kit && AU.kit.held), state: AU.ctx ? AU.ctx.state : null, crowd: AU.crowd ?? null, count: { ...AU.count } }, reduced: R.reduced, touch: touchOn(), fx: R.fx.parts.length, loop: !!raf,
+    pick: { ...state.pick }, audio: { ctx: !!AU.ctx, on: AU.on, ambience: AU.ambOn, music: AU.musOn, track: AU.kit && AU.kit.music.score && AU.music ? AU.music : '', tension: AU.tension, bed: AU.kit && AU.kit.amb.scene && AU.scene ? AU.scene : '', held: !!(AU.kit && AU.kit.held), state: AU.ctx ? AU.ctx.state : null, crowd: AU.crowd ?? null, count: { ...AU.count } }, reduced: R.reduced, touch: touchOn(), fx: R.fx.parts.length, loop: !!raf,
     view: R.v ? { W: R.v.W, H: R.v.H, s: +R.v.s.toFixed(2), camX: +R.v.camX.toFixed(2) } : null,
     gfx: { mode: is3d() ? '3d' : '2d', gl: state.gl || null, ...info3d(), hq: hqInfo() },
     hud: hudState(),

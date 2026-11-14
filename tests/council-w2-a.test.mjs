@@ -62,7 +62,7 @@ export const tests = [
     async run(t) {
       const list = await t.page.evaluate(() => window.__game.audioList());
       t.equal(list.ambience.join(','), 'gym,arena', 'a bed for the home gym and one for the arena');
-      t.equal(list.music.length, 0, 'no music in this batch');
+      t.equal(list.music.join(','), 'pepBand,breakRoom,fanfare', 'the three pieces of music are listed apart from the beds (batch B)');
       for (const name of list.ambience) {
         const lvl = {};
         for (const crowd of [0, 0.5, 1]) {
@@ -224,6 +224,7 @@ export const tests = [
       t.equal((await t.state()).scene, 'pause', 'and the game is on the pause card');
       t.equal(a.held, true, 'with the bed held');
       await gesture(t);
+      for (let k = 0; k < 20 && (await audio(t)).state !== 'running'; k++) { await t.page.mouse.click(4, 4); await t.page.waitForTimeout(150); } // resume() takes a moment on a busy machine
       t.equal((await audio(t)).state, 'running', 'a gesture resumes it');
     },
   },

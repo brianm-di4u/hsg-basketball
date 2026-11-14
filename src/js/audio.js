@@ -99,7 +99,7 @@ AU.noiseFor = (ctx) => { let b = noiseCache.get(ctx); if (!b) { b = noiseBuffer(
 // the noise buffer, so no two repeats are sample-identical. o = { pan, v (variant), p (0..1 state), big, mine, hard, far }.
 // Per-cue level trims, measured so each gameplay cue peaks between 0.2 and 0.45 at Medium volume
 // even at the quietest jitter draw (the jitter takes up to 1.5 dB off).
-const TRIM = { fake: 1.6, sprint: 2.3, tick: 0.9, streak: 1.3, swish: 1.2, floor: 1.15, rim: 1.15, whistle: 1.1, cheer: 1.2, groan: 5.4, ooh: 5.3, sigh: 4.0, block: 0.74, release: 1.82, pass: 1.32, catch: 1.15, jump: 2.5, sub: 1.63 };
+const TRIM = { fake: 1.8, sprint: 2.3, cross: 0.88, reb: 0.9, tick: 0.9, streak: 1.3, swish: 1.2, floor: 1.15, rim: 1.15, whistle: 1.1, cheer: 1.2, groan: 5.4, ooh: 5.3, sigh: 4.0, block: 0.7, release: 1.82, pass: 1.32, catch: 1.15, jump: 2.5, sub: 1.63 };
 const JIT = { default: [20, 1.5], click: [8, 0.6], whistle: [18, 1.2], buzzer: [6, 0.6], meter: [4, 0.4], win: [6, 0.8] };
 
 export function makeCues(ctx, master, kit) {

@@ -7,6 +7,10 @@ export const DIFF = [
   { name: 'Varsity', sd: 0.09, steal: 1.0, react: 0.2, win: 1.0, noise: 0.22 },
   { name: 'All-State', sd: 0.065, steal: 1.35, react: 0.13, win: 0.8, noise: 0.12 },
 ];
+// Team styles (S3-03): how an AI team plays. pace: 1 is today's tempo (above is quicker shots and more drives); three: leans toward
+// (+) or away from (-) the three-point shot; press: 0 none, 1 a full-court press with a trap near half court. Opponents use their style;
+// the team you steer, and its teammates, play the neutral one, as before.
+export const STYLE_NEUTRAL = { name: 'Balanced', blurb: 'A bit of everything.', pace: 1, three: 0, press: 0 };
 export const TEAM_AI = { sd: 0.09, steal: 0.9, react: 0.2, win: 1, noise: 0.22 }; // the user's AI teammates
 
 export const SWEET = 0.9; // meter value at the top of the jump

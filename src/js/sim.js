@@ -3,7 +3,7 @@
 import { rnd, gauss, clamp } from './util.js';
 import { COURT, G, rimFor, distToRim, isThree, inBounds } from './court.js';
 import { decide, nearestDef, bestPassTarget, spots } from './ai.js';
-import { DIFF, TEAM_AI, meterTime, meterQuality, contestFactor, shotChance, ftChance, SWEET } from './rules.js';
+import { DIFF, TEAM_AI, STYLE_NEUTRAL, meterTime, meterQuality, contestFactor, shotChance, ftChance, SWEET } from './rules.js';
 
 export const DT = 1 / 60;
 const SHOOT_BUFFER = 0.15; // s a shoot press before the catch stays valid
@@ -27,7 +27,7 @@ export function createMatch(opts) {
     key: src.key, name: src.name, short: src.short, abbr: src.abbr, mascot: src.mascot, crest: src.crest, colors: src.colors,
     fictional: !!src.fictional, kit: src.kit, program: opts.program,
     roster: src.roster.map((r) => ({ ...r, st: STAT0(), energy: 1, out: false })),
-    onCourt: [0, 1, 2, 3, 4], score: 0, tf: [0, 0, 0, 0], isUser,
+    onCourt: [0, 1, 2, 3, 4], score: 0, tf: [0, 0, 0, 0], isUser, style: isUser ? STYLE_NEUTRAL : (src.style || STYLE_NEUTRAL),
   });
   const m = {
     v: 1, mode: opts.mode || 'exhibition', rs: (opts.seed | 0) || 1, seed: opts.seed | 0, rules, program: opts.program,
@@ -354,7 +354,15 @@ export function crossover(m, i, dx, dz) {
 // Sprint is on while it is asked for in live play and the legs are not spent.
 const spriting = (m, i) => m.p[i].sprint && m.phase === 'live' && R(m, i).energy > SPRINT_MIN;
 
-const A = { startShot, doPass, trySteal, jump, pump: pumpFake, cross: crossover };
+// A deliberate foul by a team behind late, to stop the clock. It is a reach-in: the ball goes out of bounds, or two shots in the bonus.
+function hack(m, i, j) {
+  const p = m.p[i];
+  if (m.noFouls || m.phase !== 'live' || m.ball.holder !== j) return false;
+  p.cool = 0.8; m.fx.hack[p.t]++;
+  foulCall(m, i, j, 'reach');
+  return true;
+}
+const A = { startShot, doPass, trySteal, jump, pump: pumpFake, cross: crossover, foul: hack };
 
 function gainBall(m, i, how) {
   const p = m.p[i];
@@ -961,7 +969,7 @@ export function summary(m) {
     mode: m.mode, phase: m.phase, q: m.clock.q, t: +m.clock.t.toFixed(2), shot: +m.clock.shot.toFixed(2), shotOff: m.clock.shotOff, running: m.clock.running,
     poss: m.poss, score: [m.teams[0].score, m.teams[1].score], winner: m.winner, dir: m.dir, arrow: m.arrow, venue: m.venue, crowd: +m.crowd.toFixed(2), crowdTeam: m.crowdTeam,
     rules: m.rules, difficulty: m.difficulty, breakReady: m.breakReady, program: m.program,
-    teams: m.teams.map((T) => ({ key: T.key, name: T.name, abbr: T.abbr, isUser: T.isUser, tf: T.tf, kit: T.kit, onCourt: T.onCourt.slice(), fictional: T.fictional })),
+    teams: m.teams.map((T) => ({ key: T.key, name: T.name, abbr: T.abbr, isUser: T.isUser, style: T.style.name, tf: T.tf, kit: T.kit, onCourt: T.onCourt.slice(), fictional: T.fictional })),
     ball: { state: m.ball.state, holder: m.ball.holder, x: +m.ball.x.toFixed(2), y: +m.ball.y.toFixed(2), z: +m.ball.z.toFixed(2), shot: m.ball.shot ? { type: m.ball.shot.type, make: m.ball.shot.make, three: m.ball.shot.three, q: m.ball.shot.q, label: m.ball.shot.label } : null },
     user: { team: m.user.team, ctrl: m.user.ctrl, auto: m.user.auto, meterLabel: m.user.meterLabel },
     players: m.p.map((p) => { const r = m.teams[p.t].roster[p.r]; return { i: p.idx, t: p.t, slot: p.slot, num: r.num, name: `${r.first} ${r.last}`, x: +p.x.toFixed(2), z: +p.z.toFixed(2), y: +p.y.toFixed(2), act: p.act, pf: r.st.pf, energy: +r.energy.toFixed(2), meter: +(p.meter || 0).toFixed(3), stun: +p.stun.toFixed(2), sprint: p.sprint }; }),

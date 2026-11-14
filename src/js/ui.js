@@ -92,6 +92,7 @@ export function hubScreen(st, fact) {
       <div class="vs">${crest(me, 52)}<span>vs</span>${crest(opp, 52)}</div>
       <p class="big">${esc(me.short)} ${esc(me.mascot)} vs ${esc(opp.short)} ${esc(opp.mascot)}</p>
       <p>${where}${g.rival ? ` · <span class="tag">Rivalry game</span>` : ''}${opp.fictional ? ' · <span class="tag">fictional town</span>' : ''}</p>
+      <p class="sub">They play: <b>${esc(opp.style.name)}</b>. ${esc(opp.style.blurb)}</p>
       <div class="row">${btn('playSeason', 'Play game', { cls: 'primary' })}${btn('simSeason', 'Sim game')}</div>
     </section>`;
   } else if (S.done) {

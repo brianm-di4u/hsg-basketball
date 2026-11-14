@@ -1,6 +1,7 @@
 // Team definitions: the seven real Garland County schools (setting only, from shared/data/schools.json)
 // plus clearly fictional out-of-county towns that fill schedules and brackets.
 import { contrast, shade } from './util.js';
+import { STYLE_NEUTRAL } from './rules.js';
 
 /* global SCHOOLS, FACTS */
 const RAW = typeof SCHOOLS !== 'undefined' ? SCHOOLS : globalThis.SCHOOLS;
@@ -56,6 +57,23 @@ export const FICTIONAL = TOWNS.map(([key, town, mascot, primary, secondary]) => 
   colors: { primary, secondary, accent: '#FFFFFF' }, cls: null, conf: null, tier: 'mid', crest: 'mono', fictional: true,
   titles: { boys: [], girls: [], any: [] },
 }));
+
+// How each team plays (S3-03): data, so the owner can edit one line. See STYLE_NEUTRAL in rules.js for what the numbers mean.
+const S = {
+  balanced: STYLE_NEUTRAL,
+  runGun: { name: 'Run and gun', blurb: 'Pushes the ball and shoots early.', pace: 1.2, three: 0.4, press: 0.2 },
+  shooters: { name: 'Perimeter shooters', blurb: 'Lives and dies by the three.', pace: 1, three: 0.8, press: 0 },
+  grind: { name: 'Grind it out', blurb: 'Slows the game down and works the clock.', pace: 0.95, three: -0.2, press: 0 },
+  press: { name: 'Full-court press', blurb: 'Pressures the ball the whole floor.', pace: 1.1, three: 0, press: 1 },
+  trap: { name: 'Trap and run', blurb: 'Traps at half court, then runs.', pace: 1.15, three: 0.2, press: 0.6 },
+  inside: { name: 'Inside out', blurb: 'Looks for layups first.', pace: 1.05, three: -0.6, press: 0.15 },
+};
+const STYLE_OF = {
+  'hot-springs': S.balanced, lakeside: S.shooters, 'lake-hamilton': S.runGun, 'fountain-lake': S.grind, 'cutter-morning-star': S.trap, jessieville: S.press, 'mountain-pine': S.inside,
+  cinderbrook: S.runGun, 'quartz-hollow': S.grind, bluemist: S.shooters, ironleaf: S.inside, hollowpine: S.balanced, redclay: S.press, 'kettle-ford': S.trap,
+  'marrow-creek': S.grind, ambergrove: S.runGun, lanternfield: S.shooters, copperbend: S.balanced, fernhaven: S.inside, saltlick: S.trap, thistledown: S.balanced,
+};
+for (const t of [...COUNTY, ...FICTIONAL]) t.style = STYLE_OF[t.key] || STYLE_NEUTRAL;
 
 const ALL = new Map([...COUNTY, ...FICTIONAL].map((t) => [t.key, t]));
 export const team = (key) => ALL.get(key);

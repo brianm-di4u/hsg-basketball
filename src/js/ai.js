@@ -3,7 +3,26 @@
 // Actions are passed in (A) so this module does not import sim.js.
 import { rnd, gauss, clamp, segDist } from './util.js';
 import { COURT, rimFor, distToRim, isThree } from './court.js';
-import { shotChance, contestFactor } from './rules.js';
+import { shotChance, contestFactor, STYLE_NEUTRAL } from './rules.js';
+
+// Team styles and late-game awareness (S3-03). Every number the styles and the late game move is named here.
+const THREE_VALUE = 2.6, THREE_LEAN = 0.5; // what a three is worth to the AI's shot choice (2 for a two), and how far a style's `three` moves it
+const LATE_SECS = 90, HACK_SECS = 24, HACK_MARGIN = 6, HACK_ODDS = 0.5; // the late window of a fourth quarter or overtime, when a team behind fouls on purpose, how far behind, how often it tries
+const TRAIL_MAX = 12, LEAD_MAX = 10; // a game further apart than this is decided and nobody changes their play
+const PRESS_TIGHT = 2.2, PRESS_OVERPLAY = 0.45, PRESS_STEAL = 2.5, TRAP_REACH = 16; // gap of the man on the ball, how much closer the others play at full press, extra steal tries at full press, how far the trapper may come from
+const PACE_POWER = 1.5; // how strongly a pace number changes how soon the AI shoots and drives
+const LATE0 = { u: 0, margin: 0, t: 99 };
+const styleOf = (m, t) => m.teams[t].style || STYLE_NEUTRAL;
+// How late and how close it is for team t: u climbs 0 to 1 through the late window, margin is t's lead.
+function lateGame(m, t) {
+  const c = m.clock;
+  if (c.q < 4 || m.phase === 'final') return LATE0;
+  const span = Math.min(LATE_SECS, m.rules.qLen * 0.75);
+  if (c.t >= span) return LATE0;
+  return { u: 1 - c.t / span, margin: m.teams[t].score - m.teams[1 - t].score, t: c.t };
+}
+const trailing = (s) => (s.margin < 0 && s.margin >= -TRAIL_MAX ? s.u : 0);
+const leading = (s) => (s.margin > 0 && s.margin <= LEAD_MAX ? s.u : 0);
 
 export const spots = (d) => {
   const rx = rimFor(d);
@@ -30,7 +49,11 @@ export function shotValue(m, i, x = m.p[i].x, z = m.p[i].z) {
   const nd = nearestDef(m, x, z, t);
   const type = dist < 4.5 ? 'layup' : 'jumper';
   const pr = shotChance({ dist, type, sht: R.sht, ins: R.ins, contest: contestFactor(nd.d, false), quality: 0.8 });
-  return pr * (isThree(x, z, d) ? 2.6 : 2); // AI shot selection leans away from threes
+  const sit = lateGame(m, t);
+  let three = THREE_VALUE + THREE_LEAN * styleOf(m, t).three, two = 2; // AI shot selection leans away from threes (a style moves that)
+  if (trailing(sit) > 0.5 && sit.margin <= -3) { three = 3.3; two = 1.6; } // behind by a three or more, late: it needs them
+  else if (leading(sit) > 0) three = Math.min(three, 2.1); // ahead late: no threes, run the clock
+  return pr * (isThree(x, z, d) ? three : two);
 }
 
 function laneSafety(m, i, j) {
@@ -72,7 +95,8 @@ const SPRINT_DIST = 9, SPRINT_ENERGY = 0.6, SPRINT_ODDS = 0.8; // ft to the targ
 const FAKE_ODDS = 0.4, CROSS_ODDS = 0.7; // chance a contested shooter pumps instead of shooting, and a driver crosses over a defender in his way
 function sprintPlan(m, i) {
   const p = m.p[i], r = m.teams[p.t].roster[p.r];
-  p.sprint = m.phase === 'live' && r.energy > SPRINT_ENERGY && Math.hypot(p.tx - p.x, p.tz - p.z) > SPRINT_DIST && rnd(m) < SPRINT_ODDS;
+  const st = styleOf(m, p.t), odds = SPRINT_ODDS * clamp(st.pace * (1 + 0.2 * st.press), 0.7, 1.2); // quick and pressing teams run more
+  p.sprint = m.phase === 'live' && r.energy > SPRINT_ENERGY && Math.hypot(p.tx - p.x, p.tz - p.z) > SPRINT_DIST && rnd(m) < odds;
 }
 
 // Main per-player decision. ai = difficulty params for this team.
@@ -176,9 +200,14 @@ function handler(m, i, A, ai) {
     const v = shotValue(m, k) * laneSafety(m, i, k) * 0.92 - (m.ball.lastPasser === k ? 0.12 : 0);
     if (v > pass) { pass = v; pj = k; }
   }
-  const hold = Math.max(0.2, 1.3 - 0.04 * possT); // patient offense: possessions run about 15 s
+  const sit = lateGame(m, t), st = styleOf(m, t);
+  const pace = clamp((st.pace * (1 + 0.6 * trailing(sit)) / (1 + 0.8 * leading(sit))) ** PACE_POWER, 0.6, 1.8); // a quick style, or a team behind late, shoots sooner; one ahead late runs the clock
+  let crowd = 0; // two defenders on him: a trap
+  for (let k = 0; k < 10; k++) if (m.p[k].t !== t && Math.hypot(m.p[k].x - p.x, m.p[k].z - p.z) < 5) crowd++;
+  if (crowd >= 2) pass *= 1.8;
+  const hold = Math.max(0.2, 1.3 - 0.04 * possT) / pace; // patient offense: possessions run about 15 s
   const n = () => gauss(m) * ai.noise * 0.5;
-  const opts = [['shoot', shoot + n()], ['drive', drive + n()], ['pass', pass + n()], ['hold', hold + n()]];
+  const opts = [['shoot', shoot * clamp(pace, 0.85, 1.3) + n()], ['drive', drive * pace + n()], ['pass', pass + n()], ['hold', hold + n()]];
   opts.sort((a, b) => b[1] - a[1]);
   const pickO = opts[0][0];
   const near = nearestDef(m, p.x, p.z, t);
@@ -225,9 +254,20 @@ function defend(m, i, A, ai) {
   const md = Math.hypot(man.x - rim, man.z - 25) || 1;
   const onBall = ball.holder === man.idx;
   const bd = Math.hypot(man.x - ball.x, man.z - ball.z);
-  const gap = onBall ? 3.4 : clamp(4.5 + bd * 0.18, 4.5, 10);
+  const st = styleOf(m, t), sit = lateGame(m, t);
+  const pressing = st.press > 0 && ball.state === 'held' && h && h.t !== t && od * (h.x - 47) < 4; // the ball has not got well past half court
+  let gap = onBall ? 3.4 : clamp(4.5 + bd * 0.18, 4.5, 10);
+  if (pressing) gap = onBall ? PRESS_TIGHT : gap * (1 - PRESS_OVERPLAY * st.press);
+  if (pressing && st.press >= 0.5 && !onBall && Math.abs(h.x - 47) < 14) { // the nearest teammate of the man on the ball comes to trap him
+    const onIdx = t * 5 + h.slot;
+    let near = -1, nd = 1e9;
+    for (let k = t * 5; k < t * 5 + 5; k++) { if (k === onIdx) continue; const dd = Math.hypot(m.p[k].x - h.x, m.p[k].z - h.z); if (dd < nd) { nd = dd; near = k; } }
+    if (near === i && nd < TRAP_REACH) { setTarget(p, h.x, h.z + (h.z > 25 ? 2.2 : -2.2), 1); return; }
+  }
   let gx = man.x + (rim - man.x) / md * gap, gz = man.z + (25 - man.z) / md * gap;
   if (!onBall) { gx += (ball.x - gx) * 0.12; gz += (ball.z - gz) * 0.12; }
   setTarget(p, gx, gz, 1);
-  if (onBall && bd < 3.4 && p.cool <= 0 && rnd(m) < 0.035 * ai.steal * (0.6 + m.teams[t].roster[p.r].def)) A.trySteal(m, i);
+  if (onBall && bd < 3.4 && p.cool <= 0 && A.foul && !m.teams[t].isUser && sit.u > 0 && sit.margin < 0 && sit.margin >= -HACK_MARGIN
+    && m.clock.t < Math.min(HACK_SECS, m.rules.qLen * 0.2) && m.teams[t].roster[p.r].st.pf < m.rules.foulOut - 1 && rnd(m) < HACK_ODDS) { A.foul(m, i, h.idx); return; } // behind late: stop the clock with a foul
+  if (onBall && bd < 3.4 && p.cool <= 0 && rnd(m) < 0.035 * ai.steal * (0.6 + m.teams[t].roster[p.r].def) * (1 + PRESS_STEAL * (pressing ? st.press : 0))) A.trySteal(m, i);
 }

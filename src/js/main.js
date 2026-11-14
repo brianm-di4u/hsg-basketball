@@ -216,6 +216,60 @@ function start3d() {
 }
 
 
+
+// ---------------------------------------------------------------- first-run tips (S2-01)
+// Three one-line prompts in a new player's first game, each at the moment it matters and each gone when the player does the thing
+// it says (or after a few seconds). Nothing here takes input: only the Skip button and a tap on the line itself are clickable.
+// tipsSeen (saved with the settings) is set when all three are done, on Skip, or when the first game ends. A save from before
+// the tips existed is never a newcomer's (restore() sets it). Settings > First-game tips shows them again.
+const COACH = {
+  tipoff: { key: 'Press Space when the ball reaches its peak.', touch: 'Tap SHOOT when the ball reaches its peak.', secs: 6 },
+  shoot: { key: 'Score more than them. Hold Space, release in the green.', touch: 'Score more than them. Hold SHOOT, release in the green.', secs: 9 },
+  defend: { key: 'On defense: X steals, C switches player.', touch: 'On defense: STEAL grabs it, SWITCH changes player.', secs: 8 },
+  practice: { key: 'Hold Space, release in the green.', touch: 'Hold SHOOT, release in the green.', secs: 9 }, // Hot Streak practice
+};
+const newCoach = () => ({ done: {}, cur: null, t: 0, practice: false });
+function coachFinish(id) { const c = state.coach; if (!c || c.done[id]) return; c.done[id] = true; if (c.cur === id) setCoach(null); if (!c.practice && ['tipoff', 'shoot', 'defend'].every((k) => c.done[k])) coachSeen(); }
+function coachSeen() {
+  setCoach(null);
+  if (state.settings.tipsSeen) return;
+  state.settings.tipsSeen = true; persist({ settings: { tipsSeen: true } });
+}
+function setCoach(id) {
+  const c = state.coach, el = $('#coach');
+  if (!c || !el) return;
+  if (c.cur === id) return;
+  c.cur = id; c.t = 0;
+  if (!id) { el.hidden = true; return; }
+  const text = touchOn() ? COACH[id].touch : COACH[id].key;
+  $('#coach-t').textContent = text; el.hidden = false; el.dataset.tip = id;
+  announce(text);
+}
+function coachTick(m) {
+  const c = state.coach;
+  if (!c || (state.settings.tipsSeen && !c.practice) || !m || m.user.team < 0) return;
+  const ut = m.user.team, held = m.ball.holder >= 0 ? m.p[m.ball.holder] : null;
+  if (m.phase !== 'tipoff') coachFinish('tipoff');
+  let want = null;
+  if (m.phase === 'tipoff') want = 'tipoff';
+  else if (m.phase === 'live' && held && held.t === ut && m.user.ctrl === held.idx && !m.user.auto) want = 'shoot';
+  else if (m.phase === 'live' && held && held.t !== ut) want = 'defend';
+  if (want && c.done[want]) want = null;
+  if (c.cur !== want) setCoach(want); // the moment came, or it passed (the possession changed)
+  if (c.cur) { c.t += DT; if (c.t >= COACH[c.cur].secs) coachFinish(c.cur); }
+}
+function coachInput() {
+  const c = state.coach; if (!c || !c.cur) return;
+  if (c.cur === 'tipoff' && I.shootP) coachFinish('tipoff');
+  if (c.cur === 'shoot' && I.shootR) coachFinish('shoot');
+  if (c.cur === 'defend' && (I.passP || I.switchP)) coachFinish('defend');
+}
+// Hot Streak practice: the shot tip until the first shot.
+function coachShootout(so) {
+  const c = state.coach; if (!c || !so.practice) return;
+  if (!c.done.practice) { if (c.cur !== 'practice') setCoach('practice'); c.t += DT; if (so.sh.act === 'shoot' || c.t >= COACH.practice.secs) coachFinish('practice'); }
+}
+
 // ---------------------------------------------------------------- career, achievements, daily game (S3-01)
 // What the user's team did in this game, tracked from the sim's events (the box score gives the totals).
 const today = () => state.dateOverride || localDate();
@@ -355,6 +409,7 @@ function enterGame() {
   state.paused = false; state.finalShown = false; state.showBox = false;
   state.factSeed = (state.match.seed || 1) + 3;
   state.track = newTrack(state.match); state.awards = null;
+  state.coach = state.settings.tipsSeen ? null : newCoach();
   go('game', false);
 }
 
@@ -427,11 +482,13 @@ function challengeResult() {
 
 // ---------------------------------------------------------------- shootout
 function startShootout(o = {}) {
+  state.coach = o.practice ? { ...newCoach(), practice: true } : null; state.awards = null;
   const p = state.pick;
   const key = o.school || p.school, program = o.program || p.program;
   const t = teamFor(key, program, null, 1);
   state.mode = 'shootout';
-  state.so = createShootout({ team: t, roster: t.roster, kit: kitFor(t, 'home'), seed: o.seed ?? (state.seed || (Date.now() & 0xffff)), difficulty: state.settings.difficulty, assist: state.settings.assist });
+  state.so = createShootout({ team: t, roster: t.roster, kit: kitFor(t, 'home'), seed: o.seed ?? (state.seed || (Date.now() & 0xffff)), difficulty: state.settings.difficulty, assist: state.settings.assist, length: o.practice ? 30 : 60 });
+  state.so.practice = !!o.practice;
   state.paused = false;
   go('shootout', false);
 }
@@ -521,6 +578,7 @@ function render() {
     if (f) f.focus({ preventScroll: true });
     scr.scrollTop = 0;
   }
+  if (!IN_PLAY.has(sc) || state.paused) { const cc = $('#coach'); if (cc) cc.hidden = true; if (state.coach) { state.coach.cur = null; state.coach.t = 0; } }
   const showSB = OVER_GAME.has(sc) && (state.match || state.so);
   syncAudio();
   $('#sb').hidden = !showSB;
@@ -601,8 +659,10 @@ function stepOnce() {
     return;
   }
   if (sc === 'shootout' && state.so) {
+    coachInput();
     drain(state.so.input);
     shootoutTick(state.so);
+    coachShootout(state.so);
     soEvents(state.so);
     streakTension(state.so);
     crowdBed(CROWD_REST + 0.1 * ((state.so.mult || 1) - 1));
@@ -611,6 +671,7 @@ function stepOnce() {
   }
   const m = state.match;
   if (!m || sc !== 'game') return;
+  coachInput();
   drain(m.input);
   const vd = verticalDir(m);
   if (vd) { const { mx, mz } = m.input; m.input.mx = -mz * vd; m.input.mz = mx * vd; } // screen up = toward the attacked basket
@@ -618,6 +679,7 @@ function stepOnce() {
   record(m);
   matchEvents(m);
   trackScore(m);
+  coachTick(m);
   meterTick(m);
   tickClock(m);
   crowdBed(CROWD_REST + CROWD_HOME * (m.crowdTeam >= 0 ? m.crowd : 0.3) + CROWD_CLOSE * matchTension(m));
@@ -628,6 +690,7 @@ function stepOnce() {
 function onFinal() {
   const m = state.match;
   state.finalShown = true; state.paused = true;
+  if (state.coach) { coachSeen(); state.coach = null; }
   const ut = m.user.team;
   if (ut >= 0) { play(m.winner === ut ? 'win' : 'groan'); if (m.winner === ut) duck(6, 1200); }
   announce(`Final: ${m.teams[0].short} ${m.teams[0].score}, ${m.teams[1].short} ${m.teams[1].score}.`);
@@ -641,6 +704,7 @@ function onFinal() {
 function endShootout() {
   const so = state.so;
   if (state.scene !== 'shootout') return;
+  if (so.practice) { play('buzzer'); announce(`Time. ${so.made} of ${so.att} made.`); setCoach(null); go('shootoutEnd', false); return; } // practice is not scored or saved
   const memoryBest = state.save.best.shootout || 0;
   state.save.best.shootout = Math.max(memoryBest, so.score);
   const saved = persist({ score: so.score });
@@ -986,7 +1050,7 @@ function updateScoreboard(force) {
     const so = state.so;
     const gauge = Math.min(6, so.streak);
     html = `<div class="sb-team"><span class="sb-name">${UI.esc(so.team.abbr)}</span><span class="sb-score" aria-label="Score">${so.score}</span></div>
-      <div class="sb-mid"><span class="sb-q">HOT STREAK</span><span class="sb-clock">${so.phase === 'ready' ? 'READY' : so.t.toFixed(1)}</span><span class="sb-shot">x${so.mult}</span></div>
+      <div class="sb-mid"><span class="sb-q">${so.practice ? 'PRACTICE' : 'HOT STREAK'}</span><span class="sb-clock">${so.phase === 'ready' ? 'READY' : so.t.toFixed(1)}</span><span class="sb-shot">x${so.mult}</span></div>
       <div class="sb-team"><span class="sb-name sb-steam">STREAK</span><span class="gauge" role="img" aria-label="Streak ${so.streak}">${Array.from({ length: 6 }, (_, k) => `<i class="${k < gauge ? 'on' : ''}"></i>`).join('')}</span></div>`;
   } else {
     const m = state.match;
@@ -1086,6 +1150,10 @@ const ACT = {
   playChallenge: (a) => { const [id, prog] = a.split('|'); startChallenge(id, prog); },
   afterChallenge: () => { const cr = state.chalResult; state.chalResult = null; if (cr && cr.more) startChallenge(state.chal.id, state.chal.program, state.chal.step + 1); else { state.match = null; state.stack = ['title']; go('challenges', false); } },
   startShootout: () => startShootout(),
+  startPractice: () => startShootout({ practice: true }),
+  setTips: (a) => { state.coach = null; setSetting('tipsSeen', a === '0'); },
+  skipTips: () => { coachSeen(); state.coach = null; },
+  tapTip: () => { if (state.coach && state.coach.cur) coachFinish(state.coach.cur); },
   resume: () => { state.quitArmed = false; state.paused = false; go('game', false); },
   pause: () => pauseGame(),
   toggleBox: () => { state.showBox = !state.showBox; render(); },
@@ -1172,7 +1240,7 @@ function sumState() {
     trophies: state.save.trophies, unlocks: state.save.unlocks, best: state.save.best, challenges: state.save.challenges,
     career: state.save.career, daily: state.save.daily, achievements: state.save.achievements, awards: state.awards || null, date: today(), look: { ball: R.look.ball.id || ballSkin(state.settings.ball).id, floor: R.look.floor.id },
     replay: state.replay ? { kind: state.replay.kind, f: Math.floor(state.replay.f), n: state.replay.frames.length } : null,
-    pick: { ...state.pick }, audio: { ctx: !!AU.ctx, on: AU.on, ambience: AU.ambOn, music: AU.musOn, track: AU.kit && AU.kit.music.score && AU.music ? AU.music : '', tension: AU.tension, bed: AU.kit && AU.kit.amb.scene && AU.scene ? AU.scene : '', held: !!(AU.kit && AU.kit.held), state: AU.ctx ? AU.ctx.state : null, crowd: AU.crowd ?? null, count: { ...AU.count } }, reduced: R.reduced, touch: touchOn(), fx: R.fx.parts.length, loop: !!raf,
+    coach: state.coach ? { cur: state.coach.cur, done: { ...state.coach.done }, text: state.coach.cur ? $('#coach-t').textContent : '', practice: state.coach.practice } : null, pick: { ...state.pick }, audio: { ctx: !!AU.ctx, on: AU.on, ambience: AU.ambOn, music: AU.musOn, track: AU.kit && AU.kit.music.score && AU.music ? AU.music : '', tension: AU.tension, bed: AU.kit && AU.kit.amb.scene && AU.scene ? AU.scene : '', held: !!(AU.kit && AU.kit.held), state: AU.ctx ? AU.ctx.state : null, crowd: AU.crowd ?? null, count: { ...AU.count } }, reduced: R.reduced, touch: touchOn(), fx: R.fx.parts.length, loop: !!raf,
     view: R.v ? { W: R.v.W, H: R.v.H, s: +R.v.s.toFixed(2), camX: +R.v.camX.toFixed(2) } : null,
     gfx: { mode: is3d() ? '3d' : '2d', gl: state.gl || null, ...info3d(), hq: hqInfo() },
     hud: hudState(),

@@ -165,6 +165,7 @@ const scoreLine = (m) => `<div class="final-score"><span>${crest(m.teams[0], 40)
 export function pauseScreen(st, m, showBox) {
   return `<div class="panel">
     <h2>Paused</h2>${scoreLine(m)}
+    <p class="goal"><b>Goal:</b> score more than the other team. Hold Shoot, and let go in the green.</p>
     <nav class="menu">${btn('resume', 'Resume', { cls: 'primary' })}${btn('toggleBox', showBox ? 'Hide box score' : 'Box score')}${btn('help', 'How to play')}${btn('settings', 'Settings')}${btn('quit', st.quitArmed ? 'Yes, quit and lose this game' : st.mode === 'season' ? 'Quit game (not recorded)' : 'Quit to menu')}</nav>
     ${st.quitArmed ? `<p class="warn" role="status">${st.mode === 'season' ? 'This game will be lost and is not recorded. You can play it again from the season hub.' : 'This game will be lost. Press Quit again to leave, or Resume to keep playing.'}</p>` : ''}
     ${showBox ? teamTotals(m) + boxTable(m, m.user.team >= 0 ? m.user.team : 0) : ''}
@@ -217,10 +218,17 @@ export function shootoutSetupScreen(st) {
     ${seg('pickProgram', [['boys', 'Boys'], ['girls', 'Girls']], x.program, 'Program')}
     ${grid('pickSchool', x.school, 'School')}
     <p>Best score: <b>${st.save.best.shootout || 0}</b></p>
-    <div class="row end">${btn('title', 'Back')}${btn('startShootout', 'Start', { cls: 'primary' })}</div>
+    <p class="fine">New to the shot meter? Practice is 30 seconds of free shooting from the same spots. It is not scored and does not touch your best.</p>
+    <div class="row end">${btn('title', 'Back')}${btn('startPractice', 'Practice')}${btn('startShootout', 'Start', { cls: 'primary' })}</div>
   </div>`;
 }
 export function shootoutEndScreen(st, so, isBest, awards = '') {
+  if (so.practice) return `<div class="panel">
+    <p class="kicker">Practice · time</p>
+    <h2>${so.made} of ${so.att} made</h2>
+    <p>${so.att ? `That is ${Math.round((100 * so.made) / so.att)}%. ` : ''}Practice is not scored.</p>
+    <div class="row end">${btn('title', 'Menu')}${btn('startPractice', 'Practice again')}${btn('startShootout', 'Play Hot Streak', { cls: 'primary' })}</div>
+  </div>`;
   return `<div class="panel">
     <p class="kicker">Hot Streak · time</p>
     <h2>${so.score} points</h2>
@@ -407,6 +415,7 @@ export function helpScreen(st, tab = 'controls') {
     <li>Classic 2D court available in Settings → Graphics.</li></ul>`;
   return `<div class="panel wide">
     <h2>How to play</h2>
+    <p class="goal"><b>Goal:</b> score more than the other team. Hold Shoot, and let go in the green.</p>
     <div class="tabs" role="tablist">${tabs.map(([k, l]) => `<button class="tab" role="tab" aria-selected="${k === tab}" data-act="helpTab" data-arg="${k}">${l}</button>`).join('')}</div>
     <div class="tabbody" role="tabpanel">${body}</div>
     <div class="row end">${btn('back', 'Back', { cls: 'primary' })}</div>
@@ -436,6 +445,7 @@ export function settingsScreen(st, saving) {
     ${seg('setTouch', [['auto', 'Auto'], ['on', 'Always'], ['off', 'Never']], s.touch, 'Touch controls')}
     ${seg('setGraphics', [['auto', 'Auto'], ['3d', '3D gym'], ['2d', 'Classic 2D']], s.graphics || 'auto', 'Graphics')}
     ${seg('setReplays', [[1, 'On'], [0, 'Off']], s.replays === false ? 0 : 1, 'Highlight replays')}
+    ${seg('setTips', [[1, 'Show'], [0, 'Hide']], s.tipsSeen ? 0 : 1, 'First-game tips')}
     ${saveNote(saving)}
     <div class="row end">${btn('back', 'Done', { cls: 'primary' })}</div>
   </div>`;

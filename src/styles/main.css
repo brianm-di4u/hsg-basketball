@@ -326,7 +326,7 @@ b.w { color: var(--ok); } b.l { color: var(--accent); }
 .ach em { font: 700 var(--fs-xs) var(--font-text); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); font-style: normal; }
 .ach li.got em { color: var(--ok); }
 .seg-b.locked { border-style: dashed; color: var(--muted); background: transparent; cursor: not-allowed; }
-.seg-b.locked small { display: block; font-size: .7rem; letter-spacing: 0; font-family: var(--font-text); font-weight: 600; margin-top: 3px; }
+.seg-b.locked small { display: block; font-size: var(--fs-xs); letter-spacing: 0; font-family: var(--font-text); font-weight: 600; margin-top: 3px; }
 .awards { border-color: var(--primary); border-width: 2px; }
 .awards li { display: block; }
 .cal { list-style: none; padding: 0; margin: 0 0 6px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
@@ -344,3 +344,17 @@ b.w { color: var(--ok); } b.l { color: var(--accent); }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
 body.reduced #toast.in { animation: none; }
 @media (prefers-reduced-motion: reduce) { #toast.in { animation: none; } }
+
+/* ---------- first-game tips (S2-01): one line at a time, clear of the scoreboard and the pad; only the line and Skip take a tap ---------- */
+#coach { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); z-index: 4; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 8px; width: max-content; max-width: min(600px, calc(100% - 140px)); pointer-events: none; }
+#coach[hidden] { display: none; }
+@media (min-width: 760px) { body.gl #coach { top: 100px; } }
+#coach-tip { pointer-events: auto; display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 14px; border-radius: var(--radius-md); background: rgba(20, 18, 31, .92); border: 2px solid #D4AF37; color: #FFF6E0; font: 700 1.15rem/1.2 var(--font-text); letter-spacing: .02em; cursor: pointer; text-align: left; }
+.coach-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: #FFD84D; animation: coach-pulse 1.2s ease-in-out infinite; }
+@keyframes coach-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(1.5); } }
+body.reduced .coach-dot { animation: none; }
+@media (prefers-reduced-motion: reduce) { .coach-dot { animation: none; } }
+#coach-skip { pointer-events: auto; min-height: 44px; min-width: 44px; padding: 8px 14px; border-radius: var(--radius-md); background: rgba(20, 18, 31, .92); border: 2px solid #8A84A8; color: #E9E2D2; font: 700 1rem var(--font-text); cursor: pointer; }
+#coach-skip:hover { border-color: #D4AF37; }
+@media (max-width: 600px) { #coach { max-width: calc(100% - 76px); left: 10px; transform: none; justify-content: flex-start; } }
+.goal { margin: 0 0 8px; }

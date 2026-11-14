@@ -440,3 +440,237 @@ export const tests = [
     },
   },
 ];
+
+// ---------------------------------------------------------------- S2-01 first-run teaching
+const words = (x) => x.trim().split(/\s+/).length;
+const coach = async (t) => (await t.state()).coach;
+const tipBox = (t) => t.page.evaluate(() => {
+  const e = document.querySelector('#coach'); if (!e || e.hidden) return null;
+  const r = (s) => { const q = document.querySelector(s); if (!q || q.hidden || !q.getClientRects().length) return null; const b = q.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height }; };
+  const g = r('#coach-tip'), k = r('#coach-skip');
+  return { tip: g, skip: k, text: document.querySelector('#coach-t').textContent, sb: r('#sb'), pause: r('#b-pause'), pad: r('#pad'), stick: r('#stick'), W: innerWidth, H: innerHeight };
+});
+const overlap = (a, b) => !!a && !!b && a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+async function freshGame(t, o = {}) {
+  await wipe(t); await t.reload();
+  const s = await exhibition(t, { seed: 7, ...o });
+  await t.game('step', 2);
+  return s;
+}
+const input = (t, o) => t.game('act', 'input', o);
+
+tests.push(
+  {
+    name: 'S2-01: a new player sees the tip-off tip, in words that match the input, clear of the HUD and the controls',
+    viewports: ['desktop', 'mobile'],
+    async run(t) {
+      await freshGame(t);
+      const c = await coach(t);
+      t.equal(c.cur, 'tipoff', 'the tip-off tip is up at the jump ball');
+      const b = await tipBox(t);
+      const touch = t.viewport === 'mobile';
+      t.expect(touch ? /Tap SHOOT/.test(b.text) : /Press Space/.test(b.text), `the words match the input (${b.text})`);
+      t.expect(words(b.text) <= 12, `twelve words or fewer (${words(b.text)})`);
+      t.expect(b.skip && b.skip.h >= 44 && b.skip.w >= 44, 'Skip tips is visible and at least 44 px');
+      t.expect(b.tip.h >= 44, 'and so is the tip line, which also takes a tap');
+      t.expect(!overlap(b.tip, b.sb) && !overlap(b.skip, b.sb), 'the tip is clear of the scoreboard');
+      t.expect(!overlap(b.tip, b.pause) && !overlap(b.skip, b.pause), 'and of the pause button');
+      t.expect(!overlap(b.tip, b.pad) && !overlap(b.skip, b.pad), 'and of the touch pad');
+      t.expect(b.tip.x >= 0 && b.tip.x + b.tip.w <= b.W && b.skip.x + b.skip.w <= b.W, 'inside the screen');
+      t.expect(await t.page.evaluate(() => getComputedStyle(document.querySelector('#coach')).pointerEvents === 'none'), 'the layer around it lets every tap through');
+      t.expect((await t.page.textContent('#live')).includes(b.text.slice(0, 12)), 'and the live region says it');
+      await t.shot('S2-01-tip-tipoff');
+      await t.checkLayout({ allowScrollY: true });
+      await input(t, { shoot: true }); await t.game('step', 3); await input(t, { shoot: false });
+      t.equal((await coach(t)).done.tipoff, true, 'pressing Shoot, as the tip says, clears it');
+      t.equal((await coach(t)).cur, null, 'it is gone');
+    },
+  },
+  {
+    name: 'S2-01: the shot tip comes with the first possession and goes when the shot is released; the defence tip when they have the ball',
+    viewports: ['desktop', 'mobile'],
+    async run(t) {
+      await freshGame(t);
+      await stepUntil(t, (s) => s.match.phase === 'live', 1200, 10, 'live');
+      await t.game('act', 'autoplay', false);
+      await t.game('act', 'give', 0, 0);
+      await t.game('step', 3);
+      let c = await coach(t);
+      t.equal(c.cur, 'shoot', 'the user holds the ball: the shot tip');
+      const touch = t.viewport === 'mobile';
+      t.expect(touch ? /Hold SHOOT/.test(c.text) : /Hold Space/.test(c.text), `words match the input (${c.text})`);
+      t.expect(/green/.test(c.text) && words(c.text) <= 12, `the goal and the rule, in ${words(c.text)} words`);
+      const b = await tipBox(t);
+      t.expect(!overlap(b.tip, b.sb) && !overlap(b.tip, b.pause) && !overlap(b.tip, b.pad), `clear of the HUD and the controls (${JSON.stringify({ tip: b.tip, sb: b.sb, pause: b.pause, pad: b.pad })})`);
+      await t.shot('S2-01-tip-shoot');
+      await input(t, { shoot: true }); await t.game('step', 20); await input(t, { shoot: false }); await t.game('step', 3);
+      t.equal((await coach(t)).done.shoot, true, 'releasing a shot clears it');
+      await t.game('act', 'give', 1, 0);
+      await t.game('step', 3);
+      c = await coach(t);
+      t.equal(c.cur, 'defend', 'they have the ball: the defence tip');
+      t.expect(touch ? /STEAL/.test(c.text) && /SWITCH/.test(c.text) : /X steals/.test(c.text) && /C switches/.test(c.text), `words match the input (${c.text})`);
+      t.expect(words(c.text) <= 12, 'twelve words or fewer');
+      await t.shot('S2-01-tip-defend');
+      await input(t, { switch: true }); await t.game('step', 3);
+      c = await coach(t);
+      t.equal(c.done.defend, true, 'switching, as it says, clears it');
+      t.equal((await t.state()).settings.tipsSeen, true, 'all three done: the tips are marked seen');
+      t.equal((await save(t)).settings.tipsSeen, true, 'and that is saved with the settings');
+      await exhibition(t, { seed: 9 });
+      await t.game('step', 3);
+      t.equal(await coach(t), null, 'the next game has no tips');
+    },
+  },
+  {
+    name: 'S2-01: a tip clears itself after a few seconds, and a tap on it clears it',
+    viewports: ['desktop'],
+    async run(t) {
+      await freshGame(t);
+      await stepUntil(t, (s) => s.match.phase === 'live', 1200, 10, 'live');
+      await t.game('act', 'autoplay', false);
+      await t.game('act', 'give', 0, 0);
+      await t.game('step', 3);
+      t.equal((await coach(t)).cur, 'shoot', 'the shot tip is up');
+      await t.page.click('#coach-tip');
+      t.equal((await coach(t)).done.shoot, true, 'a tap on the line clears it');
+      await t.game('act', 'give', 1, 0);
+      await t.game('step', 3);
+      t.equal((await coach(t)).cur, 'defend', 'the defence tip is up');
+      await t.game('step', 60 * 9);
+      const c = await coach(t);
+      t.expect(c.cur !== 'defend', 'and it clears itself after a few seconds');
+    },
+  },
+  {
+    name: 'S2-01: Skip tips ends them at once and is remembered',
+    viewports: ['desktop', 'mobile'],
+    async run(t) {
+      await freshGame(t);
+      t.equal((await coach(t)).cur, 'tipoff', 'a tip is up');
+      await t.page.click('#coach-skip');
+      t.equal(await coach(t), null, 'Skip tips clears the layer');
+      t.equal((await t.state()).settings.tipsSeen, true, 'the tips are marked seen');
+      t.expect(await t.page.evaluate(() => document.querySelector('#coach').hidden), 'and nothing is on screen');
+      await t.reload();
+      await exhibition(t, { seed: 7 });
+      await t.game('step', 2);
+      t.equal(await coach(t), null, 'after a reload the next game has no tips');
+    },
+  },
+  {
+    name: 'S2-01: a save from before the tips is not a newcomer; Settings can show the tips again',
+    viewports: ['desktop'],
+    async run(t) {
+      await put(t, { v: 1, settings: { sound: true, vol: 0.5, difficulty: 1 }, season: null, trophies: [], unlocks: { throwback: false }, best: { shootout: 12 }, challenges: {} });
+      await t.reload();
+      const s = await t.state();
+      t.equal(s.settings.tipsSeen, true, 'an existing save counts as seen');
+      t.expect((await save(t)).settings.tipsSeen === undefined, 'loading it writes nothing');
+      await t.game('setState', { settings: { text: 115 } });
+      t.equal((await save(t)).settings.tipsSeen, true, 'its next save says seen, not the new-player default');
+      await exhibition(t, { seed: 7 }); await t.game('step', 2);
+      t.equal(await coach(t), null, 'no tips for this player');
+      await t.game('scene', 'settings');
+      t.expect(/First-game tips/.test(await text(t)), 'Settings has First-game tips');
+      await t.page.click('[data-act="setTips"][data-arg="1"]');
+      t.equal((await save(t)).settings.tipsSeen, false, 'Show writes tipsSeen false');
+      await t.reload();
+      await exhibition(t, { seed: 7 }); await t.game('step', 2);
+      t.equal((await coach(t)).cur, 'tipoff', 'and the tips are back, even after a reload');
+    },
+  },
+  {
+    name: 'S2-01: a brand new profile has its tips due, even if its first save is a setting',
+    viewports: ['desktop'],
+    async run(t) {
+      await wipe(t); await t.reload();
+      t.equal((await t.state()).settings.tipsSeen, false, 'tips are due');
+      await t.game('setState', { settings: { text: 115 } });
+      t.equal((await save(t)).settings.tipsSeen, false, 'a first save made from Settings still leaves them due');
+      await t.reload();
+      await exhibition(t, { seed: 7 }); await t.game('step', 2);
+      t.equal((await coach(t)).cur, 'tipoff', 'and the first game shows them');
+    },
+  },
+  {
+    name: 'S2-01: the first game ending marks the tips seen even if a tip never came up',
+    viewports: ['desktop'],
+    async run(t) {
+      await freshGame(t);
+      await t.game('act', 'finishGame', { winner: 0 });
+      t.equal((await t.state()).settings.tipsSeen, true, 'seen');
+    },
+  },
+  {
+    name: 'S2-01: reduced motion gives a still marker, not a pulsing one',
+    viewports: ['desktop'],
+    async run(t) {
+      await wipe(t); await t.reload();
+      await t.game('setState', { settings: { motion: 'on' } });
+      await exhibition(t, { seed: 7 }); await t.game('step', 2);
+      t.equal((await coach(t)).cur, 'tipoff', 'the tip shows');
+      t.equal(await t.page.evaluate(() => getComputedStyle(document.querySelector('.coach-dot')).animationName), 'none', 'with reduced motion the marker does not pulse');
+      await t.game('setState', { settings: { motion: 'off' } });
+      t.expect(await t.page.evaluate(() => getComputedStyle(document.querySelector('.coach-dot')).animationName !== 'none'), 'with full motion it does');
+    },
+  },
+  {
+    name: 'S2-01: the goal is written on the Help screen and the pause card',
+    viewports: ['desktop', 'mobile'],
+    async run(t) {
+      await t.game('scene', 'help');
+      t.expect(/Goal: score more than the other team/.test(await text(t)), 'Help starts with the goal');
+      await exhibition(t, { seed: 7 });
+      await t.game('scene', 'pause');
+      t.expect(/Goal: score more than the other team/.test(await text(t)), 'so does the pause card');
+      await t.shot('S2-01-pause-goal');
+    },
+  },
+  {
+    name: 'S2-01: Practice: 30 seconds of free shooting with the shot tip, never scored or saved',
+    viewports: ['desktop', 'mobile'],
+    async run(t) {
+      await put(t, { v: 1, settings: { tipsSeen: true }, best: { shootout: 41 }, unlocks: { throwback: false }, trophies: [], challenges: {} });
+      await t.reload();
+      await t.game('scene', 'shootoutSetup');
+      t.expect(await t.page.evaluate(() => !!document.querySelector('[data-act="startPractice"]')), 'Hot Streak setup offers Practice');
+      await t.shot('S2-01-practice-setup');
+      await t.page.click('[data-act="startPractice"]');
+      let s = await t.state();
+      t.equal(s.scene, 'shootout', 'practice is a shooting round');
+      t.equal(s.shootout.t, 30, 'thirty seconds');
+      await t.game('step', 2);
+      t.equal((await coach(t)).cur, 'practice', 'the shot tip is up, even for a player who has seen the tips');
+      t.expect(/green/.test((await coach(t)).text), 'it says to let go in the green');
+      const b = await tipBox(t);
+      t.expect(!overlap(b.tip, b.sb) && !overlap(b.tip, b.pause) && !overlap(b.tip, b.pad), `clear of the HUD and the controls (${JSON.stringify({ tip: b.tip, sb: b.sb, pause: b.pause, pad: b.pad })})`);
+      await t.shot('S2-01-tip-practice');
+      await input(t, { shoot: true }); await t.game('step', 30); await input(t, { shoot: false }); await t.game('step', 120);
+      await t.game('step', 60 * 31);
+      s = await t.state();
+      t.equal(s.scene, 'shootoutEnd', 'the round ends');
+      t.expect(/Practice/.test(await text(t)) && /not scored/.test(await text(t)), 'and says it was practice');
+      t.equal(s.best.shootout, 41, 'the best is untouched');
+      t.equal((await save(t)).best.shootout, 41, 'in the save too');
+      t.expect(!s.achievements['hot-spring'], 'and no achievement comes from practice');
+      await t.shot('S2-01-practice-end');
+    },
+  },
+  {
+    name: 'S2-01: a real Hot Streak still saves its best and can earn Hot Spring',
+    viewports: ['desktop'],
+    async run(t) {
+      await wipe(t); await t.reload();
+      await t.game('newGame', { mode: 'shootout', paused: true });
+      await t.game('setState', { shootout: { score: 44, made: 14, att: 20, t: 0.01, phase: 'live' } });
+      await t.game('step', 60 * 3);
+      const s = await t.state();
+      t.equal(s.scene, 'shootoutEnd', 'the round ends');
+      t.equal(s.best.shootout >= 44, true, `the best is saved (${s.best.shootout})`);
+      t.expect(s.achievements['hot-spring'], 'Hot Spring is earned at 40 points');
+      t.expect(/Hot Spring/.test(await text(t)), 'and shown on the end screen');
+    },
+  },
+);
+

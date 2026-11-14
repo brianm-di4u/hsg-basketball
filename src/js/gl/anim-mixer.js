@@ -151,8 +151,9 @@ export function mix(st, ctx, scale) {
     const stride = (jog.speed * jog.dur) * (1 - wRun) + (run.speed * run.dur) * wRun;
     const dir = fwd < -2 && !ctx.hasBall ? -1 : 1; // backpedal: the jog runs backwards
     M.phase += dir * spM * dt / Math.max(0.5, stride);
-    sampleClip(jog, M.phase * jog.dur, base);
-    if (wRun > 0) { sampleClip(run, M.phase * run.dur, tmp); blendPose(base, tmp, wRun); }
+    // at a full run (a sprint) the blend is the run clip alone: sample only that one
+    if (wRun >= 1) sampleClip(run, M.phase * run.dur, base);
+    else { sampleClip(jog, M.phase * jog.dur, base); if (wRun > 0) { sampleClip(run, M.phase * run.dur, tmp); blendPose(base, tmp, wRun); } }
     const wStand = 1 - smooth(clamp((spM - 0.25) / 1.2, 0, 1));
     // standing: the keyed idle, or the defender's low stance
     const still = ctx.defending && !ctx.chasing && C.dstance ? C.dstance : C.idle || C.stance;

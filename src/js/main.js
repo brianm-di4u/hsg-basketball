@@ -381,6 +381,7 @@ function startMatch(o) {
     rules: { qLen: o.qLen ?? state.settings.qLen, shotClock: o.shotClock ?? state.settings.shotClock },
     difficulty: o.difficulty ?? state.settings.difficulty, assist: state.settings.assist, autoBreak: !!o.autoBreak,
   });
+  m.teams[0].gym = home.gym; m.teams[1].gym = away.gym; // the confirmed home-gym names (S4-01); the sim does not carry them
   if (o.start) startAt(m, { ...o.start, poss: o.start.poss === 'user' ? Math.max(0, user) : o.start.poss === 'opp' ? 1 - Math.max(0, user) : o.start.poss });
   m.venueInfo = { kind: venue, homeKey: o.home, awayKey: o.away, pennants: venue === 'home' ? banners(o.home, program) : [] };
   m.maxAllowed = o.maxAllowed ?? null;

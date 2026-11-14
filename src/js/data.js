@@ -32,6 +32,8 @@ export const COUNTY = RAW.schools.map((s) => ({
   crest: s.id,
   fictional: false,
   titles: titlesOf(s),
+  // the home gym's name, only where the research confirmed it (S4-01); the others are shown as the school's home gym
+  gym: s.venues && s.venues.basketball && s.venues.basketball.venueConfirmed ? s.venues.basketball.name : null,
 }));
 
 // Fictional towns: invented compound names, invented colors. None is a real school.
@@ -55,7 +57,7 @@ export const FICTIONAL = TOWNS.map(([key, town, mascot, primary, secondary]) => 
   key, name: `${town} High School`, short: town, abbr: town.includes(' ') ? town.split(' ').map((w) => w[0]).join('') : town.slice(0, 3).toUpperCase(),
   city: `${town} (fictional town)`, mascot, mascotConcept: 'monogram shield', colorNames: null, colorsConfirmed: false,
   colors: { primary, secondary, accent: '#FFFFFF' }, cls: null, conf: null, tier: 'mid', crest: 'mono', fictional: true,
-  titles: { boys: [], girls: [], any: [] },
+  titles: { boys: [], girls: [], any: [] }, gym: null,
 }));
 
 // How each team plays (S3-03): data, so the owner can edit one line. See STYLE_NEUTRAL in rules.js for what the numbers mean.

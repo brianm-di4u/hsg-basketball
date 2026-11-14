@@ -88,7 +88,7 @@ export function hubScreen(st, fact) {
   let next = '';
   if (g) {
     const opp = team(g.opp);
-    const where = g.arena ? `${esc(FINALS.name)}, ${esc(FINALS.city)}` : g.home ? `${esc(me.short)} home gym` : `at ${esc(opp.short)}`;
+    const where = g.arena ? `${esc(FINALS.name)}, ${esc(FINALS.city)}` : g.home ? esc(me.gym || `${me.short} home gym`) : `at ${opp.gym ? `${esc(opp.gym)} (${esc(opp.short)})` : esc(opp.short)}`;
     next = `<section class="card next" aria-label="Next game">
       <p class="kicker">${esc(g.round || 'Regular season')} · ${esc(g.month)}</p>
       <div class="vs">${crest(me, 52)}<span>vs</span>${crest(opp, 52)}</div>
@@ -183,11 +183,13 @@ export function breakScreen(m, fact) {
   </div>`;
 }
 
+// Where a game was played: the finals arena, or the home team's gym when the research confirmed its name.
+const placeOf = (m) => (m.venueInfo && m.venueInfo.kind === 'arena' ? FINALS.name : (m.teams[0].gym || ''));
 export function finalScreen(st, m, tops, extra = '') {
   const w = m.winner, ut = m.user.team;
   const head = ut < 0 ? `${esc(m.teams[w].short)} win` : w === ut ? 'You win!' : `${esc(m.teams[w].short)} win`;
   return `<div class="panel">
-    <p class="kicker">Final${m.clock.q > 4 ? (m.clock.q > 5 ? ` (${m.clock.q - 4} OT)` : ' (OT)') : ''}</p>
+    <p class="kicker">Final${m.clock.q > 4 ? (m.clock.q > 5 ? ` (${m.clock.q - 4} OT)` : ' (OT)') : ''}${placeOf(m) ? ` · ${esc(placeOf(m))}` : ''}</p>
     <h2>${head}</h2>${scoreLine(m)}
     <section class="card tops"><h3>Top performers</h3>${tops.map((t) => `<p><b>${esc(t.team)}:</b> #${t.num} ${esc(t.name)} · ${t.pts} pts, ${t.reb} reb, ${t.ast} ast</p>`).join('')}<p class="fine">All players are fictional.</p></section>
     ${extra}
@@ -401,7 +403,7 @@ export function helpScreen(st, tab = 'controls') {
     <h3>Where the facts come from</h3><ul class="plain bullets">
     <li>School names, cities, mascots, colors, classes and title years: <code>shared/data/schools.json</code>, compiled from Wikipedia school pages and AAA news coverage (see <code>research/schools-and-athletics.md</code>).</li>
     <li>Colors are stand-in values. Fountain Lake (green and white), Cutter-Morning Star (navy and silver), Jessieville (purple and gold) and Mountain Pine (red and black) are <b>game colors</b>: their real colors were not confirmed.</li>
-    <li>Mascot crests are original geometric drawings, not school logos. Gym names are not shown because none was confirmed.</li>
+    <li>Mascot crests are original geometric drawings, not school logos. Gym names are shown only where the research confirmed them (Lakeside's is unconfirmed, so it shows as a home gym).</li>
     <li>The state final venue: ${esc(FINALS.name)}, ${esc(FINALS.address)}, hosted the 2026 AAA basketball state championships. The 3D arena follows its published seating chart (two tiers of royal-blue seats, one end with only a small lower section); everything else in the arena art is generic.</li>
     <li>Gyms are generic game art in each school's colors. Title-year pennants hang only for real state titles.</li>
     <li>Out-of-county opponents (Cinderbrook, Quartz Hollow and others) are fictional towns.</li></ul>

@@ -8,6 +8,7 @@ import { initPlayers, makePlayer, dressPlayer, updatePlayer } from './players3d.
 import { buildVenue, loadImages, drawScoreboard, LAYER_REFLECT } from './venue3d.js';
 import { makeProbe } from './probe3d.js';
 import { makeTrail } from './trail3d.js';
+import { makeVents } from './vents3d.js';
 import { HQ } from './hq.js';
 import { fmtClock } from '../util.js';
 import { CORE } from './build-info.js';
@@ -133,6 +134,7 @@ function init(stage) {
   G3.scene.add(G3.blobs);
   // shot trail: one glowing ribbon behind the ball in flight (trail3d.js)
   G3.trailFx = makeTrail(); G3.scene.add(G3.trailFx.mesh);
+  G3.vents = makeVents(HL, HW); G3.scene.add(G3.vents.points); // steam vents outside the court (S4-01)
   // user marker: a bright ring under your player
   const ring = new THREE.Mesh(new THREE.RingGeometry(1.2, 1.55, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffd84d, transparent: true, opacity: 0.95, depthWrite: false, toneMapped: false }));
   ring.add(new THREE.Mesh(new THREE.RingGeometry(1.62, 1.74, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x14121f, transparent: true, opacity: 0.8, depthWrite: false, toneMapped: false })));
@@ -316,7 +318,7 @@ function attachCrowd3d(v, players) {
   if (V.near && V.near.seats) { V.near3d = buildCrowd3d(V.near.seats, { ...o, seed: 23 }); V.near.g.add(V.near3d.g); V.near.crowd.visible = false; }
 }
 function captureProbe() {
-  const hide = [G3.ball, G3.blobs, G3.userRing, G3.trailFx.mesh, ...[...G3.players.values()].map((pm) => pm.root)];
+  const hide = [G3.ball, G3.blobs, G3.userRing, G3.trailFx.mesh, G3.vents.points, ...[...G3.players.values()].map((pm) => pm.root)];
   G3.envTex = G3.probe.capture(G3.scene, hide);
 }
 function disposeTree(o) {
@@ -497,6 +499,7 @@ export function draw3d(scene, fx) {
   // (a close camera would see the ribbon end-on, as a pale disc around the ball)
   if (inShot && G3.camera.position.distanceTo(B.position) > 22) G3.trailFx.update(B.position, G3.camera, scene.perfect ? 0xffc23a : 0xfff0d8, 0.5);
   else G3.trailFx.clear();
+  G3.vents.update(G3.time, G3.camera, G3.renderer, G3.tier, !!scene.noVents);
   // the ball's dark outline keeps about 1.5 px on screen at any distance
   if (ball && B.visible) { const q = project(B.position.x + HL, B.position.z + HW, B.position.y); const rpx = Math.max(1, q.s * 0.4 * B.scale.x); B.children[0].scale.setScalar(1 + 1.6 / rpx); }
   // hoops: cloth net, rim flash and board shake on a make, rim shake on iron, shot clocks

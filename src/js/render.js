@@ -83,7 +83,7 @@ export function draw(scene) {
   stepFx(scene.dt || 0);
   if (is3d()) {
     G3.canvas.style.visibility = 'visible';
-    draw3d({ ...scene, reduced: R.reduced || R.snap }, R.fx);
+    draw3d({ ...scene, reduced: R.reduced || R.snap, noVents: R.reduced }, R.fx);
     R.snap = false;
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     c.clearRect(0, 0, v.W, v.H);
@@ -110,6 +110,7 @@ export function draw(scene) {
   // near-side apron fade
   const nearY = sy(v, COURT.W + R.floor.mz);
   if (nearY < v.H) { c.fillStyle = scene.venue.kind === 'arena' ? '#1F1C2E' : '#4A3324'; c.fillRect(0, nearY - 1, v.W, v.H - nearY + 2); }
+  if (!R.reduced) drawVents2d(c, v);
   const items = [];
   const players = scene.players || [];
   // shadows
@@ -127,6 +128,22 @@ export function draw(scene) {
   for (const it of items) it.f();
   drawHud(c, v, P2, scene);
   c.restore();
+}
+
+// Steam vents on the classic court (S4-01): a few faint puffs rise from the floor outside the lines. Not drawn under reduced motion.
+const VENTS_2D = [[1, -2.5], [93, -2.5], [-4, 12], [98, 40]]; // court feet
+function drawVents2d(c, v) {
+  const t = performance.now() / 1000;
+  for (let i = 0; i < VENTS_2D.length; i++) {
+    const [x, z] = VENTS_2D[i];
+    for (let k = 0; k < 4; k++) {
+      const u = (t / 5.5 + k / 4 + i * 0.23) % 1, X = sx(v, x + Math.sin(u * 5 + k + i) * 0.8 * u), Y = sy(v, z, 0.3 + u * 9), r = v.s * (0.9 + u * 2.6);
+      const g = c.createRadialGradient(X, Y, 0, X, Y, r);
+      const a = 0.17 * (0.55 + 0.45 * Math.sin(t * 0.31 + i * 2.3)) * Math.pow(Math.sin(Math.PI * u), 1.3);
+      g.addColorStop(0, `rgba(241,236,224,${a})`); g.addColorStop(1, 'rgba(241,236,224,0)');
+      c.fillStyle = g; c.fillRect(X - r, Y - r, r * 2, r * 2);
+    }
+  }
 }
 
 // broadcast vignette over the 3D frame (cached per size)

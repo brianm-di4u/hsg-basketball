@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { exhibition, stepUntil } from './helpers.mjs';
+import { exhibition, stepUntil, FORCE_3D, ready3d } from './helpers.mjs';
 
 const game = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const KEY = 'hsg-hoops-v1';
@@ -674,3 +674,86 @@ tests.push(
   },
 );
 
+// ---------------------------------------------------------------- S4-01 place
+tests.push(
+  {
+    name: 'S4-01: every gym name in the game is one the research confirmed (node)',
+    node: true,
+    async run(t) {
+      const { U } = await node();
+      const raw = JSON.parse(fs.readFileSync(path.join(game, 'shared/data/schools.json'), 'utf8'));
+      let named = 0;
+      for (const s of raw.schools) {
+        const v = s.venues && s.venues.basketball, team = U.team(s.id);
+        if (v && v.venueConfirmed) { t.equal(team.gym, v.name, `${s.id}: ${v.name}`); named++; } else t.equal(team.gym, null, `${s.id}: unconfirmed, so no name is shown`);
+      }
+      t.equal(named, 6, 'six schools have a confirmed gym');
+      t.expect(U.FICTIONAL.every((f) => !f.gym), 'the fictional towns have no gym name');
+    },
+  },
+  {
+    name: 'S4-01: a confirmed gym is named on the final screen; an unconfirmed one is not invented',
+    viewports: ['desktop', 'mobile'],
+    async run(t) {
+      await wipe(t); await t.reload();
+      await playOut(t, { home: 'cutter-morning-star', away: 'mountain-pine' }, 0);
+      t.expect(/Final.*· Eagle Arena/s.test(await text(t)), 'Cutter-Morning Star at home: Eagle Arena');
+      await playOut(t, { home: 'lakeside', away: 'mountain-pine', seed: 6 }, 0);
+      t.expect(!/Athletic Complex|Field House|Fieldhouse/.test(await text(t)) && /Final/.test(await text(t)), 'Lakeside at home: no name');
+      await t.shot('S4-01-final-gym-name');
+      await t.game('scene', 'help'); await t.page.click('[data-act="helpTab"][data-arg="about"]');
+      t.expect(/Gym names are shown only where the research confirmed them/.test(await text(t)), 'About says where gym names come from');
+    },
+  },
+  {
+    name: 'S4-01: steam rises from vents outside the court, scaled by quality tier and off under reduced motion',
+    viewports: ['desktop', 'mobile'],
+    initScript: FORCE_3D,
+    async run(t) {
+      await ready3d(t);
+      await exhibition(t, { seed: 4 });
+      await t.game('step', 90);
+      const st = await t.state();
+      t.equal(st.gfx.mode, '3d', 'the 3D gym is on');
+      {
+        const v = await t.page.evaluate(() => { const G = window.__G3; return { tier: G.tier, count: G.vents.count, vis: G.vents.points.visible }; });
+        t.expect(v.vis && v.count > 0, `vents are drawing (${v.count} puffs on the ${v.tier} tier)`);
+        const out = await t.page.evaluate(() => {
+          const G = window.__G3, p = G.vents.points.geometry.attributes.position.array, bad = [];
+          for (let i = 0; i < G.vents.count; i++) { const x = p[i * 3] + 47, z = p[i * 3 + 2] + 25; if (x > -1 && x < 95 && z > -1 && z < 51) bad.push([x.toFixed(1), z.toFixed(1)]); }
+          return bad;
+        });
+        t.equal(out.length, 0, 'every puff is out of bounds, so none covers the play');
+        await t.game('act', 'gfx', {}, 'low'); await t.game('step', 2);
+        t.equal(await t.page.evaluate(() => window.__G3.vents.count), 0, 'the lowest tier draws none');
+        await t.game('act', 'gfx', {}, 'medium'); await t.game('step', 2);
+        const med = await t.page.evaluate(() => window.__G3.vents.count);
+        await t.game('act', 'gfx', {}, 'high'); await t.game('step', 2);
+        const hi = await t.page.evaluate(() => window.__G3.vents.count);
+        t.expect(med > 0 && hi > med, `medium draws fewer than high (${med} and ${hi})`);
+        await t.game('setState', { settings: { motion: 'on' } }); await t.game('step', 2);
+        t.equal(await t.page.evaluate(() => window.__G3.vents.count), 0, 'reduced motion draws none');
+        await t.game('setState', { settings: { motion: 'off' } }); await t.game('step', 2);
+        t.expect(await t.page.evaluate(() => window.__G3.vents.count) > 0, 'and full motion brings them back');
+      }
+      await t.game('step', 120);
+      await t.shot('S4-01-vents-gym');
+      await t.game('setState', { settings: { graphics: '2d' } });
+      await t.game('step', 90);
+      await t.shot('S4-01-vents-classic');
+    },
+  },
+  {
+    name: 'S4-01: steam vents in the finals arena',
+    viewports: ['desktop', 'mobile'],
+    initScript: FORCE_3D,
+    async run(t) {
+      await ready3d(t);
+      await t.game('newGame', { mode: 'challenge', challenge: 'double-crown', program: 'boys', paused: true });
+      await t.game('step', 150);
+      t.equal((await t.state()).match.venue, 'arena', 'the finals arena');
+      t.expect(await t.page.evaluate(() => window.__G3.vents.count > 0), 'the arena has vents too');
+      await t.shot('S4-01-vents-arena');
+    },
+  },
+);

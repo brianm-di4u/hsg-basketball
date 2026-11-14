@@ -9,7 +9,10 @@ const TAU = Math.PI * 2;
 export const R = {
   cv: null, c: null, dpr: 1, v: null, floor: null, back: null, key: '', fx: { pops: [], parts: [], shake: 0, net: [0, 0], rim: [0, 0] },
   cosmo: { rs: 7 }, frozen: false, reduced: false, snap: true, use3d: true,
+  look: { ball: { base: '#D9662A', seam: '#1C120C' }, floor: { id: 'natural', wood: '#C9965A', tint: null } }, // the ball skin and court finish (career.js)
 };
+// The player's ball skin and court finish. The 3D scene reads G3.look each frame; the classic court rebuilds its floor.
+export function setLook(look) { R.look = look; G3.look = look; R.key = ''; }
 export const is3d = () => R.use3d && G3.state === 'ready';
 
 export function initRender(cv) { R.cv = cv; R.c = cv.getContext('2d'); }
@@ -27,10 +30,10 @@ export function resize(w, h) {
 
 // venue: {kind:'home'|'arena', home, away, pennants}
 function ensureLayers(venue) {
-  const k = `${R.v.W}x${R.v.H}|${R.dpr}|${venue.kind}|${venue.home.key}|${venue.away.key}|${venue.pennants.map((p) => p.year).join(',')}`;
+  const k = `${R.v.W}x${R.v.H}|${R.dpr}|${R.look.floor.id}|${venue.kind}|${venue.home.key}|${venue.away.key}|${venue.pennants.map((p) => p.year).join(',')}`;
   if (k === R.key) return;
   R.key = k;
-  R.floor = buildFloor(R.v, venue.kind === 'arena' ? ARENA_FLOOR : venue.home, R.dpr);
+  R.floor = buildFloor(R.v, venue.kind === 'arena' ? ARENA_FLOOR : venue.home, R.dpr, R.look.floor.wood);
   R.back = buildBackdrop(R.v, venue.kind, venue.home, venue.away, venue.pennants, R.dpr);
 }
 
@@ -339,12 +342,13 @@ function hoopFront(c, v, side) {
 function drawBall(c, v, b) {
   const X = sx(v, b.x), Y = sy(v, b.z, b.y), r = Math.max(3, 0.45 * v.s);
   const g = c.createRadialGradient(X - r * 0.35, Y - r * 0.35, r * 0.1, X, Y, r);
-  g.addColorStop(0, '#F08A4B'); g.addColorStop(1, '#B4501F');
+  g.addColorStop(0, shade(R.look.ball.base, 0.22)); g.addColorStop(1, shade(R.look.ball.base, -0.32));
   c.fillStyle = g; c.beginPath(); c.arc(X, Y, r, 0, TAU); c.fill();
-  c.strokeStyle = 'rgba(40,20,10,0.75)'; c.lineWidth = Math.max(0.8, r * 0.12);
+  c.strokeStyle = R.look.ball.seam; c.globalAlpha = 0.8; c.lineWidth = Math.max(0.8, r * 0.12);
   const spin = (b.x + b.y) * 0.8;
   c.beginPath(); c.moveTo(X - r, Y); c.lineTo(X + r, Y); c.stroke();
   c.beginPath(); c.ellipse(X, Y, r * Math.abs(Math.cos(spin)), r, 0, 0, TAU); c.stroke();
+  c.globalAlpha = 1;
 }
 
 // Shot meter: a vertical bar beside the shooter. Marker shape + text label, not color alone.

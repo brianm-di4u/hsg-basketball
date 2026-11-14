@@ -145,6 +145,7 @@ function makeFloor(home, arena, opts) {
   // tLM/uLM: the HQ venue's baked floor light (venue-hq.js), applied as a multiplier; off (uLM 0) on the lite floor
   const u = { tWood: { value: wood }, uWoodTint: { value: arena ? C('#F0E4D4') : C('#F7EEE2') }, tLM: { value: whiteTex() }, uLM: { value: 0 } };
   mat.userData.u = u;
+  u.baseTint = u.uWoodTint.value.clone(); // the court finish (career.js) multiplies this
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
     // the markings' UVs come from position, so any floor mesh works: the lite plane or the HQ shell's floor

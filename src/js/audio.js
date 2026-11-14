@@ -171,6 +171,8 @@ export function makeCues(ctx, master, kit) {
     sprint(t) { nz(t, 0.16, 0.34, 'bandpass', 1800, 1.1, 900); osc('sine', 2500, t + 0.02, 0.05, 0.08, 2900); },
     meter(t, o) { const p = o.p || 0; osc('sine', 880 + 880 * p, t, 0.05, 0.14); },
     jingle(t) { [523, 659, 784, 1047].forEach((f, k) => osc('triangle', f, t + k * 0.11, 0.22, 0.3)); },
+    // An achievement or an unlock toast: a short two-note chime that rises, kept clear of the game's own cues.
+    achieve(t) { [880, 1319].forEach((f, k) => osc('triangle', f, t + 0.1 * k, 0.45, 0.3)); osc('sine', 2637, t + 0.1, 0.35, 0.06); },
     win(t) { [523, 659, 784, 1047, 1319].forEach((f, k) => osc('triangle', f, t + k * 0.13, 0.35, 0.34)); },
   };
   return {
@@ -249,7 +251,7 @@ export function setTension(v) {
 export function duck(db = 5, ms = 600) { if (AU.kit && AU.kit.amb) { AU.kit.amb.duck(db, ms); AU.kit.music.duck(db, ms); } }
 
 // Rate-limited play by name.
-const GAPS = { sprint: 0.6, fake: 0.3, cross: 0.3, bounce: 0.07, squeak: 0.4, catch: 0.06, meter: 0.04, ooh: 0.6, sigh: 0.6, roar: 1.5, groan: 0.5, cheer: 0.25 };
+const GAPS = { achieve: 0.5, sprint: 0.6, fake: 0.3, cross: 0.3, bounce: 0.07, squeak: 0.4, catch: 0.06, meter: 0.04, ooh: 0.6, sigh: 0.6, roar: 1.5, groan: 0.5, cheer: 0.25 };
 export function play(name, o = {}) {
   if (!AU.on || !AU.ctx || AU.ctx.state !== 'running' || !AU.cues) return;
   const now = AU.ctx.currentTime;
@@ -261,7 +263,7 @@ export function play(name, o = {}) {
 }
 
 // ---------------------------------------------------------------- offline renders (test hooks and the owner's WAV previews)
-export function audioList() { return { music: Object.keys(SCORES), ambience: Object.keys(SCENES), cues: ['bounce', 'floor', 'swish', 'rim', 'whistle', 'buzzer', 'cheer', 'groan', 'ooh', 'sigh', 'roar', 'steal', 'block', 'release', 'pass', 'catch', 'jump', 'reb', 'sub', 'meter', 'squeak', 'click', 'win', 'tick', 'streak', 'fake', 'cross', 'sprint'] }; }
+export function audioList() { return { music: Object.keys(SCORES), ambience: Object.keys(SCENES), cues: ['bounce', 'floor', 'swish', 'rim', 'whistle', 'buzzer', 'cheer', 'groan', 'ooh', 'sigh', 'roar', 'steal', 'block', 'release', 'pass', 'catch', 'jump', 'reb', 'sub', 'meter', 'squeak', 'click', 'win', 'tick', 'streak', 'fake', 'cross', 'sprint', 'achieve'] }; }
 // Renders a piece by itself at the level the game ships (Medium volume), without touching the live audio or settings.
 // `name` is a music piece, an ambience scene, or 'cue:<name>' for one cue. `opt`: { crowd (0..1), tension (0..1, a scene's low hum; the heartbeat comes on from 0.5), cue (options for the cue), vol, seed (changes the jitter and the melody), mixCue (a cue to fire at 1 s on top), music (a piece to play under a scene or cue) }.
 // For a piece, `built` is the kit's variation count plus its tempo and the seconds before it repeats.

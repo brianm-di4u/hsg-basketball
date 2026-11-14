@@ -5,6 +5,7 @@ import { fullName, heightStr } from './roster.js';
 import { ROUNDS, nextGame } from './season.js';
 import { CHALLENGES } from './challenges.js';
 import { DIFF } from './rules.js';
+import { ACHIEVEMENTS, BALLS, FLOORS, KIT_WINS, hasAlt, kitKey, unlockKey, liveStreak, addDays } from './career.js';
 
 export const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 const crest = (t, px = 48, cls = 'crest') => `<img class="${cls}" src="${crestURL(t, px * 2)}" width="${px}" height="${px}" alt="">`;
@@ -33,6 +34,7 @@ export function titleScreen(st) {
       ${has ? btn('continueSeason', `Continue season <small>${esc(team(st.season.school).short)} ${progLabel(st.season.program)} · ${st.season.w}-${st.season.l}</small>`, { cls: 'primary' }) : ''}
       ${btn('seasonSetup', has ? 'New season' : 'Season', { cls: has ? '' : 'primary' })}
       ${btn('select', 'Exhibition')}
+      ${btn('daily', `Daily game${st.dailyStreak ? ` <small>${st.dailyStreak}-day streak</small>` : ''}`)}
       ${btn('shootoutSetup', 'Hot Streak')}
       ${btn('challenges', 'Banner Challenges')}
       ${btn('trophies', 'Trophy Room')}
@@ -45,7 +47,7 @@ export function titleScreen(st) {
 // ---------------------------------------------------------------- exhibition select
 export function selectScreen(st) {
   const x = st.pick;
-  const hs = (x.home === 'hot-springs' || x.away === 'hot-springs') && st.save.unlocks.throwback;
+  const alt = hasAlt(st.save.unlocks, x.home) || hasAlt(st.save.unlocks, x.away);
   return `<div class="panel wide setup">
     <h2>Exhibition</h2>
     ${seg('pickProgram', [['boys', 'Boys'], ['girls', 'Girls']], x.program, 'Program')}
@@ -56,7 +58,7 @@ export function selectScreen(st) {
     ${seg('setQ', [[120, '2 min'], [240, '4 min'], [480, '8 min (full)']], st.settings.qLen, 'Quarters')}
     ${seg('setClock', [[35, '35 seconds'], [0, 'Off (classic)']], st.settings.shotClock, 'Shot clock')}
     ${seg('setDiff', DIFF.map((d, i) => [i, d.name]), st.settings.difficulty, 'Difficulty')}</div>
-    ${hs ? seg('setThrow', [[1, '1912-style throwback'], [0, 'Regular']], x.throwback ? 1 : 0, 'Hot Springs kit') : ''}
+    ${alt ? seg('setThrow', [[1, 'Alternate kit'], [0, 'Regular']], x.throwback ? 1 : 0, 'Kits') + '<p class="fine">An alternate kit is worn by a team that has earned one: the 1912-style throwback for Hot Springs, a Heritage strip for the other schools.</p>' : ''}
     <div class="row end">${btn('title', 'Back')}${btn('startExhibition', 'Tip off', { cls: 'primary', disabled: x.home === x.away })}</div>
   </div>`;
 }
@@ -218,12 +220,13 @@ export function shootoutSetupScreen(st) {
     <div class="row end">${btn('title', 'Back')}${btn('startShootout', 'Start', { cls: 'primary' })}</div>
   </div>`;
 }
-export function shootoutEndScreen(st, so, isBest) {
+export function shootoutEndScreen(st, so, isBest, awards = '') {
   return `<div class="panel">
     <p class="kicker">Hot Streak · time</p>
     <h2>${so.score} points</h2>
     <p>${so.made} of ${so.att} made${so.att ? ` (${Math.round((100 * so.made) / so.att)}%)` : ''}.</p>
     <p>${isBest ? '<b>New best!</b>' : `Best: <b>${st.save.best.shootout}</b>`}</p>
+    ${awards}
     <div class="row end">${btn('title', 'Menu')}${btn('startShootout', 'Go again', { cls: 'primary' })}</div>
   </div>`;
 }
@@ -247,6 +250,86 @@ export function challengesScreen(st) {
   </div>`;
 }
 
+
+// ---------------------------------------------------------------- career, achievements, looks (S3-01)
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export const dayLabel = (k) => `${MONTHS[+k.slice(5, 7) - 1]} ${+k.slice(8, 10)}`;
+const sign = (n) => (n > 0 ? `+${n}` : String(n));
+export function cosmeticName(key) {
+  const [kind, id] = key.split(':');
+  if (kind === 'ball') return `${(BALLS.find((b) => b.id === id) || { name: id }).name} ball`;
+  if (kind === 'floor') return `${(FLOORS.find((f) => f.id === id) || { name: id }).name} court finish`;
+  if (kind === 'kit') return `${(team(id) || { short: id }).short} Heritage kit`;
+  return key;
+}
+const wlText = (x) => (x && x.g ? `${x.w}-${x.g - x.w}` : '0-0');
+function careerCard(sv) {
+  const c = sv.career;
+  if (!c || !c.games) return '<section class="card"><h3>Career</h3><p class="fine">Play a game and your record starts here: wins, points, personal bests and streaks.</p></section>';
+  const schools = COUNTY.filter((t) => c.bySchool[t.key]).map((t) => `<li>${crest(t, 24, 'crest sm')}<span><b>${esc(t.short)}:</b> ${wlText(c.bySchool[t.key])}, ${c.bySchool[t.key].pts} points</span></li>`).join('');
+  const champs = COUNTY.filter((t) => c.champs[t.key]).map((t) => `${esc(t.short)} x${c.champs[t.key]}`).join(', ');
+  return `<section class="card"><h3>Career</h3><ul class="plain kv">
+    <li>Games: <b>${c.games}</b> · Wins: <b>${c.wins}</b> · Losses: <b>${c.losses}</b></li>
+    <li>Win streak: <b>${c.streak}</b> now, <b>${c.bestStreak}</b> best</li>
+    <li>Points: <b>${c.pts}</b> · Threes: <b>${c.threes}</b> · Rebounds: <b>${c.reb}</b> · Assists: <b>${c.ast}</b> · Steals: <b>${c.steals}</b> · Blocks: <b>${c.blocks}</b></li>
+    <li>Best game: <b>${c.best.pts}</b> points, <b>${c.best.threes}</b> threes, <b>${c.best.steals}</b> steals, <b>${c.best.blocks}</b> blocks</li>
+    <li>Biggest win: <b>${c.best.margin}</b> points</li>
+    <li>By difficulty: ${DIFF.map((d, i) => `${esc(d.name)} <b>${wlText(c.byDiff[i])}</b>`).join(' · ')}</li>
+    <li>By mode: Exhibition <b>${wlText(c.byMode.exhibition)}</b> · Season <b>${wlText(c.byMode.season)}</b> · Challenges <b>${wlText(c.byMode.challenge)}</b> · Daily <b>${wlText(c.byMode.daily)}</b></li>
+    ${champs ? `<li>State titles won in play: <b>${champs}</b></li>` : ''}</ul>
+    ${schools ? `<h4 class="sub-h">By school</h4><ul class="plain">${schools}</ul>` : ''}</section>`;
+}
+function achievementsCard(sv) {
+  const have = sv.achievements || {}, n = ACHIEVEMENTS.filter((a) => have[a.id]).length;
+  return `<section class="card"><h3>Achievements <small>${n} of ${ACHIEVEMENTS.length}</small></h3><ul class="ach">${ACHIEVEMENTS.map((a) => `<li class="${have[a.id] ? 'got' : ''}"><b>${esc(a.name)}</b><span>${esc(a.how)}</span><em>${have[a.id] ? `Earned ${esc(dayLabel(have[a.id]))}` : 'Not yet'}</em></li>`).join('')}</ul></section>`;
+}
+function looksCard(sv) {
+  const u = sv.unlocks || {};
+  const row = (name, key, how) => `<li>${esc(name)}: <b>${u[key] ? 'unlocked' : 'locked'}</b>${u[key] ? '' : ` (${esc(how.replace(/[.]$/, ''))})`}</li>`;
+  return `<section class="card"><h3>Looks to earn</h3><ul class="plain kv">${BALLS.filter((b) => b.unlock).map((b) => row(`${b.name} ball`, unlockKey('ball', b.id), b.unlock)).join('')}${FLOORS.filter((f) => f.unlock).map((f) => row(`${f.name} court finish`, unlockKey('floor', f.id), f.unlock)).join('')}${COUNTY.filter((t) => t.key !== 'hot-springs').map((t) => row(`${t.short} Heritage kit`, kitKey(t.key), `win ${KIT_WINS} games with ${t.short}`)).join('')}</ul>
+    <p class="fine">Choose a ball and a court finish in Settings. Wear a kit from the Exhibition screen or a season.</p></section>`;
+}
+// A ball or court-finish picker: a locked choice stays visible with the way to earn it, and does nothing when pressed.
+function lookSeg(act, items, cur, label, kind, unlocks) {
+  const btns = items.map((it) => {
+    const open = !it.unlock || unlocks[unlockKey(kind, it.id)];
+    return open ? btn(act, esc(it.name), { arg: it.id, pressed: it.id === cur, cls: 'seg-b' })
+      : `<button class="btn seg-b locked" data-act="${act}" data-arg="${esc(it.id)}" aria-disabled="true" aria-label="${esc(it.name)}, locked. ${esc(it.unlock)}">${esc(it.name)}<small>${esc(it.unlock)}</small></button>`;
+  }).join('');
+  return `<div class="seg" role="group" aria-label="${esc(label)}"><span class="seg-l">${esc(label)}</span>${btns}</div>`;
+}
+// What a finished game or Hot Streak brought: personal bests, achievements and unlocks.
+export function awardsCard(aw) {
+  if (!aw || !(aw.bests.length || aw.ach.length || aw.cos.length)) return '';
+  const lines = [
+    ...aw.bests.map((b) => `<li><b>New personal best:</b> ${b.value} ${esc(b.name)} (was ${b.was})</li>`),
+    ...aw.ach.map((id) => { const a = ACHIEVEMENTS.find((x) => x.id === id); return `<li><b>Achievement:</b> ${esc(a.name)}. ${esc(a.how)}</li>`; }),
+    ...aw.cos.map((k) => `<li><b>Unlocked:</b> ${esc(cosmeticName(k))}</li>`),
+  ];
+  return `<section class="card awards" aria-label="New this game"><h3>New this game</h3><ul class="plain">${lines.join('')}</ul></section>`;
+}
+
+// ---------------------------------------------------------------- the daily game
+// v: { date, deal, rec (the daily record), today (rec.days[date] or null), cells: [{ d, e }] }
+export function dailyScreen(st, v) {
+  const D = v.deal, h = team(D.home), a = team(D.away);
+  const streak = liveStreak(v.rec, v.date);
+  const cell = ({ d, e }) => `<li class="${e ? (e.w ? 'won' : 'lost') : ''}${d === v.date ? ' today' : ''}" aria-label="${esc(dayLabel(d))}: ${e ? (e.w ? `won, margin ${sign(e.m)}` : `played, margin ${sign(e.m)}`) : d === v.date ? 'today, not played yet' : 'not played'}"><span>${+d.slice(8, 10)}</span><b>${e ? (e.w ? '✓' : '·') : ''}</b></li>`;
+  return `<div class="panel wide daily">
+    <h2>Daily game</h2>
+    <p class="kicker">${esc(dayLabel(v.date))} · the same game for every player today</p>
+    <section class="card next"><div class="vs">${crest(h, 52)}<span>vs</span>${crest(a, 52)}</div>
+      <p class="big">${esc(h.short)} ${esc(h.mascot)} vs ${esc(a.short)} ${esc(a.mascot)}</p>
+      <p>${progLabel(D.program)} · ${qLabel(D.qLen)} quarters · ${esc(DIFF[D.diff].name)}${D.deficit ? ` · you start ${D.deficit} down` : ' · you start level'}</p>
+      <p class="sub">They play: <b>${esc(a.style.name)}</b>. ${esc(a.style.blurb)}</p>
+      <p>Today's best: <b>${v.today ? `${v.today.w ? 'won' : 'lost'} by ${Math.abs(v.today.m)} (${sign(v.today.m)})` : 'not played yet'}</b> · Streak: <b>${streak}</b> day${streak === 1 ? '' : 's'} · Best streak: <b>${v.rec.bestStreak}</b></p>
+    </section>
+    <section class="card"><h3>Last two weeks</h3><ol class="cal" aria-label="Daily game history">${v.cells.map(cell).join('')}</ol>
+      <p class="fine">A check is a win; a dot is a game played. Your best margin for each day is kept.</p></section>
+    <div class="row end">${btn('title', 'Back')}${btn('playDaily', v.today ? 'Play again' : "Play today's game", { cls: 'primary' })}</div>
+  </div>`;
+}
+
 export function trophiesScreen(st) {
   const sv = st.save;
   const tro = sv.trophies.length ? sv.trophies.map((x) => { const t = team(x.school); return `<li class="pen" style="--tc:${t.colors.primary};--tc2:${t.colors.secondary}">${crest(t, 36)}<span><b>${esc(t.short)}</b> ${progLabel(x.program)}<br><small>Class ${esc(x.cls)} · ${esc(x.label)}</small></span></li>`; }).join('') : '<li class="fine">No banners yet. Win a season\'s state final to raise one.</li>';
@@ -265,6 +348,9 @@ export function trophiesScreen(st) {
       <li>Hot Streak best: <b>${sv.best.shootout || 0}</b></li>
       <li>Banner Challenges completed: <b>${nDone} of ${CHALLENGES.length}</b></li>
       <li>1912-style throwback kit (Hot Springs): <b>${sv.unlocks.throwback ? 'unlocked' : 'locked'}</b>${sv.unlocks.throwback ? '' : ' (complete the "1912 Colors" challenge)'}</li></ul></section>
+    ${careerCard(sv)}
+    ${achievementsCard(sv)}
+    ${looksCard(sv)}
     <section class="card"><h3>Real title years</h3><p class="fine">Basketball state titles from the research (source: Wikipedia school pages via research/schools-and-athletics.md). No titles were found for the other five schools.</p><ul class="plain">${real}</ul></section>
     <div class="row end">${btn('title', 'Back', { cls: 'primary' })}</div>
   </div>`;
@@ -338,6 +424,8 @@ export function settingsScreen(st, saving) {
     ${seg('setVol', [[0.25, 'Low'], [0.5, 'Medium'], [0.8, 'High']], s.vol, 'Volume')}
     ${seg('setMusic', [[1, 'On'], [0, 'Off']], s.music === false ? 0 : 1, 'Music')}
     ${seg('setAmbience', [[1, 'On'], [0, 'Off']], s.ambience === false ? 0 : 1, 'Crowd ambience')}
+    ${lookSeg('setBall', BALLS, s.ball, 'Ball', 'ball', st.save.unlocks || {})}
+    ${lookSeg('setFloor', FLOORS, s.floor, 'Court finish', 'floor', st.save.unlocks || {})}
     ${seg('setMotion', [['auto', 'Follow system'], ['on', 'Reduce'], ['off', 'Full']], s.motion, 'Reduced motion')}
     ${seg('setText', [[100, '100%'], [115, '115%'], [130, '130%']], s.text, 'Text size')}
     ${seg('setTheme', [['auto', 'Default (night)'], ['light', 'Day'], ['dark', 'Night']], s.theme, 'Menu theme')}

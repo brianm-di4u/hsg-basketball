@@ -148,15 +148,15 @@ export function drawPlayer(c, x, y, s, pl, r, kit, o = {}) {
   c.fillStyle = kit.jersey;
   c.beginPath(); c.moveTo(x - hw, shY); c.lineTo(x + hw, shY); c.lineTo(x + hw * 0.9, hipY - H * 0.02); c.lineTo(x - hw * 0.9, hipY - H * 0.02); c.closePath(); c.fill();
   c.strokeStyle = kit.trim; c.lineWidth = Math.max(1, H * 0.018); c.stroke();
-  if (kit.throwback) { c.fillStyle = kit.band; c.fillRect(x - hw * 0.95, shY + H * 0.1, hw * 1.9, H * 0.05); }
+  if (kit.throwback || kit.heritage) { c.fillStyle = kit.band; c.fillRect(x - hw * 0.95, shY + H * 0.1, hw * 1.9, H * 0.05); }
   // collar
   c.fillStyle = kit.trim; c.beginPath(); c.moveTo(x - hw * 0.35, shY); c.lineTo(x, shY + H * 0.05); c.lineTo(x + hw * 0.35, shY); c.closePath(); c.fill();
-  if (kit.throwback) { c.strokeStyle = kit.band; c.lineWidth = 1; c.beginPath(); c.moveTo(x - 2, shY + H * 0.015); c.lineTo(x + 2, shY + H * 0.04); c.moveTo(x + 2, shY + H * 0.015); c.lineTo(x - 2, shY + H * 0.04); c.stroke(); }
+  if (kit.throwback || kit.heritage) { c.strokeStyle = kit.band; c.lineWidth = 1; c.beginPath(); c.moveTo(x - 2, shY + H * 0.015); c.lineTo(x + 2, shY + H * 0.04); c.moveTo(x + 2, shY + H * 0.015); c.lineTo(x - 2, shY + H * 0.04); c.stroke(); }
   // number
   if (H > 22) {
     c.fillStyle = kit.num; c.font = `800 ${Math.round(H * 0.13)}px "Arial Black", Impact, system-ui, sans-serif`;
     c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText(String(r.num), x, shY + H * (kit.throwback ? 0.2 : 0.15));
+    c.fillText(String(r.num), x, shY + H * (kit.throwback || kit.heritage ? 0.2 : 0.15));
   }
   // head
   const hr = H * 0.065;
@@ -198,7 +198,7 @@ function drawHair(c, x, y, r, look, f) {
 // The finals arena gets a neutral floor (no school paint or crest) with a Deco sunburst at center.
 export const ARENA_FLOOR = { key: 'arena', colors: { primary: '#2B3A5C', secondary: '#D4AF37', accent: '#F4F1EA' }, crest: 'arena', short: 'S' };
 
-export function buildFloor(v, home, dpr) {
+export function buildFloor(v, home, dpr, wood = '#C9965A') {
   const s = v.s, mx = 6, mz = 3.5, K = v.K;
   const w = Math.ceil((COURT.L + mx * 2) * s), h = Math.ceil((COURT.W + mz * 2) * K * s + 2);
   const cv = document.createElement('canvas'); cv.width = Math.ceil(w * dpr); cv.height = Math.ceil(h * dpr);
@@ -211,11 +211,11 @@ export function buildFloor(v, home, dpr) {
   c.fillRect(X(-mx), Z(0), X(0) - X(-mx), Z(COURT.W) - Z(0)); c.fillRect(X(COURT.L), Z(0), X(COURT.L + mx) - X(COURT.L), Z(COURT.W) - Z(0));
   // hardwood strips (boards run the length of the court)
   const o = { rs: 1234 };
-  c.fillStyle = '#C9965A'; c.fillRect(X(0), Z(0), X(COURT.L) - X(0), Z(COURT.W) - Z(0));
+  c.fillStyle = wood; c.fillRect(X(0), Z(0), X(COURT.L) - X(0), Z(COURT.W) - Z(0));
   const strip = 0.75; // ft
   for (let z = 0; z < COURT.W; z += strip) {
     const tone = 0.06 * (rnd(o) - 0.5);
-    c.fillStyle = shade('#C9965A', tone);
+    c.fillStyle = shade(wood, tone);
     c.fillRect(X(0), Z(z), X(COURT.L) - X(0), Z(z + strip) - Z(z) + 0.5);
     c.fillStyle = 'rgba(80,45,15,0.18)'; c.fillRect(X(0), Z(z), X(COURT.L) - X(0), Math.max(0.5, s * 0.03));
     let x = rnd(o) * 6;

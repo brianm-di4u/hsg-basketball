@@ -144,17 +144,31 @@ function init(stage) {
   if (window.__TEST__) { window.__G3 = G3; window.__ANIM = ANIM; window.__C3 = C3; } // test and debug access
 }
 
-function ballTexture() {
+const BALL_TEX = new Map();
+function ballTexture(skin = { base: '#D9662A', seam: '#1C120C' }) {
+  const key = skin.base + skin.seam;
+  if (BALL_TEX.has(key)) return BALL_TEX.get(key);
   const cv = document.createElement('canvas'); cv.width = 512; cv.height = 256;
   const c = cv.getContext('2d');
-  c.fillStyle = '#D9662A'; c.fillRect(0, 0, 512, 256);
+  c.fillStyle = skin.base; c.fillRect(0, 0, 512, 256);
   for (let k = 0; k < 9000; k++) { c.fillStyle = Math.random() < 0.5 ? 'rgba(0,0,0,0.07)' : 'rgba(255,220,180,0.07)'; c.fillRect(Math.random() * 512, Math.random() * 256, 2, 2); }
-  c.strokeStyle = '#1C120C'; c.lineWidth = 5;
+  c.strokeStyle = skin.seam; c.lineWidth = 5;
   c.beginPath(); c.moveTo(0, 128); c.lineTo(512, 128); c.stroke();
   for (const x of [128, 384]) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, 256); c.stroke(); }
   for (const x0 of [0, 256]) { c.beginPath(); for (let y = 0; y <= 256; y += 4) { const x = x0 + 128 + Math.sin((y / 256) * Math.PI) * 70 * (x0 ? -1 : 1); y ? c.lineTo(x, y) : c.moveTo(x, y); } c.stroke(); }
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  BALL_TEX.set(key, t);
   return t;
+}
+// The ball skin and the court finish the player chose (G3.look, set by render.js setLook): applied once per change and per venue build.
+function applyLook() {
+  const L = G3.look;
+  if (!L || (G3.lookDone === L && G3.lookVenue === G3.venue)) return;
+  G3.lookDone = L; G3.lookVenue = G3.venue;
+  const mat = G3.ball.material, map = ballTexture(L.ball);
+  if (mat.map !== map) { mat.map = map; mat.needsUpdate = true; }
+  const u = G3.venue && G3.venue.floor && G3.venue.floor.mat.userData.u;
+  if (u && u.baseTint) { u.uWoodTint.value.copy(u.baseTint); if (L.floor.tint) u.uWoodTint.value.multiply(new THREE.Color(L.floor.tint).convertSRGBToLinear()); }
 }
 
 // ---------------------------------------------------------------- sizing and camera
@@ -339,6 +353,7 @@ export function draw3d(scene, fx) {
   G3.time += dt; G3.frames++;
   const canSwap = !scene.m || scene.m.phase !== 'live' || !!G3.camOverride || !!scene.reduced;
   ensureVenue(scene.venue, canSwap);
+  applyLook();
   if (ANIM.clips) ANIM.stats.frames = (ANIM.stats.frames || 0) + 1;
   // the 3D crowd: bake once when its package is in, then seat it in the venue at a dead ball
   if (!crowd3dReady() && HQ.packages.crowd && HQ.packages.crowd['fans.glb']) { try { initCrowd3d(HQ.packages.crowd['fans.glb']); } catch (e) { console.info('[hq] crowd:', e.message); HQ.packages.crowd = null; } }

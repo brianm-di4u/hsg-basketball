@@ -96,10 +96,15 @@ export function banners(key, program) {
   return [...own, ...any].sort((a, b) => a.year - b.year);
 }
 
-// Jerseys. Home wears light, away wears dark; a throwback kit is always dark.
+// Jerseys. Home wears light, away wears dark; the alternate kit is always dark: Hot Springs' 1912-style throwback, or a
+// "Heritage" strip for the other schools (a deeper shade of the school's own colour with a band in the second colour; S3-01).
 export function kitFor(t, side, throwback = false) {
   const c = t.colors;
   const light = '#F4F1EA';
+  if (throwback && t.key !== 'hot-springs') {
+    const jersey = shade(c.primary, -0.35), num = contrast(c.secondary, jersey) >= 3 ? c.secondary : light;
+    return { jersey, trim: c.secondary, num, shorts: shade(c.primary, -0.55), band: c.secondary, light: false, heritage: true };
+  }
   if (throwback) return { jersey: '#151515', trim: '#D4A017', num: '#D4A017', shorts: '#151515', band: '#D4A017', light: false, throwback: true };
   if (side === 'home') {
     const num = contrast(c.primary, light) >= 3 ? c.primary : shade(c.primary, -0.5);

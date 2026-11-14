@@ -6,7 +6,7 @@ import { DT, createMatch, tick, startNextPeriod, summary, forceShot, give, commi
 import { createSeason, teamFor, nextGame, recordResult, simCurrent } from './season.js';
 import { createShootout, shootoutTick, forceShootoutShot, cancelShootoutShot, SPOTS } from './shootout.js';
 import { challenge } from './challenges.js';
-import { R, initRender, resize, draw, pop, burst, shake, netHit, rimHit, confetti, is3d } from './render.js';
+import { R, initRender, resize, draw, pop, burst, shake, netHit, rimHit, confetti, is3d, setLook } from './render.js';
 import { G3, load3d, pickTier, info3d, glProbe, resize3d, setTier, animCtl } from './gl/scene3d.js';
 import { startHQ, hqInfo } from './gl/hq.js';
 import { CREST_KEYS, crestURL } from './art.js';
@@ -15,13 +15,15 @@ import { AU, unlock, play, setVolume, setOn, setAmbience, setMusic, setMusicTrac
 import { DIFF, meterQuality, SWEET } from './rules.js';
 import { writeSave, readSaveSnapshot, resetSave, store, fmtClock, hash } from './util.js';
 import { mergeSave, seasonText } from './save-policy.js';
+import { ACHIEVEMENTS, BALLS, FLOORS, ballSkin, floorFinish, unlockKey, kitKey, hasAlt, cleanCareer, cleanDaily, cleanAchievements, applyGame, applyDaily, emptyCareer, newBests, earnedAchievements, earnedCosmetics, liveStreak, addDays } from './career.js';
+import { dailyDeal, localDate } from './daily.js';
 import * as UI from './ui.js';
 
 const $ = (s) => document.querySelector(s);
-const DEFAULTS = { sound: true, vol: 0.5, motion: 'auto', text: 100, theme: 'auto', difficulty: 1, qLen: 120, shotClock: 35, assist: false, touch: 'auto', graphics: 'auto', replays: true, ambience: true, music: true };
+const DEFAULTS = { sound: true, vol: 0.5, motion: 'auto', text: 100, theme: 'auto', difficulty: 1, qLen: 120, shotClock: 35, assist: false, touch: 'auto', graphics: 'auto', replays: true, ambience: true, music: true, ball: 'classic', floor: 'natural', tipsSeen: false };
 const state = {
   scene: 'title', stack: [], settings: { ...DEFAULTS }, season: null,
-  save: { trophies: [], unlocks: { throwback: false }, best: { shootout: 0 }, challenges: {} },
+  save: { trophies: [], unlocks: { throwback: false }, best: { shootout: 0 }, challenges: {}, career: emptyCareer(), daily: cleanDaily(null), achievements: {} },
   mode: null, match: null, so: null, demo: null, paused: false, showBox: false, helpTab: 'controls', seed: 0,
   pick: { program: 'girls', home: 'hot-springs', away: 'lakeside', side: 'home', school: 'hot-springs', length: 'short', throwback: false },
   chal: null, lastOpts: null, rosterView: null, busy: 0, factSeed: 1, finalShown: false, quitArmed: false,
@@ -31,13 +33,13 @@ const OVER_GAME = new Set(['game', 'pause', 'break', 'final', 'shootout', 'shoot
 
 // ---------------------------------------------------------------- saves
 let seasonBase = seasonText(null), setupSeasonBase = null, setupSeason = null, saveNotice = '';
-const pendingSave = { settings: {}, score: null, challenges: [], unlocks: [], trophies: [], season: null };
+const pendingSave = { settings: {}, score: null, challenges: [], unlocks: [], trophies: [], games: [], daily: [], achievements: [], season: null };
 const copy = x => JSON.parse(JSON.stringify(x));
 const currentSnapshot = r => r.kind === 'current' || r.kind === 'absent';
 function persist(intent = {}) {
   Object.assign(pendingSave.settings, intent.settings || {});
   if (Number.isFinite(intent.score) && intent.score >= 0) pendingSave.score = Math.max(pendingSave.score ?? 0, intent.score);
-  for (const k of ['challenges', 'unlocks', 'trophies']) if (intent[k]) pendingSave[k].push(...intent[k]);
+  for (const k of ['challenges', 'unlocks', 'trophies', 'games', 'daily', 'achievements']) if (intent[k]) pendingSave[k].push(...intent[k]);
   if (intent.season) pendingSave.season = { ...intent.season, value: copy(intent.season.value) };
   const read = readSaveSnapshot();
   if (!currentSnapshot(read)) {
@@ -45,7 +47,7 @@ function persist(intent = {}) {
     return { saved: false, seasonConflict: false, previousBest: null };
   }
   const previousBest = read.value?.best?.shootout || 0;
-  const result = mergeSave(read.value, DEFAULTS, pendingSave);
+  const result = mergeSave(read.value, mergeDefaults(read.value), pendingSave);
   if (!writeSave(result.value)) {
     // This new award passed the fresh whole-season check; retain it if durability fails.
     if (result.seasonAccepted) for (const award of pendingSave.season.trophies || []) {
@@ -61,8 +63,11 @@ function persist(intent = {}) {
   state.save.unlocks = { throwback: false, ...(result.value.unlocks || {}) };
   state.save.best = { shootout: 0, ...(result.value.best || {}) };
   state.save.challenges = result.value.challenges || {};
+  mirrorGrowth(result.value);
+  setLook(lookOf());
   pendingSave.settings = {}; pendingSave.score = null;
   pendingSave.challenges = []; pendingSave.unlocks = []; pendingSave.trophies = [];
+  pendingSave.games = []; pendingSave.daily = []; pendingSave.achievements = [];
   if (result.seasonAccepted) {
     seasonBase = seasonText(result.value.season);
     pendingSave.season = null;
@@ -72,6 +77,14 @@ function persist(intent = {}) {
     saveNotice = 'This season changed in another tab. Its saved progress was kept. Reload to continue that season.';
   } else saveNotice = '';
   return { saved: true, seasonConflict: result.seasonConflict, seasonAccepted: result.seasonAccepted, previousBest };
+}
+// The career, daily record and achievements as the save holds them (a damaged field reads as empty).
+function mirrorGrowth(v) {
+  state.save.career = cleanCareer(v.career); state.save.daily = cleanDaily(v.daily); state.save.achievements = cleanAchievements(v.achievements);
+}
+// A stored save with no tipsSeen is from before the first-game tips: its next write must say seen, not take the new-player default.
+function mergeDefaults(stored) {
+  return stored && !(stored.settings && 'tipsSeen' in stored.settings) ? { ...DEFAULTS, tipsSeen: true } : DEFAULTS;
 }
 function prepareSeasonSetup() {
   const read = readSaveSnapshot();
@@ -108,6 +121,7 @@ const SETTING_OK = {
   text: (v) => [100, 115, 130].includes(v), theme: (v) => ['auto', 'light', 'dark'].includes(v), difficulty: (v) => [0, 1, 2].includes(v),
   qLen: (v) => [120, 240, 480].includes(v), shotClock: (v) => [0, 35].includes(v), assist: (v) => typeof v === 'boolean',
   touch: (v) => ['auto', 'on', 'off'].includes(v), graphics: (v) => ['auto', '3d', '2d'].includes(v), replays: (v) => typeof v === 'boolean', ambience: (v) => typeof v === 'boolean', music: (v) => typeof v === 'boolean',
+  ball: (v) => BALLS.some((b) => b.id === v), floor: (v) => FLOORS.some((f) => f.id === v), tipsSeen: (v) => typeof v === 'boolean',
 };
 function cleanSettings(raw) {
   const s = raw && typeof raw === 'object' ? raw : {}, out = { ...DEFAULTS };
@@ -141,6 +155,8 @@ function restore() {
     state.save.unlocks = { throwback: false, ...(s.unlocks || {}) };
     state.save.best = { shootout: 0, ...(s.best || {}) };
     state.save.challenges = s.challenges || {};
+    mirrorGrowth(s);
+    if (!(s.settings && 'tipsSeen' in s.settings)) state.settings.tipsSeen = true; // a save from before the first-game tips: not a newcomer (mergeDefaults keeps it so when it is next written)
     if (state.season) { state.pick.school = state.season.school; state.pick.program = state.season.program; }
   } catch (e) { /* unreadable record: boot with defaults */ }
 }
@@ -162,6 +178,13 @@ function applySettings() {
   R.reduced = reducedMotion();
   R.use3d = s.graphics !== '2d' && !NO_GL;
   setOn(s.sound); setVolume(s.vol); setAmbience(s.ambience !== false); setMusic(s.music !== false);
+  setLook(lookOf());
+}
+// The ball skin and court finish in use: what Settings holds, if it is unlocked (a hand-edited save pointing at a locked one gets the default).
+function lookOf() {
+  const s = state.settings, open = (kind, it) => !it.unlock || !!state.save.unlocks[unlockKey(kind, it.id)];
+  const b = ballSkin(s.ball), f = floorFinish(s.floor);
+  return { ball: open('ball', b) ? b : BALLS[0], floor: open('floor', f) ? f : FLOORS[0] };
 }
 const NO_GL = /[?&]gl=0\b/.test(location.search);
 
@@ -190,6 +213,95 @@ function start3d() {
     }
     wantLoop(); drawFrame(0);
   }).catch(() => { state.busy3d = false; R.use3d = false; document.body.classList.remove('gl'); wantLoop(); drawFrame(0); }); // any 3D start-up fault leaves the classic court
+}
+
+
+// ---------------------------------------------------------------- career, achievements, daily game (S3-01)
+// What the user's team did in this game, tracked from the sim's events (the box score gives the totals).
+const today = () => state.dateOverride || localDate();
+function newTrack(m) {
+  const ut = m.user.team;
+  return { perfectRun: 0, perfectBest: 0, maxDef: ut >= 0 ? Math.max(0, m.teams[1 - ut].score - m.teams[ut].score) : 0, qPts: {}, skipQ: m.startScore && m.clock.t < m.rules.qLen - 0.5 ? m.clock.q : 0, bad: false };
+}
+function trackEvent(m, e) {
+  const tr = state.track; if (!tr || m.user.team < 0) return;
+  if (e.k === 'score') { const q = m.clock.q; (tr.qPts[q] || (tr.qPts[q] = [0, 0]))[e.t] += e.pts; }
+  else if (e.k === 'shot' && isUserBall(m, e.i) && !m.user.auto) { tr.perfectRun = m.user.meterLabel === 'PERFECT' ? tr.perfectRun + 1 : 0; tr.perfectBest = Math.max(tr.perfectBest, tr.perfectRun); }
+}
+function trackScore(m) {
+  const tr = state.track, ut = m.user.team; if (!tr || ut < 0) return;
+  tr.maxDef = Math.max(tr.maxDef, m.teams[1 - ut].score - m.teams[ut].score);
+}
+function gameRecord(m, mode) {
+  const ut = m.user.team, T = m.teams[ut], O = m.teams[1 - ut], tr = state.track || newTrack(m);
+  const sum = (k) => T.roster.reduce((a, r) => a + r.st[k], 0);
+  let shutQ = false;
+  if (!tr.bad) for (let q = Math.max(1, tr.skipQ + 1); q <= Math.min(4, m.clock.q); q++) if (((tr.qPts[q] || [0, 0])[1 - ut]) === 0) shutQ = true; // a regulation quarter the other team never scored in
+  return { mode, school: T.key, opp: O.key, diff: m.difficulty, win: m.winner === ut, pts: T.score, oppPts: O.score, scored: sum('pts'), threes: sum('tpm'), steals: sum('stl'), blocks: sum('blk'), reb: sum('reb'), ast: sum('ast'),
+    perfect: tr.bad ? 0 : tr.perfectBest, maxDef: tr.maxDef, shutQ, champion: false };
+}
+// Achievements and cosmetic unlocks the save now earns, saved and shown as toasts. Returns { ach, cos, bests }.
+function award(extra) {
+  const sv = state.save, d = today();
+  const ctx = { rec: extra.rec || null, shootout: extra.shootout ?? null, career: cleanCareer(sv.career), daily: cleanDaily(sv.daily), trophies: sv.trophies.filter((t) => !t.seasonSeed).map((t) => t.school), challenges: sv.challenges, schools: COUNTY.map((t) => t.key) };
+  const ach = earnedAchievements(ctx, sv.achievements), cos = earnedCosmetics(ctx, ctx.schools).filter((k) => !sv.unlocks[k]);
+  if (ach.length || cos.length) {
+    for (const id of ach) sv.achievements[id] = d;
+    for (const k of cos) sv.unlocks[k] = true;
+    persist({ achievements: ach.map((id) => ({ id, d })), unlocks: cos });
+    for (const id of ach) { const a = ACHIEVEMENTS.find((x) => x.id === id); toast('Achievement', a.name, a.how); }
+    for (const k of cos) toast('Unlocked', UI.cosmeticName(k), '');
+  }
+  return { ach, cos, bests: [] };
+}
+function recordGrowth(m, champion) {
+  const ut = m.user.team; if (ut < 0) return null;
+  const rec = gameRecord(m, state.mode === 'daily' ? 'daily' : state.mode === 'season' ? 'season' : state.mode === 'challenge' ? 'challenge' : 'exhibition');
+  rec.champion = !!champion;
+  const before = cleanCareer(state.save.career), intent = { games: [rec] };
+  state.save.career = cleanCareer(state.save.career); applyGame(state.save.career, rec);
+  if (rec.mode === 'daily' && state.daily) {
+    const d = { d: state.daily.date, margin: rec.pts - rec.oppPts, win: rec.win };
+    state.save.daily = cleanDaily(state.save.daily); applyDaily(state.save.daily, d); intent.daily = [d];
+  }
+  persist(intent);
+  const aw = award({ rec });
+  aw.bests = newBests(before, rec);
+  return aw;
+}
+// A short banner at the foot of the screen, one at a time; it never takes focus or input. The live region says it too.
+const toasts = []; let toastOn = false;
+function toast(kind, title, text) {
+  toasts.push({ kind, title, text }); announce(`${kind}: ${title}. ${text || ''}`.trim());
+  if (!toastOn) nextToast();
+}
+function nextToast() {
+  const el = $('#toast'), t = toasts.shift();
+  if (!el || !t) { toastOn = false; if (el) el.hidden = true; return; }
+  toastOn = true;
+  el.innerHTML = `<small>${UI.esc(t.kind)}</small><b>${UI.esc(t.title)}</b>${t.text ? `<span>${UI.esc(t.text)}</span>` : ''}`;
+  el.hidden = false; el.classList.remove('in'); void el.offsetWidth; el.classList.add('in');
+  play('achieve');
+  setTimeout(() => { el.hidden = true; setTimeout(nextToast, 250); }, 3800);
+}
+function dailyView() {
+  const date = today(), rec = cleanDaily(state.save.daily), cells = [];
+  for (let i = 13; i >= 0; i--) { const d = addDays(date, -i); cells.push({ d, e: rec.days[d] || null }); }
+  return { date, deal: dailyDeal(date), rec, today: rec.days[date] || null, cells };
+}
+function playDaily() {
+  const date = today(), D = dailyDeal(date);
+  state.daily = { date };
+  const opts = { mode: 'exhibition', home: D.home, away: D.away, program: D.program, user: 'home', qLen: D.qLen, shotClock: 35, difficulty: D.diff, venue: 'home', seed: D.seed,
+    start: D.deficit ? { q: 1, t: D.qLen, score: [0, D.deficit], poss: 'user' } : undefined };
+  state.lastOpts = opts; state.mode = 'daily';
+  state.match = startMatch(opts);
+  enterGame();
+}
+function lockedLook(kind, list, id) {
+  const it = list.find((x) => x.id === id);
+  if (it && it.unlock && !state.save.unlocks[unlockKey(kind, id)]) { announce(`${it.name} is locked. ${it.unlock}`); return true; }
+  return false;
 }
 
 // ---------------------------------------------------------------- match setup
@@ -230,8 +342,8 @@ function newExhibition(o = {}) {
   const opts = {
     mode: 'exhibition', home: o.home || p.home, away: o.away || p.away, program: o.program || p.program, user: o.user || p.side,
     qLen: o.qLen, shotClock: o.shotClock, difficulty: o.difficulty, venue: o.venue || 'home', seed: o.seed,
-    throwHome: (o.home || p.home) === 'hot-springs' && (o.throwback ?? p.throwback) && state.save.unlocks.throwback,
-    throwAway: (o.away || p.away) === 'hot-springs' && (o.throwback ?? p.throwback) && state.save.unlocks.throwback,
+    throwHome: !!((o.throwback ?? p.throwback) && hasAlt(state.save.unlocks, o.home || p.home)),
+    throwAway: !!((o.throwback ?? p.throwback) && hasAlt(state.save.unlocks, o.away || p.away)),
   };
   state.lastOpts = opts;
   state.mode = 'exhibition';
@@ -242,6 +354,7 @@ function newExhibition(o = {}) {
 function enterGame() {
   state.paused = false; state.finalShown = false; state.showBox = false;
   state.factSeed = (state.match.seed || 1) + 3;
+  state.track = newTrack(state.match); state.awards = null;
   go('game', false);
 }
 
@@ -268,7 +381,7 @@ function playSeasonGame(o = {}) {
   const S = state.season, g = nextGame(S);
   if (!g) return;
   const homeKey = g.home ? S.school : g.opp, awayKey = g.home ? g.opp : S.school;
-  const tb = state.save.unlocks.throwback && state.pick.throwback && S.school === 'hot-springs';
+  const tb = state.pick.throwback && hasAlt(state.save.unlocks, S.school);
   state.mode = 'season';
   state.match = startMatch({ mode: 'season', home: homeKey, away: awayKey, program: S.program, cls: S.cls, user: g.home ? 'home' : 'away', venue: g.arena ? 'arena' : 'home', rosterSeed: S.seed, seed: o.seed ?? hash(`${S.school}${S.w}${S.l}${S.seed}`), throwHome: tb && g.home, throwAway: tb && !g.home });
   enterGame();
@@ -277,6 +390,7 @@ function finishSeasonGame() {
   const m = state.match, S = state.season, ut = m.user.team;
   const wasFinal = S.phase === 'bracket' && S.bracket.round === 2;
   advanceSeason(() => recordResult(state.season, m.teams[ut].score, m.teams[1 - ut].score), wasFinal ? 'played' : null);
+  return wasFinal && !!state.season.champion;
 }
 
 // ---------------------------------------------------------------- challenges
@@ -335,7 +449,7 @@ function back() {
 }
 
 function screenHTML() {
-  const st = { ...state, settings: state.settings, save: state.save, mode: state.mode };
+  const st = { ...state, settings: state.settings, save: state.save, mode: state.mode, dailyStreak: liveStreak(state.save.daily, today()) };
   const m = state.match;
   switch (state.scene) {
     case 'title': return UI.titleScreen(st);
@@ -349,8 +463,9 @@ function screenHTML() {
     case 'final': return m ? finalHTML(st) : '';
     case 'champion': return UI.championScreen(st);
     case 'shootoutSetup': return UI.shootoutSetupScreen(st);
-    case 'shootoutEnd': return UI.shootoutEndScreen(st, state.so, state.so && state.so.newBest);
+    case 'shootoutEnd': return UI.shootoutEndScreen(st, state.so, state.so && state.so.newBest, UI.awardsCard(state.awards));
     case 'challenges': return UI.challengesScreen(st);
+    case 'daily': return UI.dailyScreen(st, dailyView());
     case 'trophies': return UI.trophiesScreen(st);
     case 'help': return UI.helpScreen(st, state.helpTab);
     case 'settings': return UI.settingsScreen(st, saveStatus());
@@ -375,7 +490,11 @@ function finalHTML(st) {
     const S = state.season;
     extra = `<p class="fine">Season record now ${S.w}-${S.l}.</p>`;
   }
-  return UI.finalScreen(st, m, tops, extra);
+  if (state.mode === 'daily' && state.daily) {
+    const e = state.save.daily.days[state.daily.date], s = liveStreak(state.save.daily, state.daily.date);
+    extra = `<section class="card"><h3>Daily game</h3><p>${UI.dayLabel(state.daily.date)}: ${e && e.w ? 'won' : 'lost'}, margin ${e && e.m > 0 ? '+' : ''}${e ? e.m : 0}. Streak: <b>${s}</b> day${s === 1 ? '' : 's'}.</p></section>`;
+  }
+  return UI.finalScreen(st, m, tops, extra + UI.awardsCard(state.awards));
 }
 
 // the pinned footer says when more of the panel sits below it (phones, long setup screens)
@@ -498,6 +617,7 @@ function stepOnce() {
   tick(m);
   record(m);
   matchEvents(m);
+  trackScore(m);
   meterTick(m);
   tickClock(m);
   crowdBed(CROWD_REST + CROWD_HOME * (m.crowdTeam >= 0 ? m.crowd : 0.3) + CROWD_CLOSE * matchTension(m));
@@ -511,8 +631,10 @@ function onFinal() {
   const ut = m.user.team;
   if (ut >= 0) { play(m.winner === ut ? 'win' : 'groan'); if (m.winner === ut) duck(6, 1200); }
   announce(`Final: ${m.teams[0].short} ${m.teams[0].score}, ${m.teams[1].short} ${m.teams[1].score}.`);
-  if (state.mode === 'season') finishSeasonGame();
+  let champion = false;
+  if (state.mode === 'season') champion = finishSeasonGame();
   if (state.mode === 'challenge') state.chalResult = challengeResult();
+  state.awards = recordGrowth(m, champion);
   go('final', false);
 }
 
@@ -523,6 +645,7 @@ function endShootout() {
   state.save.best.shootout = Math.max(memoryBest, so.score);
   const saved = persist({ score: so.score });
   so.newBest = so.score > (saved.previousBest ?? memoryBest);
+  state.awards = award({ shootout: so.score });
   play(so.newBest ? 'win' : 'buzzer'); duck(6, 1200);
   announce(`Time. ${so.score} points.`);
   go('shootoutEnd', false);
@@ -663,6 +786,7 @@ function matchTension(m) {
 const WHY = { shotclock: 'SHOT CLOCK', oob: 'OUT OF BOUNDS', reach: 'FOUL', shoot: 'SHOOTING FOUL', '5sec': '5 SECONDS' };
 function matchEvents(m) {
   for (const e of m.ev) {
+    trackEvent(m, e);
     switch (e.k) {
       case 'score': {
         const side = rimSide(rimFor(m.dir[e.t]));
@@ -915,6 +1039,8 @@ const ACT = {
   shootoutSetup: () => go('shootoutSetup'),
   challenges: () => go('challenges'),
   trophies: () => go('trophies'),
+  daily: () => go('daily'),
+  playDaily: () => playDaily(),
   help: () => go('help'),
   settings: () => go('settings'),
   helpTab: (a) => { state.helpTab = a; render(); },
@@ -942,6 +1068,8 @@ const ACT = {
   setVol: (a) => setSetting('vol', +a),
   setAmbience: (a) => setSetting('ambience', a === '1'),
   setMusic: (a) => setSetting('music', a === '1'),
+  setBall: (a) => { if (!lockedLook('ball', BALLS, a)) setSetting('ball', a); },
+  setFloor: (a) => { if (!lockedLook('floor', FLOORS, a)) setSetting('floor', a); },
   setMotion: (a) => setSetting('motion', a),
   setText: (a) => setSetting('text', +a),
   setTheme: (a) => setSetting('theme', a),
@@ -950,7 +1078,7 @@ const ACT = {
   setReplays: (a) => setSetting('replays', a === '1'),
   setGraphics: (a) => { setSetting('graphics', a); if (a !== '2d') start3d(); R.snap = true; drawFrame(0); },
   startExhibition: () => { if (state.pick.home !== state.pick.away) newExhibition(); },
-  rematch: () => { state.match = startMatch({ ...state.lastOpts, seed: undefined }); enterGame(); },
+  rematch: () => { state.match = startMatch(state.mode === 'daily' ? state.lastOpts : { ...state.lastOpts, seed: undefined }); enterGame(); }, // the daily game is the same game each time
   startSeason: () => startSeason(),
   playSeason: () => playSeasonGame(),
   simSeason: () => { if (!advanceSeason(() => simCurrent(state.season), 'sim')) return; if (state.season.champion) go('champion', false); else render(); },
@@ -998,7 +1126,7 @@ function onKey(e) {
     if (sc === 'game' || sc === 'shootout') { pauseGame(); return true; }
     if (sc === 'pause') { ACT.resume(); return true; }
     if (e.code === 'Escape' && ['help', 'settings', 'roster', 'bracket'].includes(sc)) { back(); return true; }
-    if (e.code === 'Escape' && ['select', 'seasonSetup', 'shootoutSetup', 'challenges', 'trophies'].includes(sc)) { ACT.title(); return true; }
+    if (e.code === 'Escape' && ['select', 'seasonSetup', 'shootoutSetup', 'challenges', 'trophies', 'daily'].includes(sc)) { ACT.title(); return true; }
   }
   return false;
 }
@@ -1042,6 +1170,7 @@ function sumState() {
     shootout: state.so ? { t: +state.so.t.toFixed(2), score: state.so.score, streak: state.so.streak, mult: state.so.mult, made: state.so.made, att: state.so.att, spot: state.so.spot, phase: state.so.phase, ball: state.so.ball.state, shooter: fullName(state.so.r) } : null,
     challenge: state.chal, chalResult: state.chalResult ? { ok: state.chalResult.ok, more: state.chalResult.more, note: state.chalResult.note } : null,
     trophies: state.save.trophies, unlocks: state.save.unlocks, best: state.save.best, challenges: state.save.challenges,
+    career: state.save.career, daily: state.save.daily, achievements: state.save.achievements, awards: state.awards || null, date: today(), look: { ball: R.look.ball.id || ballSkin(state.settings.ball).id, floor: R.look.floor.id },
     replay: state.replay ? { kind: state.replay.kind, f: Math.floor(state.replay.f), n: state.replay.frames.length } : null,
     pick: { ...state.pick }, audio: { ctx: !!AU.ctx, on: AU.on, ambience: AU.ambOn, music: AU.musOn, track: AU.kit && AU.kit.music.score && AU.music ? AU.music : '', tension: AU.tension, bed: AU.kit && AU.kit.amb.scene && AU.scene ? AU.scene : '', held: !!(AU.kit && AU.kit.held), state: AU.ctx ? AU.ctx.state : null, crowd: AU.crowd ?? null, count: { ...AU.count } }, reduced: R.reduced, touch: touchOn(), fx: R.fx.parts.length, loop: !!raf,
     view: R.v ? { W: R.v.W, H: R.v.H, s: +R.v.s.toFixed(2), camX: +R.v.camX.toFixed(2) } : null,
@@ -1071,6 +1200,12 @@ function stepN(n) {
 
 const HOOKS = {
   seed(n) { state.seed = n | 0; return n; },
+  setDate(d) { state.dateOverride = d || null; return today(); }, // tests: pretend it is another day
+  unlockAll() { // tests: every ball, court finish and kit, as an earned save would hold them
+    const keys = ['throwback', ...BALLS.filter((b) => b.unlock).map((b) => unlockKey('ball', b.id)), ...FLOORS.filter((f) => f.unlock).map((f) => unlockKey('floor', f.id)), ...COUNTY.filter((t) => t.key !== 'hot-springs').map((t) => kitKey(t.key))];
+    for (const k of keys) state.save.unlocks[k] = true;
+    persist({ unlocks: keys }); return keys.length;
+  },
   audioList,
   audioRender,
   getState: sumState,
@@ -1139,6 +1274,7 @@ const HOOKS = {
       case 'finishGame': {
         if (!m) return false;
         m.user.auto = true; m.autoBreak = true;
+        if (state.track) state.track.bad = true; // events are not tracked while the hook plays the game out
         if (m.phase === 'qend') startNextPeriod(m);
         let n = 0;
         while (m.phase !== 'final' && n < 60 * 60 * 60) { tick(m); m.ev.length = 0; n++; }

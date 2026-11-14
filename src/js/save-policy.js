@@ -1,4 +1,5 @@
 // Field-specific save intents. Ordinary preferences never replay cached progress.
+import { cleanCareer, applyGame, cleanDaily, applyDaily, cleanAchievements, DATE_RE } from './career.js';
 const object = x => !!x && typeof x === 'object' && !Array.isArray(x);
 const clone = x => JSON.parse(JSON.stringify(x));
 function ordered(x) { return Array.isArray(x) ? x.map(ordered) : object(x) ? Object.fromEntries(Object.keys(x).sort().map(k => [k, ordered(x[k])])) : x; }
@@ -18,6 +19,14 @@ export function mergeSave(latest, defaults, intent) {
   if (Number.isFinite(intent.score) && intent.score >= 0) value.best = { ...(value.best || {}), shootout: Math.max(value.best?.shootout || 0, intent.score) };
   for (const k of intent.challenges || []) value.challenges = { ...(value.challenges || {}), [k]: true };
   for (const k of intent.unlocks || []) value.unlocks = { ...(value.unlocks || {}), [k]: true };
+  // S3-01: finished games add to the career totals, a finished daily game to the daily record, an earned achievement to its list.
+  // Each is applied to what is stored now (never to a cached copy), so two tabs cannot undo each other; a damaged field is read as empty.
+  if (intent.games?.length) { value.career = cleanCareer(value.career); for (const g of intent.games) applyGame(value.career, g); }
+  if (intent.daily?.length) { value.daily = cleanDaily(value.daily); for (const d of intent.daily) applyDaily(value.daily, d); }
+  if (intent.achievements?.length) {
+    value.achievements = cleanAchievements(value.achievements);
+    for (const a of intent.achievements) if (!value.achievements[a.id] && DATE_RE.test(a.d || '')) value.achievements[a.id] = a.d;
+  }
   const append = records => {
     if (!records?.length) return;
     value.trophies = value.trophies || [];

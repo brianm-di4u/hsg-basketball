@@ -499,7 +499,7 @@ export function draw3d(scene, fx) {
   // (a close camera would see the ribbon end-on, as a pale disc around the ball)
   if (inShot && G3.camera.position.distanceTo(B.position) > 22) G3.trailFx.update(B.position, G3.camera, scene.perfect ? 0xffc23a : 0xfff0d8, 0.5);
   else G3.trailFx.clear();
-  G3.vents.update(G3.time, G3.camera, G3.renderer, G3.tier, !!scene.noVents);
+  G3.vents.update(G3.time, G3.camera, G3.renderer, G3.tier, !!scene.noVents, scene.steam || 0);
   // the ball's dark outline keeps about 1.5 px on screen at any distance
   if (ball && B.visible) { const q = project(B.position.x + HL, B.position.z + HW, B.position.y); const rpx = Math.max(1, q.s * 0.4 * B.scale.x); B.children[0].scale.setScalar(1 + 1.6 / rpx); }
   // hoops: cloth net, rim flash and board shake on a make, rim shake on iron, shot clocks

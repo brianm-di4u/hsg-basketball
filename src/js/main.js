@@ -1090,6 +1090,8 @@ function drawMatch(m, dt) {
   updateScoreboard();
 }
 
+const STEAM_GAP = 1.1, STEAM_FASTER = 0.15, CHEER_BASE = 0.1, CHEER_STEP = 0.1, CHEER_MAX = 0.7; // seconds between wisps at no gauge and the cut for each gauge step; the crowd's lift at no gauge, per step and at most
+let steamAcc = 0;
 function drawShootout(dt) {
   const so = state.so;
   if (G3.camOverride && G3.camOverride.attract) { G3.camOverride = null; R.snap = true; }
@@ -1097,9 +1099,14 @@ function drawShootout(dt) {
   const scale = (DIFF[so.difficulty] || DIFF[1]).win * (so.assist ? 1.5 : 1);
   const meter = so.sh.act === 'shoot' && so.ball.state === 'held' ? { x: so.sh.x, z: so.sh.z, y: so.sh.y, h: so.r.height / 12, v: so.sh.meter, win: 0.05 * scale, label: null }
     : so.labelT > 0 ? { x: so.sh.x, z: so.sh.z, y: so.sh.y, h: so.r.height / 12, v: 0, win: 0.05 * scale, label: so.label } : null;
+  padMeter(meter);
   const venue = { kind: 'home', home: so.team, away: so.team, pennants: gymBanners(so.team.key, so.r.id.includes('girls') ? 'girls' : 'boys') };
   const vert = is3d() ? 1 : 0; // the 3D Hot Streak camera stands behind the shooter, looking at the basket
-  draw({ venue, dt, camX: vert ? (so.sh.x + COURT.rimX[1]) / 2 - 4 : R.v && R.v.portrait ? (so.sh.x + COURT.rimX[1]) / 2 - 2 : COURT.rimX[1] - 14, camZ: (so.sh.z + 25) / 2, players, ball: so.ball, meter, vertical: vert });
+  // the stands wake up and a wisp of bathhouse steam rises at the shooter's feet as the steam gauge fills (S4-07)
+  const gauge = so.phase === 'live' ? Math.min(6, so.streak) : 0;
+  steamAcc += dt; // 2D: puffs at the shooter's feet; in 3D the venue's steam vents swell instead (the flat puffs read as ghost discs there)
+  if (!is3d() && gauge > 0 && steamAcc >= STEAM_GAP - STEAM_FASTER * gauge) { steamAcc = 0; burst('steam', so.sh.x, 1.5, so.sh.z, 1 + Math.ceil(gauge / 2), ['#fff']); }
+  draw({ venue, dt, steam: gauge / 6, cheer: gauge ? Math.min(CHEER_MAX, CHEER_BASE + CHEER_STEP * gauge) : 0, camX: vert ? (so.sh.x + COURT.rimX[1]) / 2 - 4 : R.v && R.v.portrait ? (so.sh.x + COURT.rimX[1]) / 2 - 2 : COURT.rimX[1] - 14, camZ: (so.sh.z + 25) / 2, players, ball: so.ball, meter, vertical: vert });
   updateScoreboard();
 }
 
@@ -1130,7 +1137,7 @@ function updateScoreboard(force) {
     const gauge = Math.min(6, so.streak);
     html = `<div class="sb-team"><span class="sb-name">${UI.esc(so.team.abbr)}</span><span class="sb-score" aria-label="Score">${so.score}</span></div>
       <div class="sb-mid"><span class="sb-q">${so.practice ? 'PRACTICE' : 'HOT STREAK'}</span><span class="sb-clock">${so.phase === 'ready' ? 'READY' : so.t.toFixed(1)}</span><span class="sb-shot">x${so.mult}</span></div>
-      <div class="sb-team"><span class="sb-name sb-steam">STREAK</span><span class="gauge" role="img" aria-label="Streak ${so.streak}">${Array.from({ length: 6 }, (_, k) => `<i class="${k < gauge ? 'on' : ''}"></i>`).join('')}</span></div>`;
+      <div class="sb-team"><span class="sb-name sb-steam">STEAM</span><span class="gauge" role="img" aria-label="Steam gauge, ${gauge} of 6 makes in a row">${Array.from({ length: 6 }, (_, k) => `<i class="${k < gauge ? 'on' : ''}"></i>`).join('')}</span></div>`;
   } else {
     const m = state.match;
     if (!m) return;
@@ -1370,6 +1377,7 @@ function sumState() {
     coach: state.coach ? { cur: state.coach.cur, done: { ...state.coach.done }, text: state.coach.cur ? $('#coach-t').textContent : '', practice: state.coach.practice } : null, pick: { ...state.pick }, audio: { ctx: !!AU.ctx, on: AU.on, ambience: AU.ambOn, music: AU.musOn, track: AU.kit && AU.kit.music.score && AU.music ? AU.music : '', tension: AU.tension, bed: AU.kit && AU.kit.amb.scene && AU.scene ? AU.scene : '', held: !!(AU.kit && AU.kit.held), state: AU.ctx ? AU.ctx.state : null, crowd: AU.crowd ?? null, count: { ...AU.count } }, reduced: R.reduced, touch: touchOn(), fx: R.fx.parts.length, loop: !!raf,
     input: { mx: I.mx, mz: I.mz, shoot: I.shoot, shootP: I.shootP, shootR: I.shootR, passP: I.passP, switchP: I.switchP, sprint: I.sprint },
     view: R.v ? { W: R.v.W, H: R.v.H, s: +R.v.s.toFixed(2), camX: +R.v.camX.toFixed(2) } : null,
+    steam: R.fx.parts.filter((p) => p.kind === 'steam').length, ventBoost: G3.vents ? G3.vents.boost : 0, shootCheer: G3.cheer,
     gfx: { mode: is3d() ? '3d' : '2d', gl: state.gl || null, ...info3d(), hq: hqInfo() },
     hud: hudState(),
     ui: { focus: document.activeElement ? (document.activeElement.dataset.act || document.activeElement.id || document.activeElement.tagName) : null },

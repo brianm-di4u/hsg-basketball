@@ -110,6 +110,11 @@ body.replay #sb, body.replay #pad { display: none; } /* the replay gets the phon
 .pb { width: 72px; height: 72px; border-radius: 50%; border: 3px solid #14121F; background: #D8CFBD; color: #14121F; font: 700 var(--fs-sm)/1.05 var(--font-text); letter-spacing: .03em; display: flex; flex-direction: column; align-items: center; justify-content: center; touch-action: none; box-shadow: 0 4px 0 #8A8590; }
 .pb small { font-size: var(--fs-xs); font-weight: 700; opacity: .9; }
 .pb.big { width: 92px; height: 92px; background: #FFD84D; grid-row: 1 / span 3; grid-column: 2; font-size: .95rem; }
+#b-shoot { position: relative; }
+#b-shoot::before, #b-shoot::after { content: ''; position: absolute; inset: -11px; border-radius: 50%; pointer-events: none; opacity: 0; -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 8px)); mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 8px)); }
+#b-shoot.metering::before, #b-shoot.metering::after { opacity: 1; }
+#b-shoot::before { background: conic-gradient(#FFF6E0 0 var(--mf, 0deg), rgba(255, 246, 224, .22) var(--mf, 0deg) 360deg); }
+#b-shoot::after { background: conic-gradient(transparent 0 var(--gs, 0deg), #2E8F55 var(--gs, 0deg) var(--ps, 0deg), #7CF0A4 var(--ps, 0deg) var(--pe, 0deg), #2E8F55 var(--pe, 0deg) var(--ge, 0deg), transparent var(--ge, 0deg) 360deg); }
 .pb.small { width: 72px; height: 44px; border-radius: 14px; font-size: var(--fs-xs); }
 #b-sprint { background: #8FD6C8; }
 .pb.on { transform: translateY(3px); box-shadow: 0 1px 0 #8A8590; filter: brightness(.9); }

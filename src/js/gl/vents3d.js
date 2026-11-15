@@ -11,6 +11,7 @@ const LIFE = 5.5;    // seconds a puff lives
 const RISE = 10;     // feet a puff climbs
 const SIZE = [1.6, 6.5]; // world feet across: small at the grate, wide at the top
 const ALPHA = 0.2;   // the most opaque a puff gets
+const BOOST_ALPHA = 1, BOOST_SIZE = 0.4; // Hot Streak (S4-07): at a full steam gauge the plumes are twice as opaque and 40% wider, and swell all the time
 
 export function makeVents(HL, HW) {
   const nMax = VENT_SPOTS.length * Math.max(...Object.values(VENT_PUFFS));
@@ -29,9 +30,10 @@ export function makeVents(HL, HW) {
   points.frustumCulled = false; points.visible = false; points.renderOrder = 2;
   let drawn = -1;
   return {
-    points, count: 0,
-    // time in seconds, tier 'high' | 'medium' | 'low', off: reduced motion
-    update(time, cam, renderer, tier, off) {
+    points, count: 0, boost: 0,
+    // time in seconds, tier 'high' | 'medium' | 'low', off: reduced motion, boost: 0 to 1, how full the Hot Streak steam gauge is
+    update(time, cam, renderer, tier, off, boost = 0) {
+      this.boost = off ? 0 : boost;
       const per = off ? 0 : VENT_PUFFS[tier] || 0, V = VENT_SPOTS.length, n = per * V;
       if (!n) { points.visible = false; this.count = 0; return; }
       const fov = cam.fov * Math.PI / 180, h = renderer.getDrawingBufferSize(new THREE.Vector2()).y;
@@ -39,11 +41,11 @@ export function makeVents(HL, HW) {
       for (let i = 0; i < n; i++) {
         const v = i % V, k = Math.floor(i / V), [vx, vz] = VENT_SPOTS[v];
         const t = (time / LIFE + k / per + v * 0.23) % 1;
-        const breathe = 0.55 + 0.45 * Math.sin(time * 0.31 + v * 2.3); // each vent swells and eases on its own slow beat
+        const slow = 0.55 + 0.45 * Math.sin(time * 0.31 + v * 2.3), breathe = slow + (1 - slow) * boost; // each vent swells and eases on its own slow beat; a full gauge holds them swollen
         const sway = Math.sin(t * 5 + i * 1.7) * 0.9 * t;
         pos[i * 3] = vx - HL + sway; pos[i * 3 + 1] = 0.4 + t * RISE; pos[i * 3 + 2] = vz - HW + Math.cos(t * 4 + i) * 0.6 * t;
-        size[i] = SIZE[0] + (SIZE[1] - SIZE[0]) * t;
-        alpha[i] = ALPHA * breathe * Math.pow(Math.sin(Math.PI * t), 1.3);
+        size[i] = (SIZE[0] + (SIZE[1] - SIZE[0]) * t) * (1 + BOOST_SIZE * boost);
+        alpha[i] = ALPHA * (1 + BOOST_ALPHA * boost) * breathe * Math.pow(Math.sin(Math.PI * t), 1.3);
       }
       if (drawn !== n) { geo.setDrawRange(0, n); drawn = n; }
       geo.attributes.position.needsUpdate = geo.attributes.aSize.needsUpdate = geo.attributes.aAlpha.needsUpdate = true;

@@ -11,6 +11,9 @@ export const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', 
 const crest = (t, px = 48, cls = 'crest') => `<img class="${cls}" src="${crestURL(t, px * 2)}" width="${px}" height="${px}" alt="">`;
 const btn = (act, label, o = {}) => `<button class="btn ${o.cls || ''}" data-act="${act}"${o.arg != null ? ` data-arg="${esc(o.arg)}"` : ''}${o.pressed != null ? ` aria-pressed="${o.pressed}"` : ''}${o.disabled ? ' disabled' : ''}${o.label ? ` aria-label="${esc(o.label)}"` : ''}>${label}</button>`;
 const seg = (act, opts, cur, label) => `<div class="seg" role="group" aria-label="${esc(label)}"><span class="seg-l">${esc(label)}</span>${opts.map(([v, t]) => btn(act, esc(t), { arg: v, pressed: String(v) === String(cur), cls: 'seg-b' })).join('')}</div>`;
+// What each difficulty changes, in a line under the control (S2-19). The numbers behind it are DIFF in rules.js (window, steals, reaction, the opponent's edge).
+export const DIFF_HINT = ['A wider shot window and slower defenders, and the other team plays a little weaker.', 'The standard game: a fair shot window and defenders who play it straight.', 'A narrower shot window, sharp shooters and aggressive steals, and the other team plays a little stronger.'];
+const diffSeg = (cur) => `<div class="diffw">${seg('setDiff', DIFF.map((d, i) => [i, d.name]), cur, 'Difficulty')}<p class="fine diff-hint">${esc(DIFF_HINT[cur] || DIFF_HINT[1])}</p></div>`;
 const progLabel = (p) => (p === 'girls' ? 'Girls' : 'Boys');
 const qLabel = (s) => `${s / 60} min`;
 
@@ -58,7 +61,7 @@ export function selectScreen(st) {
     <div class="opts">${seg('pickSide', [['home', 'Home'], ['away', 'Away']], x.side, 'You play')}
     ${seg('setQ', [[120, '2 min'], [240, '4 min'], [480, '8 min (full)']], st.settings.qLen, 'Quarters')}
     ${seg('setClock', [[35, '35 seconds'], [0, 'Off (classic)']], st.settings.shotClock, 'Shot clock')}
-    ${seg('setDiff', DIFF.map((d, i) => [i, d.name]), st.settings.difficulty, 'Difficulty')}</div>
+    ${diffSeg(st.settings.difficulty)}</div>
     ${alt ? seg('setThrow', [[1, 'Alternate kit'], [0, 'Regular']], x.throwback ? 1 : 0, 'Kits') + '<p class="fine">An alternate kit is worn by a team that has earned one: the 1912-style throwback for Hot Springs, a Heritage strip for the other schools.</p>' : ''}
     <div class="row end">${btn('title', 'Back')}${btn('startExhibition', 'Tip off', { cls: 'primary', disabled: x.home === x.away })}</div>
   </div>`;
@@ -75,7 +78,7 @@ export function seasonSetupScreen(st) {
     ${grid('pickSchool', x.school, 'School')}
     ${seg('pickLength', [['short', 'Short: 3 games'], ['full', 'Full: 8 games']], x.length, 'Regular season')}
     ${seg('setQ', [[120, '2 min'], [240, '4 min'], [480, '8 min (full)']], st.settings.qLen, 'Quarters')}
-    ${seg('setDiff', DIFF.map((d, i) => [i, d.name]), st.settings.difficulty, 'Difficulty')}
+    ${diffSeg(st.settings.difficulty)}
     ${st.season && !st.season.done ? '<p class="warn">Starting a new season replaces the season in progress.</p>' : ''}
     <div class="row end">${btn('title', 'Back')}${btn('startSeason', 'Start season', { cls: 'primary' })}</div>
   </div>`;
@@ -230,6 +233,7 @@ export function finalScreen(st, m, tops, extra = '') {
   </div>`;
 }
 
+export const rookieNudgeCard = () => `<section class="card why"><h3>Struggling?</h3><p>Try Rookie: a wider shot window, slower defenders and a weaker opponent. You can switch it in Settings, and the meter assist is there too.</p></section>`;
 export function championScreen(st) {
   const S = st.season, t = team(S.school);
   return `<div class="panel champ-panel" style="--tc:${t.colors.primary};--tc2:${t.colors.secondary}">
@@ -446,6 +450,7 @@ export function helpScreen(st, tab = 'controls') {
     <h3>Tip-off</h3><p>Press Shoot as the tossed ball reaches its peak to jump for it. Good timing wins more tips.</p>
     <h3>Offense</h3><p>You control whoever has the ball. Pass to find open teammates, especially cutters heading to the rim. The 35-second shot clock is on the scoreboard.</p>
     <h3>Sprint, fakes and crossovers</h3><p>Hold Sprint to run about a quarter faster; it wears your legs down, so use it in bursts. Tap Shoot quickly for a pump fake: a defender may jump at it and leave you open. Flip the stick the other way while you dribble to cross him over. Every team uses all three.</p>
+    <h3>Difficulty</h3><p><b>Rookie:</b> a wider shot window and slower defenders, and the other team plays a little weaker. <b>Varsity:</b> the standard game. <b>All-State:</b> a narrower window, sharp shooters and aggressive steals, and the other team plays a little stronger. Struggling? Try Rookie, or turn on the meter assist in Settings. Change it any time in Settings.</p>
     <h3>Defense</h3><p>You control the defender nearest the ball (marked <b>YOU</b> with a yellow chevron). Stay between your player and the rim. Time steals and blocks: reaching in can draw a foul. Switch defenders any time.</p>
     <h3>Telling teams apart</h3><p>Home players stand on a solid ring, away players on a dashed ring. Home wears light jerseys, away wears dark ones.</p>`;
   if (tab === 'rules') body = `<p>These are the game's rules. Only the 35-second shot clock is a sourced Arkansas rule; everything else is how this game plays.</p><ul class="plain bullets">
@@ -498,7 +503,7 @@ export function settingsScreen(st, saving) {
     ${seg('setMotion', [['auto', 'Follow system'], ['on', 'Reduce'], ['off', 'Full']], s.motion, 'Reduced motion')}
     ${seg('setText', [[100, '100%'], [115, '115%'], [130, '130%']], s.text, 'Text size')}
     ${seg('setTheme', [['auto', 'Default (night)'], ['light', 'Day'], ['dark', 'Night']], s.theme, 'Menu theme')}
-    ${seg('setDiff', DIFF.map((d, i) => [i, d.name]), s.difficulty, 'Difficulty')}
+    ${diffSeg(s.difficulty)}
     ${seg('setQ', [[120, '2 min'], [240, '4 min'], [480, '8 min (full)']], s.qLen, 'Quarter length')}
     ${seg('setClock', [[35, '35-second clock'], [0, 'Classic (off)']], s.shotClock, 'Shot clock')}
     ${seg('setAssist', [[1, 'On (wider window)'], [0, 'Off']], s.assist ? 1 : 0, 'Meter assist')}

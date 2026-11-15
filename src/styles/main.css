@@ -192,6 +192,8 @@ code { font-size: max(var(--fs-xs), .85em); }
 .title-panel .fine { color: inherit; opacity: .85; }
 
 /* segmented controls */
+.diffw .seg { margin-bottom: 2px; }
+.diff-hint { margin: 0 0 8px; }
 .seg { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0; }
 .seg-l { font-weight: 700; min-width: 8.5em; }
 .seg-b { min-height: 44px; padding: 8px 12px; }

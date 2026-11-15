@@ -569,7 +569,7 @@ function finalHTML(st) {
     const e = state.save.daily.days[state.daily.date], s = liveStreak(state.save.daily, state.daily.date);
     extra = `<section class="card"><h3>Daily game</h3><p>${UI.dayLabel(state.daily.date)}: ${e && e.w ? 'won' : 'lost'}, margin ${e && e.m > 0 ? '+' : ''}${e ? e.m : 0}. Streak: <b>${s}</b> day${s === 1 ? '' : 's'}.</p></section>`;
   }
-  return UI.finalScreen(st, m, tops, extra + UI.awardsCard(state.awards));
+  return UI.finalScreen(st, m, tops, (state.rookieNudge ? UI.rookieNudgeCard() : '') + extra + UI.awardsCard(state.awards));
 }
 
 // the pinned footer says when more of the panel sits below it (phones, long setup screens)
@@ -728,7 +728,20 @@ function onFinal() {
   let champion = false;
   if (state.mode === 'season') champion = finishSeasonGame();
   state.awards = recordGrowth(m, champion);
+  state.rookieNudge = strugglingNudge(m);
   go('final', false);
+}
+
+// A heavy loss on Varsity or All-State by someone who has never played a game on Rookie gets one suggestion a visit (S2-19). Nothing is saved: the career record says whether Rookie was ever tried.
+const NUDGE_MARGIN = 15;
+let nudgeShown = false;
+function strugglingNudge(m) {
+  const ut = m.user.team, w = m.winner;
+  if (nudgeShown || ut < 0 || w === ut || w < 0 || m.difficulty < 1 || m.teams[w].score - m.teams[ut].score < NUDGE_MARGIN) return false;
+  const r = cleanCareer(state.save.career).byDiff['0'];
+  if (r && r.g > 0) return false;
+  nudgeShown = true;
+  return true;
 }
 
 function endShootout() {

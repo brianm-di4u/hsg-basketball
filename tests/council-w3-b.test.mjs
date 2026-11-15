@@ -43,3 +43,30 @@ tests.push({
     t.expect(m.p[0].x - x0 <= 1.5, `and slid at most 1.5 ft (${(m.p[0].x - x0).toFixed(2)}; it was 3 ft)`);
   },
 });
+
+tests.push({
+  name: 'S1-06: a jump shooter is at the top of his jump at the meter\'s sweet spot, at the same height as before (node)',
+  node: true,
+  async run(t) {
+    const rules = await load('rules.js');
+    const sweetMs = rules.SWEET * rules.meterTime('jumper') * 1000;
+    for (const jmp of [0, 0.5, 1]) {
+      const { m, sim, step } = await soloMatch();
+      const p = m.p[0];
+      m.teams[0].roster[p.r].jmp = jmp;
+      Object.assign(p, { x: 70, z: 25, tx: 70, tz: 25 });
+      m.input.shoot = true; m.input.shootP = true; step(); m.input.shootP = false;
+      let apex = 0, apexAt = 0, released = 0, releaseY = 0;
+      for (let n = 1; n < 300 && !(released && p.y <= 0); n++) {
+        if (m.ball.state === 'held' && p.actT >= rules.SWEET * rules.meterTime('jumper')) { m.input.shoot = false; m.input.shootR = true; }
+        step(); m.input.shootR = false;
+        if (p.y > apex) { apex = p.y; apexAt = n; }
+        if (!released && m.ball.state !== 'held') { released = n; releaseY = p.y; }
+      }
+      const oldApex = (10 + 4 * jmp) ** 2 / 64;
+      t.expect(Math.abs(apexAt * 1000 / 60 - sweetMs) <= 50, `jump rating ${jmp}: the top of the jump (${Math.round(apexAt * 1000 / 60)} ms) is within 50 ms of the sweet spot (${Math.round(sweetMs)} ms); it was ${Math.round((10 + 4 * jmp) / 32 * 1000)} ms`);
+      t.expect(releaseY >= 0.9 * apex, `jump rating ${jmp}: a PERFECT release leaves from the top (${releaseY.toFixed(2)} of ${apex.toFixed(2)} ft), not from the floor`);
+      t.expect(Math.abs(apex - oldApex) <= 0.1, `jump rating ${jmp}: the jump is as high as before (${apex.toFixed(2)} ft against ${oldApex.toFixed(2)})`);
+    }
+  },
+});

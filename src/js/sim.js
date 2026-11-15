@@ -21,6 +21,7 @@ const CROSS_WINDOW = 0.3, CROSS_HOLD = 0.1, CROSS_MIN_SPEED = 5; // a reversal w
 const MOVE_ACCEL = 90;  // ft/s2 toward the target velocity (was 46: 0.33 s to top speed)
 const MOVE_BRAKE = 140; // ft/s2 once the target is the player's own spot, so a released stick stops him (was 46: a 3 ft slide)
 const MOVE_TURN = 1.5;  // acceleration multiple while the new heading opposes the velocity (was 1)
+const JUMP_V0 = 10, JUMP_V_JMP = 4; // a jump shot's launch speed in ft/s is JUMP_V0 + JUMP_V_JMP * jump rating; it sets how high he goes
 const STAT0 = () => ({ pts: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, reb: 0, ast: 0, stl: 0, blk: 0, to: 0, pf: 0, sec: 0 });
 
 // opts: {mode, home, away (team objects with roster, kit), rules:{qLen, shotClock}, seed, user (0|1|-1), difficulty, assist, crowd (team idx or -1), venue}
@@ -204,7 +205,13 @@ export function startShot(m, i) {
   p.stype = dist < 4.6 ? (reachIn >= 86 && Math.hypot(p.vx, p.vz) > 6 ? 'dunk' : 'layup') : 'jumper';
   p.act = p.stype === 'jumper' ? 'shoot' : 'layup';
   p.actT = 0; p.meter = 0;
-  if (p.stype === 'jumper') { p.vy = 10 + 4 * r.jmp; p.vx *= 0.2; p.vz *= 0.2; }
+  p.hangG = 0;
+  if (p.stype === 'jumper') {
+    // The same jump height as before (JUMP_V0 / JUMP_V_JMP), but with its top at the meter's sweet spot instead of before it (S1-06):
+    // the shooter rises more slowly and is still at the top when a PERFECT release comes, instead of already standing on the floor.
+    const apex = (JUMP_V0 + JUMP_V_JMP * r.jmp) ** 2 / (2 * G), T = SWEET * meterTime('jumper');
+    p.vy = 2 * apex / T; p.hangG = p.vy / T; p.vx *= 0.2; p.vz *= 0.2;
+  }
   else p.vy = 11 + 4 * r.jmp;
   const ai = aiOf(m, p.t);
   if (!(m.user.team === p.t && m.user.ctrl === i && !m.user.auto)) {
@@ -659,7 +666,7 @@ function integrate(m) {
     }
     p.x += p.vx * DT; p.z += p.vz * DT;
     if (p.y > 0 || p.vy > 0) {
-      p.vy -= G * DT; p.y += p.vy * DT;
+      p.vy -= (p.hangG && p.act === 'shoot' && m.ball.holder === i ? p.hangG : G) * DT; p.y += p.vy * DT; // a jump shooter still holding the ball hangs to the sweet spot
       if (p.y <= 0) { p.y = 0; p.vy = 0; if (p.act === 'jump' || p.act === 'shoot' || p.act === 'layup') { if (m.ball.holder !== i) { p.act = 'idle'; } } }
     }
     const holder = m.ball.holder === i && m.phase !== 'inbound';

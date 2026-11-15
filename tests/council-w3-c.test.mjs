@@ -56,3 +56,39 @@ tests.push({
     t.equal(s.season.w + s.season.l, 2, 'a separate click a moment later still sims the next game');
   },
 });
+
+// A phone with a notch reports its insets through env(safe-area-inset-*), which no desktop browser can set. The stylesheet reads them through
+// four custom properties on :root (--sa-t, --sa-r, --sa-b, --sa-l), so the test sets those to a notch's size and measures what moves.
+const rects = (t) => t.page.evaluate(() => {
+  const r = (s) => { const q = document.querySelector(s); if (!q || q.hidden || !q.getClientRects().length) return null; const b = q.getBoundingClientRect(); return { x: b.x, y: b.y, r: b.right, b: b.bottom }; };
+  return { stick: r('#stick'), shoot: r('#b-shoot'), pause: r('#b-pause'), mute: r('#b-mute'), sb: r('#sb'), sbPad: parseFloat(getComputedStyle(document.querySelector('#sb')).paddingTop), W: innerWidth };
+});
+const inset = (t, top, side) => t.page.evaluate(([a, b]) => { const s = document.documentElement.style; s.setProperty('--sa-t', a + 'px'); s.setProperty('--sa-l', b + 'px'); s.setProperty('--sa-r', b + 'px'); window.dispatchEvent(new Event('resize')); }, [top, side]); // a real phone has its insets from the first layout; the resize makes the page measure again
+
+tests.push({
+  name: 'S6-09: with a notch, the scoreboard clears the top inset in portrait and the stick, buttons and pause button clear the side insets in landscape',
+  viewports: ['mobile'],
+  async run(t) {
+    await t.seed(7);
+    await t.game('newGame', { mode: 'exhibition', home: 'hot-springs', away: 'lakeside', program: 'boys', user: 'home', qLen: 120, shotClock: 35, difficulty: 1, paused: true });
+    await t.waitForStable();
+    const none = await rects(t);
+    t.expect(!!none.stick && !!none.shoot && !!none.pause, 'the touch pad and the pause button are showing');
+    await inset(t, 47, 0); // an upright notch phone: the sensor housing is at the top
+    const p = await rects(t);
+    t.expect(p.sbPad - none.sbPad >= 46, `portrait: the scoreboard starts below the top inset (${(p.sbPad - none.sbPad).toFixed(0)} px of 47)`);
+    await t.shot('S6-09-portrait-inset');
+    await inset(t, 0, 0);
+    await t.page.setViewportSize({ width: 844, height: 390 });
+    await t.waitForStable();
+    const lone = await rects(t);
+    await inset(t, 0, 47); // on its side the housing is at one end and the rounded corners at both
+    const l = await rects(t);
+    t.expect(l.stick.x - lone.stick.x >= 46, `landscape: the stick moves in by the left inset (${(l.stick.x - lone.stick.x).toFixed(0)} px of 47)`);
+    t.expect(lone.shoot.r - l.shoot.r >= 46, `and the Shoot button by the right inset (${(lone.shoot.r - l.shoot.r).toFixed(0)} px)`);
+    t.expect(lone.pause.r - l.pause.r >= 46 && lone.mute.r - l.mute.r >= 46, 'and so do the pause and sound buttons');
+    t.expect(l.sb.x >= 0 && l.sb.r <= l.W, 'the scoreboard stays on the screen');
+    await t.shot('S6-09-landscape-inset');
+    await t.page.setViewportSize({ width: 390, height: 844 });
+  },
+});

@@ -172,6 +172,17 @@ export function pauseScreen(st, m, showBox) {
   </div>`;
 }
 
+// The Hot Streak pause card: the same Paused panel as a match, with the run so far in place of the box score.
+export function soPauseScreen(st, so) {
+  return `<div class="panel">
+    <h2>Paused</h2>
+    <p class="goal"><b>${so.practice ? 'Practice' : 'Hot Streak'}:</b> ${so.score} points, ${so.made} of ${so.att} made, ${Math.ceil(so.t)} seconds left.</p>
+    <p class="goal"><b>Goal:</b> make as many shots as you can before time runs out. Hold Shoot, and let go in the green.</p>
+    <nav class="menu">${btn('resume', 'Resume', { cls: 'primary' })}${btn('help', 'How to play')}${btn('settings', 'Settings')}${btn('quit', st.quitArmed ? 'Yes, quit and lose this run' : 'Quit to menu')}</nav>
+    ${st.quitArmed ? '<p class="warn" role="status">This run will be lost. Press Quit again to leave, or Resume to keep shooting.</p>' : ''}
+  </div>`;
+}
+
 export function breakScreen(m, fact) {
   const q = m.clock.q;
   const title = q === 2 ? 'Halftime' : q >= 4 ? (m.teams[0].score === m.teams[1].score ? 'Tied! Overtime next' : 'End of regulation') : `End of Q${q}`;

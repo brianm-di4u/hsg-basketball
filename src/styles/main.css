@@ -121,7 +121,7 @@ body.replay #sb, body.replay #pad { display: none; } /* the replay gets the phon
 #screen.enter .panel { animation: rise .2s ease-out; }
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 .reduced #screen.enter .panel { animation: none; }
-body[data-scene="pause"] #screen, body[data-scene="break"] #screen, body[data-scene="final"] #screen { padding-top: 76px; }
+body[data-scene="pause"] #screen, body[data-scene="soPause"] #screen, body[data-scene="break"] #screen, body[data-scene="final"] #screen { padding-top: 76px; }
 /* the champion moment and summaries stand alone: no live score bug behind them */
 body[data-scene="champion"] #sb { visibility: hidden; }
 /* (and the arena behind it stays bright: a light scrim, the crowd on its feet is the point of the moment) */

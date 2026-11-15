@@ -66,3 +66,52 @@ tests.push({
     t.equal((await t.page.evaluate(() => { const g = window.__game; return g.getState().audio.on; })), true, 'sound is still on');
   },
 });
+
+const SHOTS = '../_council/hsg-basketball/wave-3/shots';
+
+tests.push({
+  name: 'S2-04: Hot Streak has a Paused card with Resume and Quit, and the run is frozen behind it',
+  viewports: ['desktop', 'mobile'],
+  async run(t) {
+    await t.seed(5);
+    await t.game('newGame', { mode: 'shootout' });
+    const touch = t.viewport === 'mobile';
+    if (touch) await t.page.tap('#b-pause'); else await t.page.keyboard.press('KeyP');
+    let s = await t.state();
+    t.equal(s.scene, 'soPause', 'the pause control opens the pause card');
+    t.equal(s.paused, true, 'the run is paused');
+    const txt = await t.page.evaluate(() => ({ shown: !document.querySelector('#screen').hidden, text: document.querySelector('#screen').innerText, acts: [...document.querySelectorAll('#screen [data-act]')].map((b) => b.dataset.act) }));
+    t.expect(txt.shown && /Paused/.test(txt.text), 'a PAUSED card is on screen');
+    t.expect(txt.acts.includes('resume') && txt.acts.includes('quit'), 'it offers Resume and Quit');
+    const t0 = s.shootout.t;
+    await t.waitFrames(8);
+    t.equal((await t.state()).shootout.t, t0, 'the clock does not run behind the card');
+    await t.shot('s2-04-hot-streak-paused', { allowBlank: false });
+    await t.page.screenshot({ path: `${SHOTS}/S2-04-hot-streak-paused-${t.viewport}.png` });
+    await t.checkLayout();
+    // Resume (and P / Escape do the same)
+    await t.page.click('[data-act="resume"]');
+    s = await t.state();
+    t.equal(s.scene, 'shootout', 'Resume returns to the run');
+    t.equal(s.paused, false, 'and unpauses it');
+    await t.game('pause');
+    await t.page.keyboard.press('Escape');
+    s = await t.state();
+    t.equal(s.scene, 'soPause', 'Escape pauses');
+    await t.page.keyboard.press('Escape');
+    t.equal((await t.state()).scene, 'shootout', 'Escape resumes');
+    // a tab switch or blur pauses with the card, as in a match
+    await t.page.evaluate(() => window.dispatchEvent(new Event('blur')));
+    t.equal((await t.state()).scene, 'soPause', 'losing focus opens the card');
+    // Quit asks first, then goes to the menu
+    await t.page.click('[data-act="quit"]');
+    s = await t.state();
+    t.equal(s.scene, 'soPause', 'the first Quit press only asks');
+    t.expect(/lost/.test(await t.page.innerText('#screen')), 'the card says the run will be lost');
+    await t.page.click('[data-act="quit"]');
+    s = await t.state();
+    t.equal(s.scene, 'title', 'the second Quit press leaves');
+    t.equal(s.shootout, null, 'the run is gone');
+    t.equal(s.paused, false, 'and nothing stays paused');
+  },
+});

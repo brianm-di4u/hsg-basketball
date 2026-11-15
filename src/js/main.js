@@ -29,7 +29,8 @@ const state = {
   chal: null, lastOpts: null, rosterView: null, busy: 0, factSeed: 1, finalShown: false, quitArmed: false,
 };
 const IN_PLAY = new Set(['game', 'shootout']);
-const OVER_GAME = new Set(['game', 'pause', 'break', 'final', 'shootout', 'shootoutEnd', 'champion']);
+const OVER_GAME = new Set(['game', 'pause', 'soPause', 'break', 'final', 'shootout', 'shootoutEnd', 'champion']);
+const SO_SCENES = new Set(['shootout', 'soPause', 'shootoutEnd']); // the Hot Streak court: the run, its pause card and its result
 
 // ---------------------------------------------------------------- saves
 let seasonBase = seasonText(null), setupSeasonBase = null, setupSeason = null, saveNotice = '';
@@ -518,6 +519,7 @@ function screenHTML() {
     case 'roster': { const rv = state.rosterView; return UI.rosterScreen(st, rv.key, rv.program, makeRoster(rv.key, rv.program, rv.cls, rv.seed)); }
     case 'bracket': return state.season && state.season.bracket ? UI.bracketScreen(st) : '';
     case 'pause': return m ? UI.pauseScreen(st, m, state.showBox) : '';
+    case 'soPause': return state.so ? UI.soPauseScreen(st, state.so) : '';
     case 'break': return m ? UI.breakScreen(m, UI.pickFact(state.factSeed + m.clock.q)) : '';
     case 'final': return m ? finalHTML(st) : '';
     case 'champion': return UI.championScreen(st);
@@ -565,7 +567,7 @@ function moreCue(scr) {
 function render() {
   const sc = state.scene;
   document.body.dataset.scene = sc;
-  if (sc !== 'pause') state.quitArmed = false;
+  if (sc !== 'pause' && sc !== 'soPause') state.quitArmed = false;
   const scr = $('#screen');
   const html = screenHTML();
   const overlay = !IN_PLAY.has(sc);
@@ -801,16 +803,16 @@ function crowdBed(level) { excite *= Math.exp(-DT / EXCITE_TAU); setCrowd(Math.m
 function syncAudio() {
   const sc = state.scene, m = state.match;
   const inMatch = m && (sc === 'game' || sc === 'pause' || sc === 'break' || sc === 'final');
-  setScene(inMatch ? (m.venue === 'arena' ? 'arena' : 'gym') : sc === 'shootout' || sc === 'shootoutEnd' ? 'gym' : '');
-  setPaused(sc === 'pause' || (sc === 'shootout' && state.paused));
+  setScene(inMatch ? (m.venue === 'arena' ? 'arena' : 'gym') : SO_SCENES.has(sc) ? 'gym' : '');
+  setPaused(sc === 'pause' || sc === 'soPause' || (sc === 'shootout' && state.paused));
   if (sc === 'break') { excite = 0; setCrowd(CROWD_REST + CROWD_HOME * 0.3); }
-  if (!(sc === 'game' || sc === 'pause' || sc === 'shootout')) { setTension(0); tickSec = 0; }
+  if (!(sc === 'game' || sc === 'pause' || sc === 'shootout' || sc === 'soPause')) { setTension(0); tickSec = 0; }
   setMusicTrack(musicFor(sc, m));
 }
 // Which piece of music (music.js) goes with this screen. Live play has none: the crowd bed and the tension layers carry it.
 // A won game, the champion screen and a new Hot Streak best get the fanfare; a quarter break or a lost game, the quiet arrangement.
 function musicFor(sc, m) {
-  if (sc === 'game' || sc === 'pause' || (sc === 'shootout' && state.so && state.so.phase !== 'end')) return '';
+  if (sc === 'game' || sc === 'pause' || sc === 'soPause' || (sc === 'shootout' && state.so && state.so.phase !== 'end')) return '';
   if (sc === 'break') return 'breakRoom';
   if (sc === 'final') return m && (m.user.team < 0 || m.winner === m.user.team) ? 'fanfare' : 'breakRoom';
   if (sc === 'champion') return 'fanfare';
@@ -925,7 +927,7 @@ function announce(t) { if (t === lastAnnounce) t += ' '; lastAnnounce = t; const
 // ---------------------------------------------------------------- drawing
 function drawFrame(dt) {
   const sc = state.scene;
-  if (state.so && (sc === 'shootout' || sc === 'shootoutEnd')) return drawShootout(dt);
+  if (state.so && SO_SCENES.has(sc)) return drawShootout(dt);
   const m = activeMatch();
   if (m && (OVER_GAME.has(sc) || sc === 'title') && sc !== 'champion') return drawMatch(m, dt);
   // menus: a quiet court of the relevant school behind the panel
@@ -1048,7 +1050,7 @@ function updateScoreboard(force) {
   if (sb.hidden) return;
   const sc = state.scene;
   let html;
-  if (state.so && (sc === 'shootout' || sc === 'shootoutEnd')) {
+  if (state.so && SO_SCENES.has(sc)) {
     const so = state.so;
     const gauge = Math.min(6, so.streak);
     html = `<div class="sb-team"><span class="sb-name">${UI.esc(so.team.abbr)}</span><span class="sb-score" aria-label="Score">${so.score}</span></div>
@@ -1071,7 +1073,7 @@ function updateScoreboard(force) {
     const crowd = m.crowdTeam >= 0 ? `<span class="sb-crowd" role="img" aria-label="Home crowd ${Math.round(m.crowd * 100)} percent"><i style="width:${Math.round(m.crowd * 100)}%"></i></span>` : '';
     html = `${side(0)}<div class="sb-mid"><span class="sb-q">${q}</span><span class="sb-clock">${fmtClock(m.clock.t)}</span>${m.rules.shotClock ? `<span class="sb-shot" title="Shot clock">${shotTxt}</span>` : '<span class="sb-shot off">CLASSIC</span>'}${crowd}</div>${side(1)}`;
   }
-  if (html !== sbCache || force) { sbCache = html; sb.innerHTML = html; sb.classList.toggle('so', !!(state.so && (sc === 'shootout' || sc === 'shootoutEnd'))); }
+  if (html !== sbCache || force) { sbCache = html; sb.innerHTML = html; sb.classList.toggle('so', !!(state.so && SO_SCENES.has(sc))); }
 }
 const crestSrc = (T) => crestURL(T, 56);
 
@@ -1156,7 +1158,7 @@ const ACT = {
   setTips: (a) => { state.coach = null; setSetting('tipsSeen', a === '0'); },
   skipTips: () => { coachSeen(); state.coach = null; },
   tapTip: () => { if (state.coach && state.coach.cur) coachFinish(state.coach.cur); },
-  resume: () => { state.quitArmed = false; state.paused = false; go('game', false); },
+  resume: () => { state.quitArmed = false; state.paused = false; go(state.scene === 'soPause' ? 'shootout' : 'game', false); },
   pause: () => pauseGame(),
   toggleBox: () => { state.showBox = !state.showBox; render(); },
   quit: () => { if (!state.quitArmed) { state.quitArmed = true; render(); return; } state.quitArmed = false; state.match = null; state.paused = false; if (state.mode === 'season') { state.stack = ['title']; go('hub', false); } else ACT.title(); },
@@ -1166,7 +1168,7 @@ function setSetting(k, v) { state.settings[k] = v; persist({ settings: { [k]: v 
 function pauseGame() {
   if (state.replay) endReplay();
   if (state.scene === 'game') { state.paused = true; go('pause', false); }
-  else if (state.scene === 'shootout') { state.paused = !state.paused; syncAudio(); wantLoop(); }
+  else if (state.scene === 'shootout') { state.paused = true; go('soPause', false); }
 }
 
 // Tab hidden, window blurred or page leaving: stop play, drop a held shot (never fire it) and quiet the audio.
@@ -1175,7 +1177,7 @@ function interrupt() {
   suspendAudio();
   const sc = state.scene;
   if (sc === 'game' && state.match) { cancelShot(state.match); pauseGame(); }
-  else if (sc === 'shootout' && state.so) { cancelShootoutShot(state.so); if (!state.paused) pauseGame(); }
+  else if (sc === 'shootout' && state.so) { cancelShootoutShot(state.so); pauseGame(); }
 }
 
 function onClick(e) {
@@ -1194,7 +1196,7 @@ function onKey(e) {
   if (e.code === 'KeyM' && !e.repeat) { setSetting('sound', !state.settings.sound); return true; }
   if ((e.code === 'KeyP' || e.code === 'Escape') && !e.repeat) {
     if (sc === 'game' || sc === 'shootout') { pauseGame(); return true; }
-    if (sc === 'pause') { ACT.resume(); return true; }
+    if (sc === 'pause' || sc === 'soPause') { ACT.resume(); return true; }
     if (e.code === 'Escape' && ['help', 'settings', 'roster', 'bracket'].includes(sc)) { back(); return true; }
     if (e.code === 'Escape' && ['select', 'seasonSetup', 'shootoutSetup', 'challenges', 'trophies', 'daily'].includes(sc)) { ACT.title(); return true; }
   }
@@ -1315,7 +1317,8 @@ const HOOKS = {
     if (name === 'roster' && state.season) { const S = state.season; state.rosterView = { key: S.school, program: S.program, cls: S.cls, seed: S.seed }; }
     if (name === 'shootout' && !state.so) startShootout({ seed: state.seed || 1 });
     if (name === 'champion' && !state.season) return false;
-    if (name === 'pause') state.paused = true;
+    if (name === 'pause' || name === 'soPause') state.paused = true;
+    if (name === 'soPause' && !state.so) startShootout({ seed: state.seed || 1 });
     state.stack = name === 'title' ? [] : ['title'];
     go(name, false);
     return state.scene;

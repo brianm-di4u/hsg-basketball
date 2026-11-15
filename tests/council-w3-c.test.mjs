@@ -92,3 +92,30 @@ tests.push({
     await t.page.setViewportSize({ width: 390, height: 844 });
   },
 });
+
+tests.push({
+  name: 'S3-10: a simulated game scores like a played one: points a team, win chance by rating gap, margin per rating point, and the quarter length (node)',
+  node: true,
+  async run(t) {
+    const R = await load('rules.js'), U = await load('util.js'), S = await load('season.js');
+    // simScore draws from a seeded stream, so these numbers are the same every run (no chance of a failure by luck).
+    const run = (gap, qLen, N = 3000) => {
+      const o = { rs: 4242 }; let w = 0, m = 0, pts = 0;
+      for (let i = 0; i < N; i++) { const [a, b] = R.simScore(60 + gap, 60, o, U.rnd, qLen); if (a > b) w++; m += a - b; pts += (a + b) / 2; }
+      return { win: w / N, margin: m / N, pts: pts / N };
+    };
+    // Played games, 42 county pairings at 2-minute quarters (batch C report): 21 points a team, 48% + 1.4% a rating point, 0.28 margin a rating point.
+    const even = run(0), six = run(15.7), back = run(-15.7);
+    t.expect(even.pts >= 18 && even.pts <= 25, `a simulated game at the default quarter scores about what a played one does (${even.pts.toFixed(1)} a team; it was 55)`);
+    t.expect(Math.abs(even.win - 0.5) < 0.04, `equal teams win about half (${even.win.toFixed(3)})`);
+    t.expect(six.win >= 0.62 && six.win <= 0.78, `a 6A team over a 2A team wins about 70%, as in played games (${six.win.toFixed(3)}; it was 98%)`);
+    t.expect(back.win >= 0.22 && back.win <= 0.38, `and the 2A team still wins about 30% (${back.win.toFixed(3)})`);
+    const slope = six.margin / 15.7;
+    t.expect(slope >= 0.2 && slope <= 0.4, `margin grows 0.2 to 0.4 points per rating point (${slope.toFixed(2)}; it was 1.5)`);
+    const long = run(0, 4);
+    t.expect(long.pts / even.pts >= 1.8 && long.pts / even.pts <= 2.2, `twice the quarter gives about twice the points (${(long.pts / even.pts).toFixed(2)}x)`);
+    // The season passes the player's quarter length through: a season of sims at 8-minute quarters out-scores one at 2-minute quarters.
+    const total = (qSecs) => { let sum = 0; for (let seed = 1; seed <= 20; seed++) { const se = S.createSeason({ school: 'hot-springs', program: 'boys', length: 'short', seed }); const sc = S.simCurrent(se, qSecs); sum += sc[0] + sc[1]; } return sum; };
+    t.expect(total(480) > 3 * total(120), `Sim game takes the player's quarter length (${total(120)} points in 20 games at 2 minutes, ${total(480)} at 8)`);
+  },
+});

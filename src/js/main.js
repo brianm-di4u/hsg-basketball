@@ -452,7 +452,7 @@ function playSeasonGame(o = {}) {
 function finishSeasonGame() {
   const m = state.match, S = state.season, ut = m.user.team;
   const wasFinal = S.phase === 'bracket' && S.bracket.round === 2;
-  advanceSeason(() => recordResult(state.season, m.teams[ut].score, m.teams[1 - ut].score), wasFinal ? 'played' : null);
+  advanceSeason(() => recordResult(state.season, m.teams[ut].score, m.teams[1 - ut].score, state.settings.qLen), wasFinal ? 'played' : null);
   return wasFinal && !!state.season.champion;
 }
 
@@ -1202,7 +1202,7 @@ const ACT = {
   rematch: () => { state.match = startMatch(state.mode === 'daily' ? state.lastOpts : { ...state.lastOpts, seed: undefined }); enterGame(); }, // the daily game is the same game each time
   startSeason: () => startSeason(),
   playSeason: () => playSeasonGame(),
-  simSeason: () => { if (!advanceSeason(() => simCurrent(state.season), 'sim')) return; if (state.season.champion) go('champion', false); else render(); },
+  simSeason: () => { if (!advanceSeason(() => simCurrent(state.season, state.settings.qLen), 'sim')) return; if (state.season.champion) go('champion', false); else render(); },
   afterSeasonGame: () => { state.match = null; if (state.season.champion && state.season.done) go('champion', false); else { state.stack = ['title']; go('hub', false); } },
   playChallenge: (a) => { const [id, prog] = a.split('|'); startChallenge(id, prog); },
   afterChallenge: () => { const cr = state.chalResult; state.chalResult = null; if (cr && cr.more) startChallenge(state.chal.id, state.chal.program, state.chal.step + 1); else { state.match = null; state.stack = ['title']; go('challenges', false); } },

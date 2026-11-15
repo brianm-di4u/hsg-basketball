@@ -46,7 +46,7 @@ function bracketGame(S) {
 function rating(S, key) { return teamRating(teamFor(key, S.program, S.cls, S.seed).roster); }
 
 // Record the user's result for the current game (us/them points) and advance.
-export function recordResult(S, us, them) {
+export function recordResult(S, us, them, qSecs = 120) {
   const won = us > them;
   if (S.phase === 'regular') {
     const g = S.games[S.idx];
@@ -67,7 +67,7 @@ export function recordResult(S, us, them) {
     const o = { rs: hash(`${S.school}|${S.seed}|r${r}`) | 0 };
     for (const x of B.rounds[r]) {
       if (x.winner) continue;
-      const sc = simScore(rating(S, x.a), rating(S, x.b), o, rnd);
+      const sc = simScore(rating(S, x.a), rating(S, x.b), o, rnd, qSecs / 60);
       x.score = sc; x.winner = sc[0] > sc[1] ? x.a : x.b;
     }
     if (!won) { S.done = true; S.phase = 'done'; S.eliminated = ROUNDS[r]; return; }
@@ -95,11 +95,12 @@ function startBracket(S) {
 }
 
 // Sim the user's current game (returns [us, them]).
-export function simCurrent(S) {
+// qSecs: the quarter length of the player's games, so a simulated game scores like a played one.
+export function simCurrent(S, qSecs = 120) {
   const g = nextGame(S);
   const o = { rs: hash(`${S.school}|${S.seed}|sim|${S.w + S.l}`) | 0 };
   const mine = rating(S, S.school) + (g.home ? 1.5 : 0) + (g.arena ? 1 : 0);
-  const sc = simScore(mine, rating(S, g.opp), o, rnd);
-  recordResult(S, sc[0], sc[1]);
+  const sc = simScore(mine, rating(S, g.opp), o, rnd, qSecs / 60);
+  recordResult(S, sc[0], sc[1], qSecs);
   return sc;
 }

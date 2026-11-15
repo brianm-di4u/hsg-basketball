@@ -63,10 +63,14 @@ export function ftChance(ft, q) {
   return clamp(0.2 + 0.42 * ft + 0.3 * q - (q < 0.3 ? 0.12 : 0), 0.05, 0.97);
 }
 
-// Quick statistical result for simulated games (season "Sim"). Returns [a, b], never tied.
-export function simScore(ra, rb, o, rndFn, qLen = 8) {
-  const poss = Math.round(14 * qLen * 0.5 + rndFn(o) * 6);
-  const ppp = (r, opp) => clamp(0.86 + (r - opp) * 0.012 + (rndFn(o) - 0.5) * 0.12, 0.6, 1.2);
+// Quick statistical result for simulated games (season "Sim"). Returns [a, b], never tied. Calibrated against played games (S3-10): 42 pairings of
+// the county teams, 16 games each at 2-minute quarters, gave about 21 points a team, a margin of 0.28 points per rating point and a win chance of
+// 48% plus 1.4% per rating point. Sim used to give 55 points a team, 1.5 points per rating point and 98% for a 6A team over a 2A one.
+export const SIM_POSS_PER_MIN = 11;      // possessions a team gets per minute of quarter (was 7, which was 56 a game at the old default of 8-minute quarters)
+export const SIM_PPP_PER_RATING = 0.0055; // points per possession gained per rating point of advantage (was 0.012)
+export function simScore(ra, rb, o, rndFn, qLen = 2) { // qLen: minutes in a quarter (was 8; the game's own default quarter is 2)
+  const poss = Math.round(SIM_POSS_PER_MIN * qLen + rndFn(o) * 3);
+  const ppp = (r, opp) => clamp(0.86 + (r - opp) * SIM_PPP_PER_RATING + (rndFn(o) - 0.5) * 0.12, 0.6, 1.2);
   const pa = ppp(ra, rb), pb = ppp(rb, ra);
   let a = 0, b = 0;
   for (let i = 0; i < poss; i++) {

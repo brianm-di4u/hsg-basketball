@@ -63,7 +63,7 @@ button { font: inherit; color: inherit; }
 .sb-q { font: 400 .95rem/1 var(--font-display); letter-spacing: .14em; color: #E9E2D2; }
 .sb-clock { font: 700 1.75rem/1.05 var(--font-text); font-variant-numeric: tabular-nums; letter-spacing: .04em; color: #FF8A7A; text-shadow: 0 0 8px rgba(255, 90, 90, .6); }
 .sb-shot { font: 700 1.1rem/1 var(--font-text); font-variant-numeric: tabular-nums; color: #8FE3FF; text-shadow: 0 0 6px rgba(79, 195, 255, .5); }
-.sb-shot-l { display: block; font: 700 .6rem/1 var(--font-text); letter-spacing: .12em; opacity: .85; margin-bottom: 1px; text-align: center; }
+.sb-shot-l { display: block; font: 700 .82rem/1 var(--font-text); letter-spacing: .1em; opacity: .85; margin-bottom: 1px; text-align: center; }
 .sb-shot.low { color: #FF8A7A; text-shadow: 0 0 6px rgba(255, 90, 90, .6); animation: shot-low 1s ease-out; }
 @keyframes shot-low { from { transform: scale(1.18); } to { transform: scale(1); } }
 body.reduced .sb-shot.low { animation: none; }

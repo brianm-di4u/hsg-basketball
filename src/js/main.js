@@ -273,6 +273,48 @@ function coachShootout(so) {
   if (!c.done.practice) { if (c.cur !== 'practice') setCoach('practice'); c.t += DT; if (so.sh.act === 'shoot' || c.t >= COACH.practice.secs) coachFinish('practice'); }
 }
 
+// ---------------------------------------------------------------- the PA line (S4-03)
+// A short caption under the scoreboard that says what a stadium announcer would: who is starting, who has taken the lead, a run, the half.
+// It is text only (the sound is the crowd's), never takes input, and is read out through the live region with the score.
+const PA_SECS = 4, PA_INTRO_SECS = 6, PA_RUNS = [8, 12]; // seconds a line stays, seconds the starting fives stay, and the scoring runs worth a mention (called at 8 to 11 points, again at 12 or more)
+const newPA = (m) => ({ left: 0, text: '', kicker: '', intro: false, lead: Math.sign(m.teams[0].score - m.teams[1].score), run: { t: -1, pts: 0, said: 0 } });
+function paSay(text, kicker, secs = PA_SECS) {
+  const pa = state.pa, el = $('#pa'); if (!pa || !el) return;
+  pa.text = text; pa.kicker = kicker || ''; pa.left = secs;
+  $('#pa-k').textContent = pa.kicker; $('#pa-t').textContent = text; el.hidden = false;
+}
+function paHide() { const el = $('#pa'); if (el) el.hidden = true; if (state.pa) state.pa.left = 0; }
+const scoreLine = (m) => { const a = m.teams[0], b = m.teams[1]; return a.score === b.score ? `tied at ${a.score}` : a.score > b.score ? `${a.short} ${a.score}, ${b.short} ${b.score}` : `${b.short} ${b.score}, ${a.short} ${a.score}`; };
+const fiveOf = (T) => T.roster.slice(0, 5).map((r) => r.last).join(', ');
+function paTick(m) {
+  const pa = state.pa; if (!pa || m.user.team < 0) return;
+  if (!pa.intro && m.phase === 'tipoff') {
+    pa.intro = true;
+    const gym = m.venueInfo && m.venueInfo.kind === 'arena' ? FINALS.name : m.teams[0].gym;
+    const away = `${m.teams[1].short}: ${fiveOf(m.teams[1])}`, home = `${m.teams[0].short}: ${fiveOf(m.teams[0])}`;
+    paSay([away, home].join('\n'), gym ? `Welcome to ${gym}` : 'Starting fives', PA_INTRO_SECS);
+    announce(`${gym ? `Welcome to ${gym}. ` : ''}Starting fives. ${away}. ${home}.`);
+  }
+  if (pa.left > 0) {
+    pa.left -= DT; if (pa.left <= 0) { paHide(); return; }
+    const cc = $('#coach'); $('#pa').style.marginTop = cc && !cc.hidden ? `${cc.offsetHeight + 8}px` : ''; // a first-run tip sits above it
+  }
+}
+// A basket: the line to say (a run, or a change of lead), or ''.
+function paScore(m, e) {
+  const pa = state.pa; if (!pa || m.user.team < 0) return '';
+  const a = m.teams[0], b = m.teams[1], sign = Math.sign(a.score - b.score), prev = pa.lead, T = m.teams[e.t];
+  pa.lead = sign;
+  const r = pa.run; if (r.t === e.t) r.pts += e.pts; else { r.t = e.t; r.pts = e.pts; r.said = 0; }
+  const step = PA_RUNS.filter((n) => r.pts >= n && n > r.said).pop();
+  let line = '';
+  if (step) { r.said = step; line = `${T.short} on ${r.pts === 8 || r.pts === 11 ? 'an' : 'a'} ${r.pts}-0 run.`; }
+  else if (a.score + b.score === e.pts) line = `${T.short} scores first.`;
+  else if (sign !== prev) line = sign === 0 ? `Tie game, ${a.score}-${b.score}.` : `${sign > 0 ? a.short : b.short} takes the lead, ${Math.max(a.score, b.score)}-${Math.min(a.score, b.score)}.`;
+  if (line) paSay(line, 'PA');
+  return line;
+}
+
 // ---------------------------------------------------------------- career, achievements, daily game (S3-01)
 // What the user's team did in this game, tracked from the sim's events (the box score gives the totals).
 const today = () => state.dateOverride || localDate();
@@ -420,6 +462,7 @@ function enterGame() {
   state.factSeed = (state.match.seed || 1) + 3;
   state.track = newTrack(state.match); state.awards = null;
   state.coach = state.settings.tipsSeen ? null : newCoach();
+  state.pa = newPA(state.match); paHide();
   go('game', false);
 }
 
@@ -607,6 +650,7 @@ function render() {
     if (f) f.focus({ preventScroll: true });
     scr.scrollTop = 0;
   }
+  if (!IN_PLAY.has(sc) || state.paused) paHide();
   if (!IN_PLAY.has(sc) || state.paused) { const cc = $('#coach'); if (cc) cc.hidden = true; if (state.coach) { state.coach.cur = null; state.coach.t = 0; } }
   const showSB = OVER_GAME.has(sc) && (state.match || state.so);
   syncAudio();
@@ -720,6 +764,7 @@ function stepOnce() {
   matchEvents(m);
   trackScore(m);
   coachTick(m);
+  paTick(m);
   meterTick(m);
   tickClock(m);
   crowdBed(CROWD_REST + CROWD_HOME * (m.crowdTeam >= 0 ? m.crowd : 0.3) + CROWD_CLOSE * matchTension(m));
@@ -934,7 +979,7 @@ function matchEvents(m) {
         state.cheer = e.pts === 3 ? 1 : 0.75; state.cheerTeam = e.t; state.cheerAt = { m, t: m.time, x: rimFor(m.dir[e.t]) };
         // the sim says 'score' before 'swish' in the same tick: the shot type comes from this tick's swish
         { const sw = m.ev.find((x) => x.k === 'swish' && x.t === e.t); const lm = { ...(state.lastMake || {}), dunk: sw ? sw.type === 'dunk' : false, side: sw ? rimSide(rimFor(m.dir[e.t])) : (state.lastMake || {}).side }; if (e.pts === 3 || lm.dunk || lm.buzzer) { state.slam = { m, text: lm.buzzer ? 'BUZZER BEATER' : lm.dunk ? 'SLAM DUNK' : '3 POINTS', color: m.teams[e.t].colors.primary, sub: m.teams[e.t].short.toUpperCase(), at: m.time, side }; } if (e.pts === 3 || lm.dunk || lm.buzzer) queueReplay(m, lm.dunk ? 'DUNK' : lm.buzzer ? 'BUZZER BEATER' : 'THREE', lm.side ?? rimSide(m.ball.x)); state.lastMake = null; }
-        announce(`${m.teams[e.t].short} scores ${e.pts}. ${m.teams[0].short} ${m.teams[0].score}, ${m.teams[1].short} ${m.teams[1].score}.`);
+        announce(`${m.teams[e.t].short} scores ${e.pts}. ${m.teams[0].short} ${m.teams[0].score}, ${m.teams[1].short} ${m.teams[1].score}. ${paScore(m, e)}`.trim());
         break;
       }
       case 'swish': netHit(rimSide(m.ball.x)); play('swish', { pan: panAt(m, m.ball.x) }); if (e.type === 'dunk') shake(0.6); state.lastMake = { dunk: e.type === 'dunk', buzzer: !!(m.ball.shot && m.ball.shot.buzzer), side: rimSide(m.ball.x) }; break;
@@ -961,7 +1006,7 @@ function matchEvents(m) {
       case 'reb': play('reb', { pan: panAt(m, m.p[e.i].x), far: m.p[e.i].t !== m.user.team }); bump(0.1); break;
       case 'sub': play('sub', { far: e.t !== m.user.team }); break;
       case 'qend': announce(m.clock.q === 2 ? 'Halftime.' : `End of quarter ${m.clock.q}.`); break;
-      case 'period': announce(m.clock.q > 4 ? 'Overtime.' : `Quarter ${m.clock.q}.`); break;
+      case 'period': announce(m.clock.q > 4 ? 'Overtime.' : `Quarter ${m.clock.q}.`); if (state.pa && m.clock.q >= 3) paSay(`${m.clock.q > 4 ? 'Overtime' : m.clock.q === 3 ? 'Second half' : 'Fourth quarter'}: ${scoreLine(m)}.`, 'PA'); break;
       default: break;
     }
   }
@@ -1409,7 +1454,7 @@ function sumState() {
     view: R.v ? { W: R.v.W, H: R.v.H, s: +R.v.s.toFixed(2), camX: +R.v.camX.toFixed(2) } : null,
     steam: R.fx.parts.filter((p) => p.kind === 'steam').length, ventBoost: G3.vents ? G3.vents.boost : 0, shootCheer: G3.cheer,
     gfx: { mode: is3d() ? '3d' : '2d', gl: state.gl || null, ...info3d(), hq: hqInfo() },
-    hud: hudState(),
+    hud: hudState(), pa: $('#pa') && !$('#pa').hidden ? { kicker: $('#pa-k').textContent, text: $('#pa-t').textContent } : null,
     ui: { focus: document.activeElement ? (document.activeElement.dataset.act || document.activeElement.id || document.activeElement.tagName) : null },
   };
 }

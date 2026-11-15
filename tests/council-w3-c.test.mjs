@@ -521,3 +521,25 @@ tests.push({
     t.expect(good < 0.35, `and a block is still never a sure thing (${good.toFixed(3)})`);
   },
 });
+
+tests.push({
+  name: 'S3-08: the AI takes the same share of threes as before (it makes more of them, it does not shoot more of them) (node)',
+  node: true,
+  async run(t) {
+    const sim = await load('sim.js'), rost = await load('roster.js'), D = await load('data.js');
+    const mk = (key, side, program) => { const tm = D.team(key); return { ...tm, roster: rost.makeRoster(tm.key, program, tm.cls, 1), kit: D.kitFor(tm, side) }; };
+    const keys = D.COUNTY.map((c) => c.key);
+    let fga = 0, tpa = 0, tpm = 0;
+    for (let g = 0; g < 30; g++) {
+      // Seeded demo games between county teams, two AI sides: the sim's stream is fixed, so these counts are the same every run.
+      const a = keys[g % 7], b = keys[(g * 3 + 1) % 7 === g % 7 ? (g + 1) % 7 : (g * 3 + 1) % 7], program = g % 2 ? 'girls' : 'boys';
+      const m = sim.createMatch({ mode: 'demo', home: mk(a, 'home', program), away: mk(b, 'away', program), program, rules: { qLen: 60, shotClock: 35 }, seed: 2000 + g, user: -1, difficulty: 1, autoBreak: true });
+      for (let k = 0; k < 60 * 4000 && m.phase !== 'final'; k++) { sim.tick(m); m.ev.length = 0; }
+      for (const row of sim.boxScore(m)) for (const p of row) { fga += p.fga; tpa += p.tpa; tpm += p.tpm; }
+    }
+    // Measured over these 30 games: threes were 44.0% of shots and 32.0% made before S3-08; 51.1% and 37.7% with the new base and the AI valuing a three as before; 44.6% and 37.6% now.
+    const share = tpa / fga;
+    t.expect(share >= 0.40 && share <= 0.48, `threes are ${(share * 100).toFixed(1)}% of the AI's shots (44% before S3-08, 51% if the AI valued a three as it did)`);
+    t.expect(tpm / tpa >= 0.35, `and it makes ${(100 * tpm / tpa).toFixed(1)}% of them (32% before)`);
+  },
+});

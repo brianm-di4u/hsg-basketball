@@ -370,9 +370,9 @@ body.reduced .coach-dot { animation: none; }
 /* Banner Challenge stars (S3-06) */
 .stars { margin: 4px 0 8px; }
 .stars p { margin: 0 0 2px; }
-.stars .star-row { color: #FFC83D; letter-spacing: .12em; }
+.stars .star-row { color: #7A5200; letter-spacing: .12em; }
+body:not(.theme-light) .stars .star-row { color: #FFC83D; }
 .stars ul { margin: 0; }
-.stars li { color: #B9B1A0; }
-.stars li.met { color: #FFE9A8; }
+.stars li.met { font-weight: 700; }
 #sb .sb-goal.bad { color: #FF9B8A; }
 @media (max-width: 520px) { #sb .sb-goal { font-size: .78rem; } }

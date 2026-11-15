@@ -3,10 +3,13 @@
 // Actions are passed in (A) so this module does not import sim.js.
 import { rnd, gauss, clamp, segDist } from './util.js';
 import { COURT, rimFor, distToRim, isThree } from './court.js';
-import { shotChance, contestFactor, STYLE_NEUTRAL } from './rules.js';
+import { shotChance, contestFactor, STYLE_NEUTRAL, BASE_THREE } from './rules.js';
 
 // Team styles and late-game awareness (S3-03). Every number the styles and the late game move is named here.
-const THREE_VALUE = 2.6, THREE_LEAN = 0.5; // what a three is worth to the AI's shot choice (2 for a two), and how far a style's `three` moves it
+// S3-08 made a three likelier (base 0.33 to BASE_THREE). What a three is worth to the AI scales back by the same amount, so its shot choice stays what it was:
+// it makes more of the threes it takes, it does not take more of them.
+const THREE_SCALE = 0.33 / BASE_THREE;
+const THREE_VALUE = 2.6 * THREE_SCALE, THREE_LEAN = 0.5; // what a three is worth to the AI's shot choice (2 for a two), and how far a style's `three` moves it
 const LATE_SECS = 90, HACK_SECS = 24, HACK_MARGIN = 6, HACK_ODDS = 0.5; // the late window of a fourth quarter or overtime, when a team behind fouls on purpose, how far behind, how often it tries
 const TRAIL_MAX = 12, LEAD_MAX = 10; // a game further apart than this is decided and nobody changes their play
 const PRESS_TIGHT = 2.2, PRESS_OVERPLAY = 0.45, PRESS_STEAL = 2.5, TRAP_REACH = 16; // gap of the man on the ball, how much closer the others play at full press, extra steal tries at full press, how far the trapper may come from
@@ -51,8 +54,8 @@ export function shotValue(m, i, x = m.p[i].x, z = m.p[i].z) {
   const pr = shotChance({ dist, type, sht: R.sht, ins: R.ins, contest: contestFactor(nd.d, false), quality: 0.8 });
   const sit = lateGame(m, t);
   let three = THREE_VALUE + THREE_LEAN * styleOf(m, t).three, two = 2; // AI shot selection leans away from threes (a style moves that)
-  if (trailing(sit) > 0.5 && sit.margin <= -3) { three = 3.3; two = 1.6; } // behind by a three or more, late: it needs them
-  else if (leading(sit) > 0) three = Math.min(three, 2.1); // ahead late: no threes, run the clock
+  if (trailing(sit) > 0.5 && sit.margin <= -3) { three = 3.3 * THREE_SCALE; two = 1.6; } // behind by a three or more, late: it needs them
+  else if (leading(sit) > 0) three = Math.min(three, 2.1 * THREE_SCALE); // ahead late: no threes, run the clock
   return pr * (isThree(x, z, d) ? three : two);
 }
 

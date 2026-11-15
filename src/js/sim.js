@@ -28,10 +28,14 @@ const STAT0 = () => ({ pts: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, r
 export function createMatch(opts) {
   const rules = { qLen: 120, shotClock: 35, otLen: 60, bonusAt: 5, foulOut: 5, ...opts.rules };
   rules.otLen = Math.max(60, Math.round(rules.qLen / 2));
+  // The team the player faces is better on All-State and weaker on Rookie (DIFF[].edge); a demo game with no player, and the player's own team, are not touched.
+  const edge = (isUser) => (!isUser && (opts.user === 0 || opts.user === 1) ? (DIFF[opts.difficulty ?? 1] || DIFF[1]).edge || 0 : 0);
+  const EDGED = ['sht', 'ins', 'def', 'reb'];
+  const edged = (r, e) => { const o = { ...r, st: STAT0(), energy: 1, out: false }; if (e) for (const k of EDGED) o[k] = clamp(o[k] + e, 0.1, 0.97); return o; };
   const mkTeam = (src, isUser) => ({
     key: src.key, name: src.name, short: src.short, abbr: src.abbr, mascot: src.mascot, crest: src.crest, colors: src.colors,
     fictional: !!src.fictional, kit: src.kit, program: opts.program,
-    roster: src.roster.map((r) => ({ ...r, st: STAT0(), energy: 1, out: false })),
+    roster: src.roster.map((r) => edged(r, edge(isUser))),
     onCourt: [0, 1, 2, 3, 4], score: 0, tf: [0, 0, 0, 0], isUser, style: isUser ? STYLE_NEUTRAL : (src.style || STYLE_NEUTRAL),
   });
   const m = {

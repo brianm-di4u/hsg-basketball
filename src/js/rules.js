@@ -1,11 +1,14 @@
 // Pure rule math shared by the simulation and the AI. Everything here is a game rule or balance number.
 import { clamp } from './util.js';
 
+export const EDGE_ALLSTATE = 0.05; // rating points the opponent gains on All-State (was 0: the same team at every difficulty)
+export const EDGE_ROOKIE = 0.08;   // and loses on Rookie (a bigger step: at 0.05 Rookie play did not move beyond the noise of 500 games)
 export const DIFF = [
-  // rookie, varsity, all-state: AI release spread, steal aggression, contest reaction (s), user meter window scale, decision noise
-  { name: 'Rookie', sd: 0.13, steal: 0.55, react: 0.3, win: 1.35, noise: 0.35 },
-  { name: 'Varsity', sd: 0.09, steal: 1.0, react: 0.2, win: 1.0, noise: 0.22 },
-  { name: 'All-State', sd: 0.065, steal: 1.35, react: 0.13, win: 0.8, noise: 0.12 },
+  // rookie, varsity, all-state: AI release spread, steal aggression, contest reaction (s), user meter window scale, decision noise,
+  // edge: added to the opponent's shooting, finishing, defence and rebounding ratings (S3-02), so a harder game is also a better team, not only a sharper copy of it
+  { name: 'Rookie', sd: 0.13, steal: 0.55, react: 0.3, win: 1.35, noise: 0.35, edge: -EDGE_ROOKIE },
+  { name: 'Varsity', sd: 0.09, steal: 1.0, react: 0.2, win: 1.0, noise: 0.22, edge: 0 },
+  { name: 'All-State', sd: 0.065, steal: 1.35, react: 0.13, win: 0.8, noise: 0.12, edge: EDGE_ALLSTATE },
 ];
 // Team styles (S3-03): how an AI team plays. pace: 1 is today's tempo (above is quicker shots and more drives); three: leans toward
 // (+) or away from (-) the three-point shot; press: 0 none, 1 a full-court press with a trap near half court. Opponents use their style;

@@ -412,3 +412,40 @@ tests.push({
     await shot(t, 'S3-04-trophy-room-tags');
   },
 });
+
+// ---------------------------------------------------------------- S3-02 difficulty changes the opponent's roster
+const mkTeam = async (k, q = 1) => {
+  const rost = await load('roster.js');
+  return { key: k, name: k, short: k, abbr: k.slice(0, 3), mascot: 'x', crest: null, colors: { primary: '#fff', secondary: '#000' }, kit: {}, roster: rost.makeRoster(k, 'boys', 5, q) };
+};
+
+tests.push({
+  name: 'S3-02: the opponent is a better team on All-State and a weaker one on Rookie; the player\'s team, Varsity and a demo game are untouched (node)',
+  node: true,
+  async run(t) {
+    const sim = await load('sim.js'), R = await load('rules.js');
+    const home = await mkTeam('aaa'), away = await mkTeam('bbb');
+    const KEYS = ['sht', 'ins', 'def', 'reb'], OTHER = ['pas', 'hnd', 'spd', 'blk', 'ft', 'jmp'];
+    const make = (difficulty, user) => sim.createMatch({ mode: 'exhibition', home, away, seed: 7, user, difficulty, rules: { qLen: 120, shotClock: 35 } });
+    const avg = (T, k) => T.roster.reduce((a, r) => a + r[k], 0) / T.roster.length;
+    const base = Object.fromEntries(KEYS.map((k) => [k, avg(away, k)]));
+    t.expect(R.EDGE_ALLSTATE === 0.05 && R.EDGE_ROOKIE === 0.08, 'the edges are named constants: +0.05 on All-State, -0.08 on Rookie');
+    t.expect(R.DIFF[0].edge === -R.EDGE_ROOKIE && R.DIFF[1].edge === 0 && R.DIFF[2].edge === R.EDGE_ALLSTATE, 'Rookie loses it, Varsity is as before, All-State gains it');
+    for (const [d, edge] of [[2, R.EDGE_ALLSTATE], [1, 0], [0, -R.EDGE_ROOKIE]]) {
+      const m = make(d, 0);
+      for (const k of KEYS) {
+        const diff = avg(m.teams[1], k) - base[k];
+        t.expect(Math.abs(diff - edge) < 0.012, `difficulty ${d}: the opponent's ${k} moves by ${edge} (${diff.toFixed(3)}; a few players sit at the 0.97 cap)`);
+      }
+      t.expect(OTHER.every((k) => avg(m.teams[1], k) === avg(away, k)), `difficulty ${d}: passing, handling, speed, blocks, free throws and jumping are not touched`);
+      t.expect(KEYS.every((k) => avg(m.teams[0], k) === avg(home, k)), `difficulty ${d}: the player's own team is not touched`);
+    }
+    const mine = make(2, 1);
+    t.expect(KEYS.every((k) => Math.abs(avg(mine.teams[0], k) - avg(home, k) - R.EDGE_ALLSTATE) < 0.012) && KEYS.every((k) => avg(mine.teams[1], k) === avg(away, k)), 'with the player on the away side it is the home team that gets the edge');
+    const demo = make(2, -1);
+    t.expect(KEYS.every((k) => avg(demo.teams[0], k) === avg(home, k) && avg(demo.teams[1], k) === avg(away, k)), 'a demo game with no player gives neither team an edge');
+    t.expect(KEYS.every((k) => avg(away, k) === base[k]), 'the roster the game keeps for the school is not changed');
+    t.expect(make(2, 0).teams[1].roster.every((r) => KEYS.every((k) => r[k] <= 0.97 && r[k] >= 0.1)), 'no rating leaves the 0.1 to 0.97 range');
+  },
+});
+

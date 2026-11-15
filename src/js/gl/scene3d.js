@@ -628,5 +628,6 @@ export function info3d() {
   return { state: G3.state, tier: G3.tier, prof: G3.prof ? { ...G3.prof } : null, calls: i.render.calls, tris: i.render.triangles, geos: i.memory.geometries, texs: i.memory.textures, venue: G3.venueKey, frames: G3.frames,
     hqVenue: !!(G3.venue && G3.venue.hq), hqPlayers: !!G3.hqPlayers, gov: GOV.steps.slice(), crowd3d: G3.venue && G3.venue.crowd3d ? G3.venue.crowd3d.count : 0,
     anim: { mode: ANIM.clips ? ANIM.mode : 'proc', clips: ANIM.clips ? Object.keys(ANIM.clips).length : 0, msPer: ANIM.stats.players ? +(ANIM.stats.ms / ANIM.stats.players).toFixed(4) : 0, footResidCm: +(IK.maxResid * 100).toFixed(2), slips: IK.slips, locked: IK.locked, worst: IK.worst, seen: [...ANIM.seen], ballErrCm: +((G3.ballErr || 0) * 100).toFixed(2), frames: ANIM.stats.frames || 0 },
+    post: G3.post ? { dof: G3.post.hasDof, cinema: G3.post.cinema } : null,
     cam: { x: +G3.camera.position.x.toFixed(1), y: +G3.camera.position.y.toFixed(1), z: +G3.camera.position.z.toFixed(1), fov: G3.camera.fov } };
 }

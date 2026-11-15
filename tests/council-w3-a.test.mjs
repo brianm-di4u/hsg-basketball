@@ -267,3 +267,26 @@ tests.push({
     await t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/S3-17-your-banner-classic-${t.viewport}.png` });
   },
 });
+
+tests.push({
+  name: 'S4-08: a replay on a phone is not smeared by depth of field; on the big screen it keeps its cinema look',
+  viewports: ['desktop', 'mobile'],
+  initScript: () => { try { localStorage.setItem('hsg-hoops-v1', JSON.stringify({ v: 1, settings: { graphics: '3d' } })); } catch (e) { /* blocked */ } },
+  async run(t) {
+    await ready3d(t);
+    await exhibition(t, { seed: 6, home: 'hot-springs', away: 'lakeside', program: 'girls' });
+    await t.game('step', 200);
+    await hqSettled(t);
+    let g = (await t.state()).gfx;
+    t.equal(g.post.cinema, false, 'live play has no cinema effects');
+    t.equal(await t.game('act', 'replay', 'THREE', 1, 0.5), true, 'a replay starts');
+    await t.waitFrames(4);
+    g = (await t.state()).gfx;
+    t.equal(g.post.cinema, true, 'the replay camera is in cinema mode');
+    t.equal(g.tier, t.viewport === 'mobile' ? 'medium' : 'high', 'the tier is the one this screen gets');
+    t.equal(g.post.dof, t.viewport === 'desktop', t.viewport === 'mobile' ? 'no depth of field on the phone tier' : 'depth of field stays on the high tier');
+    await t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/S4-08-replay-${t.viewport}.png` });
+    await t.game('act', 'endReplay');
+    t.equal((await t.state()).gfx.post.cinema, false, 'and the effects are off again after it');
+  },
+});

@@ -3,7 +3,7 @@
 // a light contrast/saturation grade, anti-aliasing and ACES tone mapping. pmndrs postprocessing and N8AO come in
 // the vendored bundle as THREE.PP and THREE.N8AOPostPass; nothing else in the game touches them. The low tier
 // skips all of this and renders straight to the canvas.
-// Replays and close-ups (setCinema) add a depth of field focused on the subject and, on high, a camera-motion
+// Replays and close-ups (setCinema) add, on high, a depth of field focused on the subject and a camera-motion
 // blur (each pixel smeared along its screen motion since the last frame, rebuilt from depth); medium gets a vignette.
 /* global THREE */
 
@@ -48,13 +48,13 @@ export function makePost(renderer, scene, camera, tier) {
   renderer.toneMapping = THREE.NoToneMapping;
   const composer = new PP.EffectComposer(renderer, { frameBufferType: THREE.HalfFloatType, multisampling: cfg.msaa });
   composer.addPass(new PP.RenderPass(scene, camera));
-  // cinema: depth of field (and motion blur on high) in HDR, before the grade; off in live play
-  const dof = new PP.DepthOfFieldEffect(camera, { focusDistance: 30, focusRange: 12, bokehScale: tier === 'high' ? 5 : 3.5, resolutionScale: 0.5 });
-  dof.target = new THREE.Vector3();
+  // cinema: depth of field and motion blur in HDR, before the grade; off in live play. High only: on a phone (medium) the
+  // half-resolution bokeh smeared the wall text and pennants into blotches, so a replay there stays sharp and gets the vignette.
+  const dof = tier === 'high' ? new PP.DepthOfFieldEffect(camera, { focusDistance: 30, focusRange: 12, bokehScale: 5, resolutionScale: 0.5 }) : null;
+  if (dof) dof.target = new THREE.Vector3();
   const blur = tier === 'high' ? makeBlur(PP) : null;
-  const cine = new PP.EffectPass(camera, ...(blur ? [dof, blur] : [dof]));
-  cine.enabled = false;
-  composer.addPass(cine);
+  const cine = dof ? new PP.EffectPass(camera, dof, blur) : null;
+  if (cine) { cine.enabled = false; composer.addPass(cine); }
   const vig = new PP.VignetteEffect({ offset: 0.3, darkness: 0.0 });
   const bloom = new PP.BloomEffect({ luminanceThreshold: 1.05, luminanceSmoothing: 0.25, intensity: 1.1, mipmapBlur: true, radius: 0.7, resolutionScale: cfg.bloomScale });
   const grade = new PP.BrightnessContrastEffect({ brightness: 0.02, contrast: 0.08 });
@@ -67,18 +67,20 @@ export function makePost(renderer, scene, camera, tier) {
   let primed = false;
   const lastPos = new THREE.Vector3();
   return {
-    tier, composer, bloomScale: cfg.bloomScale, bloomLow: false,
+    tier, composer, bloomScale: cfg.bloomScale, bloomLow: false, hasDof: !!dof, cinema: false, // hasDof, cinema: read by the tests
+
     // the governor's first, cheapest step
     setBloomScale(k) { bloom.resolution.scale = k; this.bloomLow = true; composer.setSize(renderer.domElement.width / renderer.getPixelRatio(), renderer.domElement.height / renderer.getPixelRatio(), false); },
     // on: a replay or close-up camera; focus: the subject's world position
     setCinema(on, focus) {
-      cine.enabled = !!on;
+      this.cinema = !!on;
+      if (cine) cine.enabled = !!on;
       vig.darkness = on ? 0.45 : 0.0;
-      if (on && focus) dof.target.copy(focus);
+      if (on && focus && dof) dof.target.copy(focus);
       if (!on) primed = false;
     },
     render(dt) {
-      if (blur && cine.enabled) {
+      if (blur && cine && cine.enabled) {
         camera.updateMatrixWorld();
         vp.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
         // a cut (the camera jumped) starts clean: no smear across it

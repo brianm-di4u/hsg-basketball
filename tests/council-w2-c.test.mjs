@@ -255,22 +255,25 @@ export const tests = [
     node: true,
     async run(t) {
       const E = await engine();
-      const run = (key) => {
+      const run = (key, GAMES = 60) => {
         // 60 games a team (was 30): over 120 games the shooters-minus-grind gap is 0.13 with or without the wave-3 movement change, but at 30 games a team
         // its spread is about 0.03, so a different random stream could land it under the margin. At 60 the spread is about 0.02 and the margins below are 3 or more spreads away.
-        const GAMES = 60, style = E.D.team(key).style, r = { fga: 0, tpa: 0, stlAgainst: 0, poss: 0 };
+        const style = E.D.team(key).style, r = { fga: 0, tpa: 0, stlAgainst: 0, poss: 0 };
         for (let g = 0; g < GAMES; g++) {
           const m = playGame(E, { seed: 300 + g, away: 'lake-hamilton', style, qLen: 120, program: g % 2 ? 'girls' : 'boys' });
           r.fga += E.sums(m, 1, 'fga'); r.poss += E.sums(m, 1, 'fga') + E.sums(m, 1, 'to'); r.tpa += E.sums(m, 1, 'tpa'); r.stlAgainst += E.sums(m, 1, 'stl');
         }
         return { tpaShare: r.tpa / r.fga, poss: r.poss / GAMES, forced: r.stlAgainst / GAMES };
       };
-      const base = run('hot-springs'), shoot = run('lakeside'), grind = run('fountain-lake'), gun = run('lake-hamilton'), press = run('jessieville');
+      // The steal count is noisy (about 1.7 a game from game to game), so the balanced team and the press team are each measured over 150 games. Wave 3, batch C measured
+      // the press effect over 150 games on the batch-start code too: 1.13 times the steals (2.89 against 2.55 a game), so a 1.15 line was only ever passed by the luck of a
+      // 60-game stream. The line is 1.08: the press steals clearly more, by about what it always has (1.13 now, 3.25 against 2.87).
+      const base = run('hot-springs', 150), shoot = run('lakeside'), grind = run('fountain-lake'), gun = run('lake-hamilton'), press = run('jessieville', 150);
       t.log(`balanced ${JSON.stringify(base)}; shooters ${JSON.stringify(shoot)}; grind ${JSON.stringify(grind)}; run and gun ${JSON.stringify(gun)}; press ${JSON.stringify(press)}`);
       t.expect(shoot.tpaShare > base.tpaShare + 0.05, `Perimeter shooters take more threes (${shoot.tpaShare.toFixed(2)} vs ${base.tpaShare.toFixed(2)})`);
       t.expect(shoot.tpaShare > grind.tpaShare + 0.05, `and more than Grind it out (${grind.tpaShare.toFixed(2)})`);
       t.expect(gun.poss > grind.poss * 1.05, `Run and gun gets up more shots than Grind it out (${gun.poss.toFixed(1)} vs ${grind.poss.toFixed(1)} shots and turnovers a game)`);
-      t.expect(press.forced > base.forced * 1.15, `a full-court press steals the ball more (${press.forced.toFixed(2)} vs ${base.forced.toFixed(2)} steals a game)`);
+      t.expect(press.forced > base.forced * 1.08, `a full-court press steals the ball more (${press.forced.toFixed(2)} vs ${base.forced.toFixed(2)} steals a game)`);
     },
   },
   {
@@ -344,7 +347,8 @@ export const tests = [
     node: true,
     async run(t) {
       const E = await engine();
-      const rate = (home, away) => { let w = 0; for (let g = 0; g < 60; g++) { const m = playGame(E, { seed: 900 + g, home, away, qLen: 120, program: g % 2 ? 'girls' : 'boys' }); if (m.teams[0].score > m.teams[1].score) w++; } return w / 60; };
+      // 240 games a direction (was 60): the true rate is about 69 percent, and over 60 games one stream or another lands under the 60 percent line (57 percent was seen); over 240 the spread is 3 points.
+      const rate = (home, away) => { let w = 0; for (let g = 0; g < 240; g++) { const m = playGame(E, { seed: 900 + g, home, away, qLen: 120, program: g % 2 ? 'girls' : 'boys' }); if (m.teams[0].score > m.teams[1].score) w++; } return w / 240; };
       const big = rate('lake-hamilton', 'mountain-pine'), small = rate('mountain-pine', 'lake-hamilton');
       t.log(`6A user vs 2A ${(big * 100).toFixed(0)} percent; 2A user vs 6A ${(small * 100).toFixed(0)} percent`);
       t.expect(big >= 0.6 && big <= 0.85, `the 6A user wins ${(big * 100).toFixed(0)} percent of games against a 2A team`);

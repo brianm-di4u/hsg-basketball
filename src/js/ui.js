@@ -198,12 +198,31 @@ export function breakScreen(m, fact) {
 
 // Where a game was played: the finals arena, or the home team's gym when the research confirmed its name.
 const placeOf = (m) => (m.venueInfo && m.venueInfo.kind === 'arena' ? FINALS.name : (m.teams[0].gym || ''));
+// What most decided a loss (S2-09): the box-score gap that is largest against the player's team, with one thing to try.
+// Returns null unless the player lost. A gap counts when it clears its own floor; if none does, the loss was spread out.
+export function whyLost(m) {
+  const ut = m.user.team, w = m.winner;
+  if (ut < 0 || w === ut || w == null) return null;
+  const sum = (t, k) => m.teams[t].roster.reduce((x, r) => x + r.st[k], 0);
+  const us = { to: sum(ut, 'to'), reb: sum(ut, 'reb'), pf: sum(ut, 'pf'), fgm: sum(ut, 'fgm'), fga: sum(ut, 'fga') };
+  const them = { to: sum(w, 'to'), reb: sum(w, 'reb'), pf: sum(w, 'pf'), fgm: sum(w, 'fgm'), fga: sum(w, 'fga') };
+  const pct = (o) => (o.fga ? Math.round(100 * o.fgm / o.fga) : 0);
+  const found = [
+    { gap: (us.to - them.to) / 3, why: `You turned it over ${us.to} times to their ${them.to}.`, tip: 'Pass to the open teammate before a defender closes in.', ok: us.to - them.to >= 3 },
+    { gap: (them.reb - us.reb) / 4, why: `They won the boards, ${them.reb} to ${us.reb}.`, tip: 'After a miss, get under the rim before they do.', ok: them.reb - us.reb >= 4 },
+    { gap: (pct(them) - pct(us)) / 10, why: `They shot ${pct(them)}% to your ${pct(us)}%.`, tip: 'Take the open look, and let go in the green.', ok: us.fga >= 8 && pct(them) - pct(us) >= 10 },
+    { gap: (us.pf - them.pf) / 4, why: `You committed ${us.pf} fouls to their ${them.pf}.`, tip: 'Stay in front of the shooter instead of reaching in.', ok: us.pf - them.pf >= 4 },
+  ].filter((c) => c.ok).sort((a, b) => b.gap - a.gap);
+  return found[0] ? { why: found[0].why, tip: found[0].tip } : { why: 'No one number decided it.', tip: 'Stay patient and take the open shot.' };
+}
+const whyCard = (m) => { const y = whyLost(m); return y ? `<section class="card why"><h3>Why it slipped</h3><p>${esc(y.why)}</p><p class="fine">Try: ${esc(y.tip)}</p></section>` : ''; };
 export function finalScreen(st, m, tops, extra = '') {
   const w = m.winner, ut = m.user.team;
   const head = ut < 0 ? `${esc(m.teams[w].short)} win` : w === ut ? 'You win!' : `${esc(m.teams[w].short)} win`;
   return `<div class="panel">
     <p class="kicker">Final${m.clock.q > 4 ? (m.clock.q > 5 ? ` (${m.clock.q - 4} OT)` : ' (OT)') : ''}${placeOf(m) ? ` · ${esc(placeOf(m))}` : ''}</p>
     <h2>${head}</h2>${scoreLine(m)}
+    ${whyCard(m)}
     <section class="card tops"><h3>Top performers</h3>${tops.map((t) => `<p><b>${esc(t.team)}:</b> #${t.num} ${esc(t.name)} · ${t.pts} pts, ${t.reb} reb, ${t.ast} ast</p>`).join('')}<p class="fine">All players are fictional.</p></section>
     ${extra}
     ${boxTable(m, ut >= 0 ? ut : w)}

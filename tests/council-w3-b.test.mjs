@@ -91,3 +91,54 @@ tests.push({
     await t.page.keyboard.up('Space');
   },
 });
+
+// A finished match reduced to what whyLost reads: two rosters of box-score lines, the user's team and the winner.
+const fakeMatch = (user, winner, a, b) => ({ user: { team: user }, winner, teams: [a, b].map((st) => ({ roster: [{ st: { to: 0, reb: 0, pf: 0, fgm: 0, fga: 0, ...st } }, { st: { to: 0, reb: 0, pf: 0, fgm: 0, fga: 0 } }] })) });
+
+tests.push({
+  name: 'S2-09: the final screen names the biggest gap behind a loss, with one thing to try, and says nothing after a win (node)',
+  node: true,
+  async run(t) {
+    const { whyLost } = await load('ui.js');
+    const lost = (us, them) => whyLost(fakeMatch(0, 1, us, them));
+    t.equal(whyLost(fakeMatch(0, 0, { to: 9 }, { to: 1 })), null, 'a win gets no Why');
+    t.equal(whyLost(fakeMatch(-1, 1, { to: 9 }, { to: 1 })), null, 'a game with no player gets no Why');
+    let y = lost({ to: 9 }, { to: 3 });
+    t.expect(/turned it over 9 times to their 3/.test(y.why) && /Pass/.test(y.tip), `turnovers: ${y.why} / ${y.tip}`);
+    y = lost({ reb: 8 }, { reb: 15 });
+    t.expect(/won the boards, 15 to 8/.test(y.why) && /rim/.test(y.tip), `rebounds: ${y.why} / ${y.tip}`);
+    y = lost({ fgm: 4, fga: 20 }, { fgm: 9, fga: 20 });
+    t.expect(/shot 45% to your 20%/.test(y.why) && /green/.test(y.tip), `shooting: ${y.why} / ${y.tip}`);
+    y = lost({ pf: 9 }, { pf: 3 });
+    t.expect(/9 fouls to their 3/.test(y.why) && /reaching/.test(y.tip), `fouls: ${y.why} / ${y.tip}`);
+    y = lost({ to: 6, reb: 10 }, { to: 3, reb: 20 });
+    t.expect(/boards/.test(y.why), 'when two gaps count, the larger one (boards, 2.5 steps; turnovers 1) is named');
+    y = lost({ to: 4, reb: 8, fgm: 6, fga: 20, pf: 4 }, { to: 3, reb: 10, fgm: 7, fga: 20, pf: 3 });
+    t.expect(/No one number/.test(y.why), 'a loss with no gap past its floor is called spread out');
+    y = lost({ fgm: 1, fga: 4 }, { fgm: 4, fga: 4 });
+    t.expect(!/shot/.test(y.why), 'shooting percentages from fewer than 8 attempts are not blamed');
+  },
+});
+
+tests.push({
+  name: 'S2-09: a lost final shows the Why card and a won one does not',
+  viewports: ['desktop', 'mobile'],
+  async run(t) {
+    await exhibition(t, { seed: 61 });
+    await stepUntil(t, (x) => x.match.phase === 'live', 600, 10, 'live');
+    await t.game('setState', { match: { q: 4, t: 0.5, score: [30, 44] } });
+    let s = await stepUntil(t, (x) => x.scene === 'final', 600, 10, 'final');
+    t.equal(s.match.winner, 1, 'the player lost');
+    const card = await t.page.locator('#screen .card.why');
+    t.equal(await card.count(), 1, 'one Why card');
+    const txt = await card.innerText();
+    t.expect(/Why it slipped/.test(txt) && /Try:/.test(txt), `it names a reason and a try: ${txt.replace(/\n/g, ' ')}`);
+    await t.checkLayout();
+    await t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/S2-09-why-card-${t.viewport}.png` });
+    await exhibition(t, { seed: 61 });
+    await stepUntil(t, (x) => x.match.phase === 'live', 600, 10, 'live');
+    await t.game('setState', { match: { q: 4, t: 0.5, score: [44, 30] } });
+    s = await stepUntil(t, (x) => x.scene === 'final', 600, 10, 'final');
+    t.equal(await t.page.locator('#screen .card.why').count(), 0, 'a win has none');
+  },
+});

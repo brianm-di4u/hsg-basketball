@@ -236,7 +236,8 @@ tests.push({
     const rules = await load('rules.js');
     const c = (o) => rules.shotChance({ dist: 24, type: 'jumper', sht: 0.55, ins: 0.55, ...o });
     const ai = { perfect: c({ quality: 1 }), good: c({ quality: 0.75 }), late: c({ quality: 0.3 }), contested: c({ quality: 1, contest: 0.62 }) };
-    t.expect(Math.abs(ai.perfect - 0.459) < 0.002 && Math.abs(ai.good - 0.34) < 0.002 && Math.abs(ai.contested - 0.284) < 0.002, `the AI's numbers are as before (${ai.perfect.toFixed(3)}, ${ai.good.toFixed(3)}, ${ai.contested.toFixed(3)})`);
+    const k = rules.BASE_THREE / 0.33; // S3-08 raised the three-point base from 0.33: the AI's timing multipliers are what this checks, so scale by it
+    t.expect(Math.abs(ai.perfect - 0.459 * k) < 0.002 && Math.abs(ai.good - 0.34 * k) < 0.002 && Math.abs(ai.contested - 0.284 * k) < 0.002, `the AI's timing numbers are as before, scaled by the new three-point base (${ai.perfect.toFixed(3)}, ${ai.good.toFixed(3)}, ${ai.contested.toFixed(3)})`);
     const hu = { perfect: c({ quality: 1, human: true }), good: c({ quality: 0.75, human: true }), late: c({ quality: 0.3, human: true }), contested: c({ quality: 1, contest: 0.62, human: true }) };
     t.expect(hu.perfect >= 0.55, `a PERFECT open three at an average rating goes in at least 55% (${hu.perfect.toFixed(3)}; it was 46%)`);
     t.expect(hu.contested >= 0.45, `a contested PERFECT three goes in at least 45% (${hu.contested.toFixed(3)}; it was 28%)`);

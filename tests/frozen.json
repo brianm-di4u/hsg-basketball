@@ -3,7 +3,7 @@
   "files": {
     "src/js/sim.js": "bc0aba24a28b4421c687bf751666bd1081e9724080924f84e265cd6385564750",
     "src/js/ai.js": "ad9cc2c68a8fcc6f032ee0039723f13aa0d8ddebce40ad9551a2c0794600d15c",
-    "src/js/rules.js": "7eef16b98c43c3ab7b147a1570b6dde6ca001e54234a1dd87bff3efbe8f6ff9e",
+    "src/js/rules.js": "7af7ac9c9d0b44cb8f797359cecd197e31471ba7784ac9945e98643b2452a5a3",
     "src/js/season.js": "4109e89519225c08cb8404d30161907825321d508b5b477059aa927a737272c5"
   }
 }

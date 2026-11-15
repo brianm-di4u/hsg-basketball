@@ -40,13 +40,18 @@ export const HUMAN_PERFECT_MULT = 1.75;  // the player's PERFECT (was 1.35)
 export const HUMAN_GOOD_MULT = 0.78;     // the player's GOOD (was 1)
 export const HUMAN_PERFECT_RELIEF = 0.5; // the share of the contest penalty the player's PERFECT cancels (was 0)
 
+// Base make chance by shot (S3-08): a drive and finish at the rim paid far more than anything from the perimeter, so a three is a little likelier
+// and a dunk a little less likely. The AI rates its shots through the same function, so its choices move with these numbers.
+export const BASE_DUNK = 0.82;  // was 0.9
+export const BASE_THREE = 0.36; // was 0.33 (at 24 ft, falling 0.035 a foot beyond)
+
 export function shotChance({ dist, type, sht, ins, contest = 1, quality = 0.75, energy = 1, bonus = 1, human = false }) {
   let base;
-  if (type === 'dunk') base = 0.9;
+  if (type === 'dunk') base = BASE_DUNK;
   else if (type === 'layup') base = 0.72;
   else if (dist < 10) base = 0.5;
   else if (dist < 19.75) base = 0.44;
-  else base = 0.33 - Math.max(0, dist - 24) * 0.035;
+  else base = BASE_THREE - Math.max(0, dist - 24) * 0.035;
   const rating = type === 'layup' || type === 'dunk' ? ins : sht;
   const skill = 0.7 + 0.6 * rating;
   const timing = quality >= 1 ? (human ? HUMAN_PERFECT_MULT : PERFECT_MULT) : quality >= 0.75 ? (human ? HUMAN_GOOD_MULT : 1) : 0.3 + quality * 0.8;

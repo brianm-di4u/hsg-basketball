@@ -162,11 +162,12 @@ export function boxTable(m, t) {
 }
 const scoreLine = (m) => `<div class="final-score"><span>${crest(m.teams[0], 40)}<b>${esc(m.teams[0].short)}</b><em>${m.teams[0].score}</em></span><span>${crest(m.teams[1], 40)}<b>${esc(m.teams[1].short)}</b><em>${m.teams[1].score}</em></span></div>`;
 
+const soundLabel = (st) => (st.settings.sound ? 'Sound: On' : 'Sound: Off');
 export function pauseScreen(st, m, showBox) {
   return `<div class="panel">
     <h2>Paused</h2>${scoreLine(m)}
     <p class="goal"><b>Goal:</b> score more than the other team. Hold Shoot, and let go in the green.</p>
-    <nav class="menu">${btn('resume', 'Resume', { cls: 'primary' })}${btn('toggleBox', showBox ? 'Hide box score' : 'Box score')}${btn('help', 'How to play')}${btn('settings', 'Settings')}${btn('quit', st.quitArmed ? 'Yes, quit and lose this game' : st.mode === 'season' ? 'Quit game (not recorded)' : 'Quit to menu')}</nav>
+    <nav class="menu">${btn('resume', 'Resume', { cls: 'primary' })}${btn('toggleBox', showBox ? 'Hide box score' : 'Box score')}${btn('help', 'How to play')}${btn('settings', 'Settings')}${btn('toggleSound', soundLabel(st))}${btn('quit', st.quitArmed ? 'Yes, quit and lose this game' : st.mode === 'season' ? 'Quit game (not recorded)' : 'Quit to menu')}</nav>
     ${st.quitArmed ? `<p class="warn" role="status">${st.mode === 'season' ? 'This game will be lost and is not recorded. You can play it again from the season hub.' : 'This game will be lost. Press Quit again to leave, or Resume to keep playing.'}</p>` : ''}
     ${showBox ? teamTotals(m) + boxTable(m, m.user.team >= 0 ? m.user.team : 0) : ''}
   </div>`;
@@ -178,7 +179,7 @@ export function soPauseScreen(st, so) {
     <h2>Paused</h2>
     <p class="goal"><b>${so.practice ? 'Practice' : 'Hot Streak'}:</b> ${so.score} points, ${so.made} of ${so.att} made, ${Math.ceil(so.t)} seconds left.</p>
     <p class="goal"><b>Goal:</b> make as many shots as you can before time runs out. Hold Shoot, and let go in the green.</p>
-    <nav class="menu">${btn('resume', 'Resume', { cls: 'primary' })}${btn('help', 'How to play')}${btn('settings', 'Settings')}${btn('quit', st.quitArmed ? 'Yes, quit and lose this run' : 'Quit to menu')}</nav>
+    <nav class="menu">${btn('resume', 'Resume', { cls: 'primary' })}${btn('help', 'How to play')}${btn('settings', 'Settings')}${btn('toggleSound', soundLabel(st))}${btn('quit', st.quitArmed ? 'Yes, quit and lose this run' : 'Quit to menu')}</nav>
     ${st.quitArmed ? '<p class="warn" role="status">This run will be lost. Press Quit again to leave, or Resume to keep shooting.</p>' : ''}
   </div>`;
 }

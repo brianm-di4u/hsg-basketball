@@ -115,3 +115,53 @@ tests.push({
     t.equal(s.paused, false, 'and nothing stays paused');
   },
 });
+
+const rect = (t, sel) => t.page.evaluate((s) => { const e = document.querySelector(s); if (!e || e.hidden || !e.getClientRects().length) return null; const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; }, sel);
+const apart = (a, b) => a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y;
+
+tests.push({
+  name: 'S2-25, S5-10: a speaker button beside Pause mutes in play, and the pause cards have a Sound row; both are the saved Sound setting',
+  viewports: ['desktop', 'mobile'],
+  async run(t) {
+    await exhibition(t, { seed: 4 });
+    const mute = await rect(t, '#b-mute'), pause = await rect(t, '#b-pause');
+    t.expect(mute && pause, 'the speaker and pause buttons are both on screen in play');
+    t.expect(mute.w >= 44 && mute.h >= 44, `the speaker is at least 44 px (${mute.w}x${mute.h})`);
+    t.expect(apart(mute, pause), 'the speaker does not overlap the pause button');
+    const stage = await rect(t, '#stage');
+    t.expect(mute.x >= stage.x && mute.x + mute.w <= stage.x + stage.w && mute.y >= stage.y && mute.y + mute.h <= stage.y + stage.h, 'and sits inside the stage');
+    t.equal(await t.page.getAttribute('#b-mute', 'aria-pressed'), 'true', 'Sound is on at the start, and the button says so');
+    await t.shot('s2-25-speaker-in-play');
+    await t.page.screenshot({ path: `${SHOTS}/S2-25-speaker-in-play-${t.viewport}.png` });
+    if (t.viewport === 'mobile') await t.page.tap('#b-mute'); else await t.page.click('#b-mute');
+    let s = await t.state();
+    t.equal(s.settings.sound, false, 'one press turns sound off');
+    t.equal(s.audio.on, false, 'the audio is off');
+    t.equal(await t.page.getAttribute('#b-mute', 'aria-pressed'), 'false', 'the button shows it is off');
+    t.equal(s.scene, 'game', 'and play carries on (no card opens)');
+    await t.shot('s2-25-speaker-off');
+    await t.page.screenshot({ path: `${SHOTS}/S2-25-speaker-off-${t.viewport}.png` });
+    await t.page.keyboard.press('KeyM');
+    t.equal((await t.state()).settings.sound, true, 'the M key still toggles the same setting');
+    await t.page.click('#b-mute');
+    await t.reload();
+    t.equal((await t.state()).settings.sound, false, 'the choice is saved with the settings');
+    // the pause card
+    await t.game('scene', 'pause');
+    t.expect(/Sound: Off/.test(await t.page.innerText('#screen')), 'the pause card says Sound: Off');
+    await t.page.click('[data-act="toggleSound"]');
+    s = await t.state();
+    t.equal(s.settings.sound, true, 'its Sound button turns sound back on');
+    t.expect(/Sound: On/.test(await t.page.innerText('#screen')), 'and the card now says Sound: On');
+    await t.shot('s2-25-pause-card');
+    await t.page.screenshot({ path: `${SHOTS}/S2-25-pause-card-${t.viewport}.png` });
+    await t.checkLayout();
+    // Hot Streak has the same two
+    await t.game('newGame', { mode: 'shootout' });
+    t.expect(!!(await rect(t, '#b-mute')), 'the speaker is there in Hot Streak');
+    await t.game('scene', 'soPause');
+    t.expect(/Sound: On/.test(await t.page.innerText('#screen')), 'and so is the Sound row on its pause card');
+    await t.game('scene', 'title');
+    t.equal(await rect(t, '#b-mute'), null, 'the speaker is not on the title');
+  },
+});

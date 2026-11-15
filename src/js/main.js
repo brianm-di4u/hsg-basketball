@@ -587,6 +587,7 @@ function render() {
   syncAudio();
   $('#sb').hidden = !showSB;
   $('#b-pause').hidden = !IN_PLAY.has(sc);
+  const mute = $('#b-mute'); mute.hidden = !IN_PLAY.has(sc); mute.setAttribute('aria-pressed', String(!!state.settings.sound));
   $('#pad').hidden = !(IN_PLAY.has(sc) && touchOn());
   $('#pad').classList.toggle('so', sc === 'shootout');
   setEnabled(IN_PLAY.has(sc));
@@ -1161,6 +1162,7 @@ const ACT = {
   resume: () => { state.quitArmed = false; state.paused = false; go(state.scene === 'soPause' ? 'shootout' : 'game', false); },
   pause: () => pauseGame(),
   toggleBox: () => { state.showBox = !state.showBox; render(); },
+  toggleSound: () => setSetting('sound', !state.settings.sound),
   quit: () => { if (!state.quitArmed) { state.quitArmed = true; render(); return; } state.quitArmed = false; state.match = null; state.paused = false; if (state.mode === 'season') { state.stack = ['title']; go('hub', false); } else ACT.title(); },
   continueGame: () => { const m = state.match; startNextPeriod(m); state.paused = false; go('game', false); },
 };
@@ -1214,6 +1216,7 @@ function boot() {
   document.addEventListener('pointerdown', () => unlock(), { passive: true });
   document.addEventListener('touchend', () => unlock(), { passive: true }); // iOS only lets a context resume from a finished touch
   $('#b-pause').addEventListener('click', () => pauseGame());
+  $('#b-mute').addEventListener('click', () => setSetting('sound', !state.settings.sound));
   window.addEventListener('resize', () => { layout(); wantLoop(); });
   window.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') setTouchSeen(true); }, { capture: true, passive: true });
   window.addEventListener('keydown', () => setTouchSeen(false), { capture: true, passive: true });

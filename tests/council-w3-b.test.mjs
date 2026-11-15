@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { exhibition, stepUntil } from './helpers.mjs';
 
 const game = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -68,5 +69,25 @@ tests.push({
       t.expect(releaseY >= 0.9 * apex, `jump rating ${jmp}: a PERFECT release leaves from the top (${releaseY.toFixed(2)} of ${apex.toFixed(2)} ft), not from the floor`);
       t.expect(Math.abs(apex - oldApex) <= 0.1, `jump rating ${jmp}: the jump is as high as before (${apex.toFixed(2)} ft against ${oldApex.toFixed(2)})`);
     }
+  },
+});
+
+tests.push({
+  name: 'S1-08: a replay plays at the speed of play, about 2 s, and the press that skips it still reaches the game',
+  viewports: ['desktop', 'mobile'],
+  async run(t) {
+    await exhibition(t, { seed: 5 });
+    await stepUntil(t, (x) => x.match.phase === 'live', 600, 10, 'live');
+    await t.game('step', 150);
+    t.expect(await t.game('act', 'replay', 'THREE', 1), 'a replay starts from the recorded frames');
+    let s = await t.state();
+    t.expect(s.replay && s.replay.speed >= 1, `it plays at normal speed or faster (${s.replay && s.replay.speed}); it was half speed`);
+    const secs = s.replay.n / 60 / s.replay.speed;
+    t.expect(secs <= 2.6 && secs >= 1, `and lasts about 2 s (${secs.toFixed(1)} s); it was 4.3 s`);
+    await t.page.keyboard.down('Space');
+    s = await t.state();
+    t.equal(s.replay, null, 'a key skips the replay');
+    t.expect(s.input.shoot, 'and that same press is not swallowed: Shoot is held');
+    await t.page.keyboard.up('Space');
   },
 });

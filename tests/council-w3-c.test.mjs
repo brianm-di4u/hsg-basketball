@@ -35,3 +35,24 @@ tests.push({
     t.expect(gap < 0.41, `a contested layup beats a contested three by less than 0.41 points (${gap.toFixed(2)}; it was 0.41)`);
   },
 });
+
+tests.push({
+  name: 'S6-08: a double click on Start season or Sim game counts once; a second, separate click still counts',
+  viewports: ['desktop', 'mobile'],
+  async run(t) {
+    await t.seed(5);
+    await click(t, 'seasonSetup');
+    await t.page.dblclick('[data-act="startSeason"]');
+    let s = await waitFor(t, (x) => x.scene === 'hub', 4000, 'the season hub');
+    t.equal(s.season.w + s.season.l, 0, 'a double click on Start season did not also play a game on the hub that replaced it');
+    await t.page.waitForFunction(() => window.__game.isIdle(), null, { timeout: 8000 });
+    await t.page.dblclick('[data-act="simSeason"]');
+    s = await t.state();
+    t.equal(s.season.w + s.season.l, 1, 'a double click on Sim game recorded one game (it recorded two)');
+    t.equal(s.season.idx, 1, 'and moved the schedule on by one');
+    await t.page.waitForTimeout(450); // past the window of a double click: this is a second, deliberate click
+    await click(t, 'simSeason');
+    s = await t.state();
+    t.equal(s.season.w + s.season.l, 2, 'a separate click a moment later still sims the next game');
+  },
+});

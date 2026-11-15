@@ -1260,13 +1260,19 @@ function padFrame(ts) {
 }
 const startPad = () => { if (!padRaf) padRaf = requestAnimationFrame(padFrame); };
 
+// A season game cannot be undone, and the screen after one redraws the same button under the player's finger: the second click of a double
+// click or double tap (a click count above 1, within ONCE_MS of the act) is ignored (S6-08). Slow, deliberate clicks and keys are never held back.
+const ONCE_MS = 350, ONCE_ACTS = new Set(['simSeason', 'playSeason', 'startSeason']);
+let onceAt = -1e9;
 function onClick(e) {
   const b = e.target.closest('[data-act]');
   if (!b || b.disabled) return;
   unlock();
+  if (ONCE_ACTS.has(b.dataset.act)) { const now = performance.now(); if (e.detail > 1 && now - onceAt < ONCE_MS) return; onceAt = now; }
   play('click');
   const f = ACT[b.dataset.act];
   try { if (f) f(b.dataset.arg); } catch (err) { fail(err); }
+  if (ONCE_ACTS.has(b.dataset.act)) onceAt = performance.now(); // counted from the end: a slow redraw must not use up the window
 }
 
 function onKey(e) {

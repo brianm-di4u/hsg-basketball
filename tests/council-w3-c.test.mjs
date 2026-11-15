@@ -119,3 +119,91 @@ tests.push({
     t.expect(total(480) > 3 * total(120), `Sim game takes the player's quarter length (${total(120)} points in 20 games at 2 minutes, ${total(480)} at 8)`);
   },
 });
+
+// ---------------------------------------------------------------- S5-17 stings (audio is checked by measurement: audioRender builds a cue on an OfflineAudioContext at Medium volume)
+const render = (t, name, seconds, opt = {}) => t.page.evaluate(([n, s, o]) => window.__game.audioRender(n, s, false, o), [name, seconds, opt]);
+const gesture = async (t) => { await t.page.mouse.click(4, 4); await t.page.waitForFunction(() => window.__game.getState().audio.state === 'running', null, { timeout: 8000 }); };
+const count = async (t, name) => ((await t.state()).audio.count[name] || 0);
+
+tests.push({
+  name: 'S5-17: the challenge and trophy stings are inside the cue range, never clip under the busiest moment, and differ from the win and achievement cues',
+  viewports: ['desktop'],
+  async run(t) {
+    const list = await t.page.evaluate(() => window.__game.audioList());
+    for (const c of ['challenge', 'trophy']) {
+      t.expect(list.cues.includes(c), `${c} is a listed cue`);
+      const peaks = [];
+      for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) peaks.push((await render(t, 'cue:' + c, 3, { seed })).peak);
+      peaks.sort((a, b) => a - b);
+      const median = peaks[Math.floor(peaks.length / 2)];
+      t.expect(median >= 0.2 && median <= 0.45, `${c}: the median repeat peaks ${median} (want 0.2 to 0.45)`);
+      t.expect(peaks[0] >= 0.17 && peaks[peaks.length - 1] <= 0.5, `${c}: no repeat is more than 1.5 dB outside the range (${peaks[0]} to ${peaks[peaks.length - 1]})`);
+      // The busiest moment: the arena crowd roaring, the fanfare music under it, every volume at its High step.
+      for (const seed of [1, 2, 3, 4, 5]) {
+        const r = await render(t, 'arena', 4, { crowd: 1, vol: 0.8, music: 'fanfare', mixCue: c, seed, cue: { big: true, mine: true } });
+        t.expect(r.peak < 0.95, `${c} + arena crowd + fanfare at High, seed ${seed}: peak ${r.peak} is under 0.95`);
+      }
+    }
+    const rms = async (c) => (await render(t, 'cue:' + c, 3, { seed: 3 })).rms;
+    const [a, b, w, ach] = [await rms('challenge'), await rms('trophy'), await rms('win'), await rms('achieve')];
+    t.expect(new Set([a, b, w, ach]).size === 4, `challenge, trophy, win and achieve are four different sounds (${a}, ${b}, ${w}, ${ach})`);
+  },
+});
+
+tests.push({
+  name: 'S5-17: finishing a Banner Challenge plays its sting, a step of a two-part one and a plain game do not, the 1912 kit unlock is toasted, and a state title plays the trophy sting',
+  viewports: ['desktop'],
+  async run(t) {
+    await t.seed(4);
+    await gesture(t);
+    await t.page.evaluate(() => { window.__toasts = []; new MutationObserver(() => { const e = document.querySelector('#toast'); if (e && !e.hidden) window.__toasts.push(e.textContent); }).observe(document.querySelector('#toast'), { childList: true, attributes: true, subtree: true }); });
+    const finish = async (opts) => {
+      await t.game('newGame', { ...opts, paused: true });
+      const s = await t.state();
+      await t.game('act', 'finishGame', { winner: s.match.user.team });
+      await waitFor(t, (x) => x.scene === 'final', 6000, 'the final screen');
+    };
+    let c = await count(t, 'challenge');
+    let w = await count(t, 'win');
+    await finish({ mode: 'challenge', challenge: '1912-colors' });
+    t.equal(await count(t, 'challenge'), c + 1, '1912 Colors plays the challenge sting');
+    t.expect((await t.state()).unlocks.throwback === true, 'and unlocks the throwback kit');
+    const toasted = await t.page.waitForFunction(() => window.__toasts.some((x) => /1912 throwback kit/.test(x)), null, { timeout: 8000 }).then(() => true, () => false);
+    t.expect(toasted, 'a toast says the 1912 throwback kit is unlocked');
+    w = await count(t, 'win'); c = await count(t, 'challenge');
+    await finish({ mode: 'challenge', challenge: '2a7-showdown' });
+    t.equal(await count(t, 'challenge'), c + 1, 'a completed challenge plays the challenge sting');
+    t.equal(await count(t, 'win'), w, 'and not the plain win cue as well');
+    w = await count(t, 'win'); c = await count(t, 'challenge');
+    await finish({ mode: 'challenge', challenge: 'double-crown' });
+    t.equal(await count(t, 'challenge'), c, 'the first final of Double Crown is a step, not a finished challenge: no challenge sting');
+    t.equal(await count(t, 'win'), w + 1, 'it plays the plain win cue');
+    w = await count(t, 'win'); c = await count(t, 'challenge');
+    await finish({ mode: 'exhibition', home: 'hot-springs', away: 'lakeside', program: 'boys', user: 'home', qLen: 120, shotClock: 35, difficulty: 1 });
+    t.equal(await count(t, 'win'), w + 1, 'a plain exhibition win still plays the win cue');
+    t.equal(await count(t, 'challenge'), c, 'and no challenge sting');
+  },
+});
+
+tests.push({
+  name: 'S5-17: winning a state title plays the trophy sting on the champion screen',
+  viewports: ['desktop'],
+  async run(t) {
+    await t.seed(4);
+    await gesture(t);
+    await t.game('newGame', { mode: 'season', school: 'hot-springs', program: 'girls', length: 'short', seed: 9 });
+    for (let k = 0; k < 3; k++) await t.game('act', 'seasonResult', 50, 40);
+    await t.game('act', 'seasonResult', 48, 41);
+    await t.game('act', 'seasonResult', 52, 49);
+    await click(t, 'playSeason');
+    await t.game('pause');
+    const s = await t.state();
+    const before = await count(t, 'trophy');
+    await t.game('act', 'finishGame', { winner: s.match.user.team });
+    await waitFor(t, (x) => x.scene === 'final', 6000, 'the final screen');
+    t.equal(await count(t, 'trophy'), before, 'the final screen of the title game does not play it yet');
+    await click(t, 'afterSeasonGame');
+    t.equal((await t.state()).scene, 'champion', 'champion screen');
+    t.equal(await count(t, 'trophy'), before + 1, 'the champion screen plays the trophy sting once');
+  },
+});

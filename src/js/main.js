@@ -326,8 +326,8 @@ function recordGrowth(m, champion) {
 }
 // A short banner at the foot of the screen, one at a time; it never takes focus or input. The live region says it too.
 const toasts = []; let toastOn = false;
-function toast(kind, title, text) {
-  toasts.push({ kind, title, text }); announce(`${kind}: ${title}. ${text || ''}`.trim());
+function toast(kind, title, text, quiet = false) { // quiet: the caller has already played the sound for this moment
+  toasts.push({ kind, title, text, quiet }); announce(`${kind}: ${title}. ${text || ''}`.trim());
   if (!toastOn) nextToast();
 }
 function nextToast() {
@@ -336,7 +336,7 @@ function nextToast() {
   toastOn = true;
   el.innerHTML = `<small>${UI.esc(t.kind)}</small><b>${UI.esc(t.title)}</b>${t.text ? `<span>${UI.esc(t.text)}</span>` : ''}`;
   el.hidden = false; el.classList.remove('in'); void el.offsetWidth; el.classList.add('in');
-  play('achieve');
+  if (!t.quiet) play('achieve');
   setTimeout(() => { el.hidden = true; setTimeout(nextToast, 250); }, 3800);
 }
 function dailyView() {
@@ -482,7 +482,7 @@ function challengeResult() {
   const more = ok && state.chal.step + 1 < c.steps.length;
   if (ok && !more) {
     state.save.challenges[c.id] = true;
-    if (c.unlock) state.save.unlocks[c.unlock] = true;
+    if (c.unlock && !state.save.unlocks[c.unlock]) { state.save.unlocks[c.unlock] = true; toast('Unlocked', '1912 throwback kit', '', true); } // the challenge's own sting is its sound
     persist({ challenges: [c.id], unlocks: c.unlock ? [c.unlock] : [] });
   }
   return { ok, more, note, c };
@@ -599,7 +599,7 @@ function render() {
   if (sc === 'title') { ensureDemo(); titleActiveAt = performance.now(); titleIdle = false; }
   document.body.classList.toggle('gl', is3d());
   layout();
-  if (sc === 'champion' && !state.confettiShown) { state.confettiShown = true; play('win'); duck(6, 1200); confetti(['#D4A017', '#F4F1EA', team(state.season.school).colors.primary, team(state.season.school).colors.secondary]); }
+  if (sc === 'champion' && !state.confettiShown) { state.confettiShown = true; play('trophy'); duck(6, 1200); confetti(['#D4A017', '#F4F1EA', team(state.season.school).colors.primary, team(state.season.school).colors.secondary]); }
   if (sc !== 'champion') state.confettiShown = false;
   updateScoreboard(true);
   wantLoop();
@@ -712,11 +712,12 @@ function onFinal() {
   state.finalShown = true; state.paused = true;
   if (state.coach) { coachSeen(); state.coach = null; }
   const ut = m.user.team;
-  if (ut >= 0) { play(m.winner === ut ? 'win' : 'groan'); if (m.winner === ut) duck(6, 1200); }
+  if (state.mode === 'challenge') state.chalResult = challengeResult();
+  const cr = state.chalResult, done = !!cr && cr.ok && !cr.more && state.mode === 'challenge'; // a Banner Challenge finished gets its own sting in place of the plain win cue (S5-17)
+  if (ut >= 0) { play(done ? 'challenge' : m.winner === ut ? 'win' : 'groan'); if (m.winner === ut) duck(6, 1200); }
   announce(`Final: ${m.teams[0].short} ${m.teams[0].score}, ${m.teams[1].short} ${m.teams[1].score}.`);
   let champion = false;
   if (state.mode === 'season') champion = finishSeasonGame();
-  if (state.mode === 'challenge') state.chalResult = challengeResult();
   state.awards = recordGrowth(m, champion);
   go('final', false);
 }

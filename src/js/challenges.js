@@ -27,13 +27,13 @@ export const CHALLENGES = [
   },
   {
     id: '6a-trial', title: '6A Trial Run', who: 'Lake Hamilton Wolves · boys', school: 'lake-hamilton', program: 'boys',
-    fact: 'Arkansas adopted a 35-second shot clock by a 183-69 vote in 2020, effective 2022-23. Class 6A used it first, experimentally, in conference and state tournament games.', source: 'Delta Plex News; NWA Online (via research/schools-and-athletics.md)',
+    fact: 'Arkansas adopted a 35-second shot clock by a 183-69 vote in 2020, effective 2022-23. Class 6A used it first, experimentally, in conference and state tournament games.', source: 'Delta Plex News; NWA Online (see research/town-content.md)',
     setup: 'Fourth quarter against fictional Lanternfield with the 35-second clock. 2:00 left, up 2.', goal: 'Win, and allow 6 points or fewer from here.',
     steps: [{ program: 'boys', opp: 'lanternfield', start: { q: 4, t: 120, score: [30, 28], poss: 'opp' }, maxAllowed: 6 }], venue: 'home', qLen: 120, shotClock: 35,
   },
   {
     id: '2a7-showdown', title: '2A-7 Showdown', who: 'Cutter-Morning Star Eagles vs Mountain Pine Red Devils', school: 'cutter-morning-star', programs: ['boys', 'girls'],
-    fact: 'Cutter-Morning Star and Mountain Pine are league mates in the 2A-7 basketball conference.', source: 'Sentinel-Record (via research/schools-and-athletics.md)',
+    fact: 'Cutter-Morning Star and Mountain Pine are league mates in the 2A-7 basketball conference.', source: 'Sentinel-Record',
     setup: 'A full 2-minute-quarter league game: Cutter-Morning Star at home against Mountain Pine.', goal: 'Win the league game.',
     steps: [{ opp: 'mountain-pine' }], venue: 'home', qLen: 120,
   },

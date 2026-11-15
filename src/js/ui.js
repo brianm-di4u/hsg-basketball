@@ -393,7 +393,7 @@ export function trophiesScreen(st) {
     ${careerCard(sv)}
     ${achievementsCard(sv)}
     ${looksCard(sv)}
-    <section class="card"><h3>Real title years</h3><p class="fine">Basketball state titles from the research (source: Wikipedia school pages via research/schools-and-athletics.md). No titles were found for the other five schools.</p><ul class="plain">${real}</ul></section>
+    <section class="card"><h3>Real title years</h3><p class="fine">Basketball state titles from the research (source: Wikipedia school pages, as compiled in <code>shared/data/schools.json</code>). No titles were found for the other five schools.</p><ul class="plain">${real}</ul></section>
     <div class="row end">${btn('title', 'Back', { cls: 'primary' })}</div>
   </div>`;
 }
@@ -434,7 +434,7 @@ export function helpScreen(st, tab = 'controls') {
     <li><b>Subs:</b> tired players are swapped automatically at dead balls.</li></ul>`;
   if (tab === 'about') body = `<p>${FICTION_NOTE}</p>
     <h3>Where the facts come from</h3><ul class="plain bullets">
-    <li>School names, cities, mascots, colors, classes and title years: <code>shared/data/schools.json</code>, compiled from Wikipedia school pages and AAA news coverage (see <code>research/schools-and-athletics.md</code>).</li>
+    <li>School names, cities, mascots, colors, classes and title years: <code>shared/data/schools.json</code>, compiled from Wikipedia school pages and AAA news coverage.</li>
     <li>Colors are stand-in values. Fountain Lake (green and white), Cutter-Morning Star (navy and silver), Jessieville (purple and gold) and Mountain Pine (red and black) are <b>game colors</b>: their real colors were not confirmed.</li>
     <li>Mascot crests are original geometric drawings, not school logos. Gym names are shown only where the research confirmed them (Lakeside's is unconfirmed, so it shows as a home gym).</li>
     <li>The state final venue: ${esc(FINALS.name)}, ${esc(FINALS.address)}, hosted the 2026 AAA basketball state championships. The 3D arena follows its published seating chart (two tiers of royal-blue seats, one end with only a small lower section); everything else in the arena art is generic.</li>

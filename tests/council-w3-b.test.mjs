@@ -267,3 +267,24 @@ tests.push({
     t.expect(hp > ap * 1.2, `the player's forced PERFECT three is rated ${hp && hp.toFixed(3)} and the AI's ${ap && ap.toFixed(3)}`);
   },
 });
+
+tests.push({
+  name: 'S1-17: every research file the game text cites exists in the repo (node)',
+  node: true,
+  async run(t) {
+    const files = fs.readdirSync(path.join(game, 'src/js')).filter((f) => f.endsWith('.js')).map((f) => path.join(game, 'src/js', f));
+    files.push(path.join(game, 'data/facts.json')); // what the player reads; shared/data/schools.json is another folder's, and its source notes are not shown
+    const missing = [];
+    let cited = 0;
+    for (const f of files) {
+      for (const m of fs.readFileSync(f, 'utf8').matchAll(/research\/[A-Za-z0-9_-]+\.md/g)) {
+        cited++;
+        if (!fs.existsSync(path.join(game, m[0]))) missing.push(`${path.basename(f)}: ${m[0]}`);
+      }
+    }
+    t.equal(missing.length, 0, `no cited research file is missing (${missing.join('; ')})`);
+    t.expect(cited >= 1, `the About notes and challenge sources still cite the research that is here (${cited} citations)`);
+    const ui = fs.readFileSync(path.join(game, 'src/js/ui.js'), 'utf8');
+    t.expect(ui.includes('shared/data/schools.json'), 'the About tab points at shared/data/schools.json');
+  },
+});

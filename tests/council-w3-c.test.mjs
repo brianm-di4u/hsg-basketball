@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { click, waitFor } from './helpers.mjs';
+import { click, stepUntil, waitFor } from './helpers.mjs';
 
 const game = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -205,5 +205,210 @@ tests.push({
     await click(t, 'afterSeasonGame');
     t.equal((await t.state()).scene, 'champion', 'champion screen');
     t.equal(await count(t, 'trophy'), before + 1, 'the champion screen plays the trophy sting once');
+  },
+});
+
+// ---------------------------------------------------------------- S3-06 stars and S3-04 records by difficulty
+tests.push({
+  name: 'S3-06 and S3-04: star masks, best-by-difficulty, saving that never lowers them, and old and damaged saves (node)',
+  node: true,
+  async run(t) {
+    const C = await load('career.js'), P = await load('save-policy.js');
+    t.equal(C.starMask({ ok: false, margin: 30, skill: true }), 0, 'a lost challenge earns nothing');
+    t.equal(C.starMask({ ok: true, margin: 2, skill: false }), 1, 'a win is one star');
+    t.equal(C.starMask({ ok: true, margin: 5, skill: false }), 3, 'a win by 5 is two');
+    t.equal(C.starMask({ ok: true, margin: 4, skill: true }), 5, 'a win by 4 on Varsity without the assist is the first and third');
+    t.equal(C.starMask({ ok: true, margin: 9, skill: true }), 7, 'all three');
+    t.equal(C.starCount(7) + C.starCount(5) + C.starCount(0), 5, 'counting');
+    t.equal(C.goalsMet({ challenges: { a: true }, stars: {} }, 'a'), 1, 'an old save with a win and no stars entry holds one star');
+    t.equal(C.goalsMet({ challenges: {}, stars: { a: { g: 6, m: 8 } } }, 'a'), 6, 'a stars entry is read as it is');
+    t.equal(C.goalsMet({ challenges: {}, stars: { a: { g: 6 } } }, 'b'), 0, 'an unknown challenge holds none');
+    t.equal(JSON.stringify(C.cleanStars({ a: { g: 99, m: -4 }, b: 'x', c: [1], '': { g: 1 } })), '{"a":{"g":3,"m":0}}', 'a damaged stars record is cleaned (only the low three bits, no negative margin, no junk keys)');
+    t.equal(JSON.stringify(C.cleanStars('no')), '{}', 'and a non-object reads as empty');
+    let s = C.applyStar({}, { id: 'a', g: 5, m: 4 });
+    s = C.applyStar(s, { id: 'a', g: 2, m: 3 });
+    t.equal(JSON.stringify(s), '{"a":{"g":7,"m":4}}', 'goals are added and the margin only improves');
+    s = C.applyStar(s, { id: 'a', g: 0, m: 0 });
+    t.equal(JSON.stringify(s), '{"a":{"g":7,"m":4}}', 'a worse result lowers nothing');
+    t.equal(C.tierKey(2, true), '2a', 'assist is its own key');
+    t.equal(C.tierKey(7, false), '1', 'an unknown difficulty reads as Varsity');
+    t.equal(JSON.stringify(C.cleanTiers({ 0: 30, '1a': 55.7, '2': -1, '3': 9, x: 1, '1': 'no' })), '{"0":30,"1a":55}', 'damaged tiers are cleaned');
+    let tr = C.applyTier({ 1: 40 }, '1', 30);
+    t.equal(tr['1'], 40, 'a lower score keeps the tier best');
+    tr = C.applyTier(tr, '2', 33);
+    t.equal(JSON.stringify(tr), '{"1":40,"2":33}', 'a new tier is added');
+    // Saved through the save policy: added to what is stored now, never lowering; old saves read.
+    const defaults = { sound: true };
+    const old = { v: 1, settings: {}, trophies: [], unlocks: {}, best: { shootout: 55 }, challenges: { '2a7-showdown': true } };
+    let v = P.mergeSave(old, defaults, { score: 30, tiers: [{ k: '2', s: 30 }], stars: [{ id: '2a7-showdown', g: 3, m: 6 }] }).value;
+    t.expect(v.best.shootout === 55 && v.best.tiers['2'] === 30, 'an old save keeps its best and gets its first tier');
+    t.expect(v.stars['2a7-showdown'].g === 3 && v.challenges['2a7-showdown'] === true, 'and its challenge gets stars while staying marked done');
+    v = P.mergeSave(v, defaults, { tiers: [{ k: '2', s: 12 }], stars: [{ id: '2a7-showdown', g: 1, m: 1 }] }).value;
+    t.expect(v.best.tiers['2'] === 30 && v.stars['2a7-showdown'].g === 3 && v.stars['2a7-showdown'].m === 6, 'a worse run later lowers nothing');
+    const broken = { ...old, best: { shootout: 55, tiers: 'x' }, stars: 5 };
+    t.expect(P.validSave(broken), 'damaged tiers and stars never make the save unreadable');
+    v = P.mergeSave(broken, defaults, { tiers: [{ k: '1', s: 20 }], stars: [{ id: 'a', g: 1, m: 2 }] }).value;
+    t.expect(v.best.tiers['1'] === 20 && v.stars.a.g === 1, 'and the next save starts them again');
+    v = P.mergeSave(old, defaults, { settings: { sound: false } }).value;
+    t.expect(v.stars === undefined && v.best.tiers === undefined, 'a settings save adds neither');
+  },
+});
+
+const challengeStars = (t) => t.state().then((s) => s.stars || {});
+const finishChallenge = async (t, id, { score, program } = {}) => {
+  await t.game('newGame', { mode: 'challenge', challenge: id, paused: true, ...(program ? { program } : {}) });
+  const s = await t.state();
+  if (score) await t.game('setState', { match: { score } });
+  await t.game('act', 'finishGame', { winner: s.match.user.team });
+  return waitFor(t, (x) => x.scene === 'final', 8000, 'the final screen');
+};
+const shot = (t, name) => t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/${name}-${t.viewport}.png` });
+
+tests.push({
+  name: 'S3-06: each Banner Challenge has three star goals; they are earned and saved by how it is won, and an old win holds one star',
+  viewports: ['desktop', 'mobile'],
+  async run(t) {
+    await t.seed(4);
+    await t.game('setState', { settings: { difficulty: 1, assist: false } });
+    await click(t, 'challenges');
+    let txt = await t.page.innerText('#screen');
+    t.equal((txt.match(/Win by 5 or more\./g) || []).length, 6, 'all six cards list the margin goal');
+    t.equal((txt.match(/Win on Varsity or All-State with the meter assist off\./g) || []).length, 6, 'and the skill goal');
+    t.equal(await t.page.locator('.stars .star-row[aria-label="0 of 3 stars"]').count(), 6, 'a new player has no stars');
+    // A close win on Varsity with the assist off: the win and the skill goal, the margin goal still open.
+    await finishChallenge(t, '2a7-showdown', { score: [0, 40] });
+    let st = await challengeStars(t);
+    t.equal(st['2a7-showdown'] && st['2a7-showdown'].g, 5, 'a close win on Varsity, assist off: stars for the win and the skill goal (mask 5)');
+    txt = await t.page.innerText('#screen');
+    t.expect(/Stars: ★★☆ \(2 new\) Next: Win by 5 or more\./.test(txt), `the result card says what it earned and what is next (${txt.replace(/\n+/g, ' | ').slice(txt.indexOf('Challenge complete'), txt.indexOf('Challenge complete') + 160)})`);
+    await shot(t, 'S3-06-challenge-result-stars');
+    // Replayed with a big lead the margin star joins them; replayed on Rookie with the assist on, nothing is lost.
+    await finishChallenge(t, '2a7-showdown', { score: [40, 0] });
+    st = await challengeStars(t);
+    t.equal(st['2a7-showdown'].g, 7, 'a replay won by more than 5 earns the third star');
+    t.expect(/All three earned\./.test(await t.page.innerText('#screen')), 'and the card says all three are earned');
+    await t.game('setState', { settings: { difficulty: 0, assist: true } });
+    await finishChallenge(t, '2a7-showdown');
+    st = await challengeStars(t);
+    t.equal(st['2a7-showdown'].g, 7, 'an easier replay (Rookie, assist on) lowers nothing');
+    // A challenge not won before, on Rookie with the assist on: the win but not the skill star.
+    await finishChallenge(t, 'bookend-banners', { program: 'boys' });
+    st = await challengeStars(t);
+    t.equal(st['bookend-banners'].g & 4, 0, 'a win on Rookie with the assist on does not earn the skill star');
+    // A two-part challenge counts every final: a narrow first final keeps the margin star away even when the second is a rout.
+    await t.game('setState', { settings: { difficulty: 1, assist: false } });
+    await finishChallenge(t, 'double-crown', { score: [0, 40] });
+    t.equal((await t.state()).chalResult.more, true, 'the first final of Double Crown is a step');
+    await click(t, 'afterChallenge');
+    await t.game('pause');
+    await t.game('setState', { match: { score: [40, 0] } });
+    const s2 = await t.state();
+    await t.game('act', 'finishGame', { winner: s2.match.user.team });
+    await waitFor(t, (x) => x.scene === 'final', 8000, 'the second final');
+    st = await challengeStars(t);
+    t.equal(st['double-crown'].g, 5, 'Double Crown: both finals won on Varsity, the first by 2: the win and skill stars only');
+    await t.page.reload();
+    await waitFor(t, (s) => s.scene === 'title', 10000, 'reloaded');
+    t.equal((await challengeStars(t))['2a7-showdown'].g, 7, 'the stars are still there after a reload');
+    await click(t, 'challenges');
+    t.equal(await t.page.locator('.stars .star-row[aria-label="3 of 3 stars"]').count(), 1, 'the card shows three stars');
+    await t.checkLayout({ allowScrollY: true });
+    await shot(t, 'S3-06-challenges-stars');
+    await click(t, 'title');
+    await click(t, 'trophies');
+    txt = await t.page.innerText('#screen');
+    t.expect(/Challenge stars: \d+ of 18/.test(txt), `the Trophy Room sums the stars (${(txt.match(/Challenge stars: [^\n]*/) || [''])[0]})`);
+  },
+});
+
+tests.push({
+  name: 'S3-06: a save from before stars (challenge done, no stars entry) shows one star and nothing is lost',
+  viewports: ['desktop', 'mobile'],
+  async run(t) {
+    await t.page.evaluate(() => localStorage.setItem('hsg-hoops-v1', JSON.stringify({ v: 1, settings: { tipsSeen: true }, trophies: [], unlocks: { throwback: true }, best: { shootout: 41 }, challenges: { '1912-colors': true, 'lady-trojans-five': true } })));
+    await t.reload();
+    await waitFor(t, (s) => s.scene === 'title', 10000, 'reloaded');
+    await click(t, 'challenges');
+    t.equal(await t.page.locator('.stars .star-row[aria-label="1 of 3 stars"]').count(), 2, 'each of the two old wins shows one star');
+    t.equal(await t.page.locator('.stars .star-row[aria-label="0 of 3 stars"]').count(), 4, 'the rest show none');
+    await click(t, 'title');
+    await click(t, 'trophies');
+    t.expect(/Challenge stars: 2 of 18/.test(await t.page.innerText('#screen')), 'the Trophy Room counts them: 2 of 18');
+    const s = await t.state();
+    t.expect(s.unlocks.throwback === true && s.best.shootout === 41 && s.challenges['1912-colors'] === true, 'the unlock, the best and the wins are untouched');
+  },
+});
+
+tests.push({
+  name: 'S3-04: Hot Streak keeps a best for each difficulty, the meter assist apart, and says which one a run beat',
+  viewports: ['desktop', 'mobile'],
+  async run(t) {
+    const finish = async (score) => {
+      await t.game('newGame', { mode: 'shootout', paused: true });
+      await t.game('setState', { shootout: { phase: 'live', score, t: 0.05 } });
+      await t.game('pause', false);
+      return stepUntil(t, (x) => x.scene === 'shootoutEnd', 400, 10, 'the end');
+    };
+    await t.game('setState', { settings: { difficulty: 2, assist: true } });
+    await finish(55);
+    await t.game('setState', { settings: { difficulty: 2, assist: false } });
+    await finish(31);
+    let txt = await t.page.innerText('#screen');
+    t.expect(/Best: 55/.test(txt), 'the overall best is still the assisted 55');
+    t.expect(/Best on All-State: 31/.test(txt) && /with the meter assist: 55/.test(txt), `the result shows All-State 31 and the assisted 55 apart (${txt.replace(/\n+/g, ' | ').slice(txt.indexOf('Best:'), txt.indexOf('Best:') + 120)})`);
+    t.expect(!/New best on/.test(txt), 'the first run in a tier is not announced as a tier record');
+    await finish(36);
+    txt = await t.page.innerText('#screen');
+    t.expect(/New best on All-State!/.test(txt) && /Best on All-State: 36/.test(txt), 'a better run on the same difficulty is a new best there');
+    await t.checkLayout({ allowScrollY: true });
+    await shot(t, 'S3-04-hot-streak-tiers');
+    await finish(20);
+    txt = await t.page.innerText('#screen');
+    t.expect(!/New best on/.test(txt) && /Best on All-State: 36/.test(txt), 'a worse run keeps it');
+    await t.game('setState', { settings: { difficulty: 0, assist: false } });
+    await finish(44);
+    t.equal(JSON.stringify((await t.state()).best.tiers), JSON.stringify({ 0: 44, 2: 36, '2a': 55 }), 'each tier is stored on its own');
+    await t.page.reload();
+    await waitFor(t, (s) => s.scene === 'title', 10000, 'reloaded');
+    t.equal(JSON.stringify((await t.state()).best.tiers), JSON.stringify({ 0: 44, 2: 36, '2a': 55 }), 'and survives a reload');
+    await t.game('setState', { settings: { difficulty: 2 } });
+    await click(t, 'shootoutSetup');
+    txt = await t.page.innerText('#screen');
+    t.expect(/Best on All-State: 36 · with the meter assist: 55/.test(txt), `the setup card shows the tier bests (${(txt.match(/Best on[^\n]*/) || [''])[0]})`);
+    await shot(t, 'S3-04-hot-streak-setup');
+  },
+});
+
+tests.push({
+  name: 'S3-04: a state-title banner records the difficulty and the assist it was played on, and a simulated one says it was simulated',
+  viewports: ['desktop', 'mobile'],
+  async run(t) {
+    await t.seed(4);
+    await t.game('setState', { settings: { difficulty: 2, assist: true } });
+    await t.game('newGame', { mode: 'season', school: 'hot-springs', program: 'girls', length: 'short', seed: 9 });
+    for (let k = 0; k < 3; k++) await t.game('act', 'seasonResult', 50, 40);
+    await t.game('act', 'seasonResult', 48, 41);
+    await t.game('act', 'seasonResult', 52, 49);
+    await click(t, 'playSeason');
+    await t.game('pause');
+    const s = await t.state();
+    await t.game('act', 'finishGame', { winner: s.match.user.team });
+    await waitFor(t, (x) => x.scene === 'final', 8000, 'the final screen');
+    await click(t, 'afterSeasonGame');
+    const played = (await t.state()).trophies;
+    t.expect(played.length === 1 && played[0].diff === 2 && played[0].assist === true && played[0].seasonSeed == null, `a played title is saved with All-State and the assist (${JSON.stringify(played[0])})`);
+    // Another season, simulated from the hub until one wins the title (about one in six does): marked as simulated and given no difficulty.
+    for (let seed = 1; seed <= 60 && (await t.state()).trophies.length < 2; seed++) {
+      await t.game('newGame', { mode: 'season', school: 'lakeside', program: 'boys', length: 'short', seed });
+      for (let g = 0; g < 12 && !(await t.state()).season.done; g++) await t.game('act', 'sim');
+    }
+    const all = (await t.state()).trophies;
+    t.expect(all.length === 2 && all[1].seasonSeed != null && all[1].diff === undefined, `a simulated title carries its season seed and no difficulty (${JSON.stringify(all[1])})`);
+    await t.game('scene', 'trophies');
+    const txt = await t.page.innerText('#screen');
+    t.expect(/All-State with meter assist/.test(txt), 'the Trophy Room says the played banner was All-State with the meter assist');
+    t.expect(/simulated/.test(txt), 'and the other one was simulated');
+    await t.checkLayout({ allowScrollY: true });
+    await shot(t, 'S3-04-trophy-room-tags');
   },
 });

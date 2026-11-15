@@ -5,7 +5,7 @@ import { fullName, heightStr } from './roster.js';
 import { ROUNDS, nextGame } from './season.js';
 import { CHALLENGES } from './challenges.js';
 import { DIFF } from './rules.js';
-import { ladder, medalFor, nextMedal, cleanRecent, recentAverage, ACHIEVEMENTS, BALLS, FLOORS, KIT_WINS, hasAlt, kitKey, unlockKey, liveStreak, addDays } from './career.js';
+import { STAR_GOALS, starCount, goalsMet, tierKey, cleanTiers, ladder, medalFor, nextMedal, cleanRecent, recentAverage, ACHIEVEMENTS, BALLS, FLOORS, KIT_WINS, hasAlt, kitKey, unlockKey, liveStreak, addDays } from './career.js';
 
 export const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 const crest = (t, px = 48, cls = 'crest') => `<img class="${cls}" src="${crestURL(t, px * 2)}" width="${px}" height="${px}" alt="">`;
@@ -246,6 +246,12 @@ export function championScreen(st) {
 // ---------------------------------------------------------------- shootout
 // One lucky run is not how you shoot: the average of the last few finished runs sits beside the best (S3-07).
 const hotAverage = (best) => { const n = cleanRecent(best && best.recent).length; return n >= 2 ? ` · Average of your last ${n}: <b>${recentAverage(best.recent)}</b>` : ''; };
+// The best for each difficulty, the meter assist apart (S3-04): the single best above mixes Rookie with the assist and All-State without it.
+const tierName = (d) => (DIFF[d] ? DIFF[d].name : 'Varsity');
+const tierText = (best, diff) => {
+  const t = cleanTiers(best && best.tiers), plain = t[tierKey(diff, false)], assisted = t[tierKey(diff, true)];
+  return `Best on ${esc(tierName(diff))}: <b>${plain || 'none yet'}</b>${assisted ? ` · with the meter assist: <b>${assisted}</b>` : ''}.`;
+};
 export function shootoutSetupScreen(st) {
   const x = st.pick;
   return `<div class="panel wide">
@@ -254,6 +260,7 @@ export function shootoutSetupScreen(st) {
     ${seg('pickProgram', [['boys', 'Boys'], ['girls', 'Girls']], x.program, 'Program')}
     ${grid('pickSchool', x.school, 'School')}
     <p>Best score: <b>${st.save.best.shootout || 0}</b>${hotAverage(st.save.best)}</p>
+    <p class="fine">${tierText(st.save.best, st.settings.difficulty)}</p>
     <p class="fine">${esc(DIFF[st.settings.difficulty] ? DIFF[st.settings.difficulty].name : 'Varsity')} medals: Bronze ${ladder(st.settings.difficulty).bronze}, Silver ${ladder(st.settings.difficulty).silver}, Gold ${ladder(st.settings.difficulty).gold}.</p>
     <p class="fine">New to the shot meter? Practice is 30 seconds of free shooting from the same spots. It is not scored and does not touch your best.</p>
     <div class="row end">${btn('title', 'Back')}${btn('startPractice', 'Practice')}${btn('startShootout', 'Start', { cls: 'primary' })}</div>
@@ -272,6 +279,7 @@ export function shootoutEndScreen(st, so, isBest, awards = '') {
     <h2>${so.score} points</h2>
     <p>${so.made} of ${so.att} made${so.att ? ` (${Math.round((100 * so.made) / so.att)}%)` : ''}.</p>
     <p>${isBest ? '<b>New best!</b>' : `Best: <b>${st.save.best.shootout}</b>`}${hotAverage(st.save.best)}</p>
+    <p class="fine">${so.tierBest ? `<b>New best on ${esc(tierName(so.difficulty))}${so.assist ? ' with the meter assist' : ''}!</b> ` : ''}${tierText(st.save.best, so.difficulty)}</p>
     ${hotMedal(so)}
     ${awards}
     <div class="row end">${btn('title', 'Menu')}${btn('startShootout', 'Go again', { cls: 'primary' })}</div>
@@ -279,6 +287,12 @@ export function shootoutEndScreen(st, so, isBest, awards = '') {
 }
 
 // ---------------------------------------------------------------- challenges and trophies
+// After a finished challenge: the stars it now holds, the ones this win added, and the next goal still open.
+export function starsLine(s) {
+  if (!s) return '';
+  const n = starCount(s.now), added = starCount(s.now & ~s.had), open = STAR_GOALS.find((x) => !(s.now & x.bit));
+  return `<p><b>Stars: <span role="img" aria-label="${n} of 3">${'★'.repeat(n)}${'☆'.repeat(3 - n)}</span></b>${added ? ` (${added} new)` : ''}${open ? ` Next: ${esc(open.text)}` : ' All three earned.'}</p>`;
+}
 export function challengesScreen(st) {
   const done = st.save.challenges || {};
   return `<div class="panel wide">
@@ -286,10 +300,12 @@ export function challengesScreen(st) {
     <p>Short scenarios built around real Garland County basketball history. Each is a <b>game scenario, not a recreation</b> of a real game: the players and situations are fictional.</p>
     <div class="clist">${CHALLENGES.map((c) => {
       const t = team(c.school);
+      const g = goalsMet(st.save, c.id), n = starCount(g);
       return `<article class="card chal${done[c.id] ? ' done' : ''}">
         <header>${crest(t, 40)}<div><h3>${esc(c.title)}${done[c.id] ? ' <span class="tag ok">Completed ✓</span>' : ''}</h3><p class="kicker">${esc(c.who)}</p></div></header>
         <p class="fact-line">${esc(c.fact)} <span class="src">Source: ${esc(c.source)}</span></p>
         <p><b>Setup:</b> ${esc(c.setup)}</p><p><b>Goal:</b> ${esc(c.goal)}</p>
+        <div class="stars"><p><b>Stars:</b> <span class="star-row" role="img" aria-label="${n} of 3 stars">${'★'.repeat(n)}${'☆'.repeat(3 - n)}</span></p><ul class="plain">${STAR_GOALS.map((s) => `<li${g & s.bit ? ' class="met"' : ''}>${g & s.bit ? '★' : '☆'} ${esc(s.text)}${g & s.bit ? ' <span class="sr-only">(done)</span>' : ''}</li>`).join('')}</ul></div>
         <div class="row">${(c.programs || [c.program]).map((p) => btn('playChallenge', c.programs ? `Play (${progLabel(p)})` : 'Play', { arg: `${c.id}|${p}`, cls: 'primary' })).join('')}</div>
       </article>`;
     }).join('')}</div>
@@ -377,9 +393,11 @@ export function dailyScreen(st, v) {
   </div>`;
 }
 
+// How a banner was won (S3-04): a title simmed from the hub says so; one played shows its difficulty and whether the meter assist was on. An older banner has no record of either.
+const trophyTag = (x) => (x.seasonSeed != null ? ' · simulated' : [0, 1, 2].includes(x.diff) ? ` · ${DIFF[x.diff].name}${x.assist ? ' with meter assist' : ''}` : '');
 export function trophiesScreen(st) {
   const sv = st.save;
-  const tro = sv.trophies.length ? sv.trophies.map((x) => { const t = team(x.school); return `<li class="pen" style="--tc:${t.colors.primary};--tc2:${t.colors.secondary}">${crest(t, 36)}<span><b>${esc(t.short)}</b> ${progLabel(x.program)}<br><small>Class ${esc(x.cls)} · ${esc(x.label)}</small></span></li>`; }).join('') : '<li class="fine">No banners yet. Win a season\'s state final to raise one.</li>';
+  const tro = sv.trophies.length ? sv.trophies.map((x) => { const t = team(x.school); return `<li class="pen" style="--tc:${t.colors.primary};--tc2:${t.colors.secondary}">${crest(t, 36)}<span><b>${esc(t.short)}</b> ${progLabel(x.program)}<br><small>Class ${esc(x.cls)} · ${esc(x.label)}${trophyTag(x)}</small></span></li>`; }).join('') : '<li class="fine">No banners yet. Win a season\'s state final to raise one.</li>';
   const real = COUNTY.filter((t) => t.titles.boys.length + t.titles.girls.length + t.titles.any.length).map((t) => {
     const parts = [];
     if (t.titles.boys.length) parts.push(`boys ${t.titles.boys.join(', ')}`);
@@ -388,12 +406,14 @@ export function trophiesScreen(st) {
     return `<li>${crest(t, 24, 'crest sm')}<span><b>${esc(t.short)}:</b> ${parts.join('; ')}</span></li>`;
   }).join('');
   const nDone = Object.keys(sv.challenges || {}).length;
+  const nStars = CHALLENGES.reduce((n, c) => n + starCount(goalsMet(sv, c.id)), 0);
   return `<div class="panel wide">
     <h2>Trophy Room</h2>
     <section class="card"><h3>Your banners</h3><ul class="pens">${tro}</ul></section>
     <section class="card"><h3>Records and unlocks</h3><ul class="plain kv">
       <li>Hot Streak best: <b>${sv.best.shootout || 0}</b></li>
       <li>Banner Challenges completed: <b>${nDone} of ${CHALLENGES.length}</b></li>
+      <li>Challenge stars: <b>${nStars} of ${CHALLENGES.length * 3}</b></li>
       <li>1912-style throwback kit (Hot Springs): <b>${sv.unlocks.throwback ? 'unlocked' : 'locked'}</b>${sv.unlocks.throwback ? '' : ' (complete the "1912 Colors" challenge)'}</li></ul></section>
     ${careerCard(sv)}
     ${achievementsCard(sv)}

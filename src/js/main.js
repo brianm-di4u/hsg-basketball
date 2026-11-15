@@ -15,7 +15,7 @@ import { AU, unlock, play, setVolume, setOn, setAmbience, setMusic, setMusicTrac
 import { DIFF, meterQuality, SWEET } from './rules.js';
 import { writeSave, readSaveSnapshot, resetSave, store, fmtClock, hash, frameDue } from './util.js';
 import { mergeSave, seasonText } from './save-policy.js';
-import { pushRecent, ACHIEVEMENTS, BALLS, FLOORS, ballSkin, floorFinish, unlockKey, kitKey, hasAlt, cleanCareer, cleanDaily, cleanAchievements, applyGame, applyDaily, emptyCareer, newBests, earnedAchievements, earnedCosmetics, liveStreak, addDays } from './career.js';
+import { pushRecent, tierKey, cleanTiers, applyTier, starMask, cleanStars, applyStar, goalsMet, ACHIEVEMENTS, BALLS, FLOORS, ballSkin, floorFinish, unlockKey, kitKey, hasAlt, cleanCareer, cleanDaily, cleanAchievements, applyGame, applyDaily, emptyCareer, newBests, earnedAchievements, earnedCosmetics, liveStreak, addDays } from './career.js';
 import { dailyDeal, localDate } from './daily.js';
 import * as UI from './ui.js';
 
@@ -23,7 +23,7 @@ const $ = (s) => document.querySelector(s);
 const DEFAULTS = { sound: true, vol: 0.5, motion: 'auto', text: 100, theme: 'auto', difficulty: 1, qLen: 120, shotClock: 35, assist: false, touch: 'auto', graphics: 'auto', replays: true, haptics: true, ambience: true, music: true, ball: 'classic', floor: 'natural', tipsSeen: false };
 const state = {
   scene: 'title', stack: [], settings: { ...DEFAULTS }, season: null,
-  save: { trophies: [], unlocks: { throwback: false }, best: { shootout: 0 }, challenges: {}, career: emptyCareer(), daily: cleanDaily(null), achievements: {} },
+  save: { trophies: [], unlocks: { throwback: false }, best: { shootout: 0 }, challenges: {}, stars: {}, career: emptyCareer(), daily: cleanDaily(null), achievements: {} },
   mode: null, match: null, so: null, demo: null, paused: false, showBox: false, helpTab: 'controls', seed: 0,
   pick: { program: 'girls', home: 'hot-springs', away: 'lakeside', side: 'home', school: 'hot-springs', length: 'short', throwback: false },
   chal: null, lastOpts: null, rosterView: null, busy: 0, factSeed: 1, finalShown: false, quitArmed: false,
@@ -34,13 +34,13 @@ const SO_SCENES = new Set(['shootout', 'soPause', 'shootoutEnd']); // the Hot St
 
 // ---------------------------------------------------------------- saves
 let seasonBase = seasonText(null), setupSeasonBase = null, setupSeason = null, saveNotice = '';
-const pendingSave = { settings: {}, score: null, challenges: [], unlocks: [], trophies: [], games: [], daily: [], achievements: [], season: null };
+const pendingSave = { settings: {}, score: null, tiers: [], stars: [], challenges: [], unlocks: [], trophies: [], games: [], daily: [], achievements: [], season: null };
 const copy = x => JSON.parse(JSON.stringify(x));
 const currentSnapshot = r => r.kind === 'current' || r.kind === 'absent';
 function persist(intent = {}) {
   Object.assign(pendingSave.settings, intent.settings || {});
   if (Number.isFinite(intent.score) && intent.score >= 0) pendingSave.score = Math.max(pendingSave.score ?? 0, intent.score);
-  for (const k of ['challenges', 'unlocks', 'trophies', 'games', 'daily', 'achievements']) if (intent[k]) pendingSave[k].push(...intent[k]);
+  for (const k of ['tiers', 'stars', 'challenges', 'unlocks', 'trophies', 'games', 'daily', 'achievements']) if (intent[k]) pendingSave[k].push(...intent[k]);
   if (intent.season) pendingSave.season = { ...intent.season, value: copy(intent.season.value) };
   const read = readSaveSnapshot();
   if (!currentSnapshot(read)) {
@@ -66,7 +66,7 @@ function persist(intent = {}) {
   state.save.challenges = result.value.challenges || {};
   mirrorGrowth(result.value);
   setLook(lookOf());
-  pendingSave.settings = {}; pendingSave.score = null;
+  pendingSave.settings = {}; pendingSave.score = null; pendingSave.tiers = []; pendingSave.stars = [];
   pendingSave.challenges = []; pendingSave.unlocks = []; pendingSave.trophies = [];
   pendingSave.games = []; pendingSave.daily = []; pendingSave.achievements = [];
   if (result.seasonAccepted) {
@@ -81,6 +81,7 @@ function persist(intent = {}) {
 }
 // The career, daily record and achievements as the save holds them (a damaged field reads as empty).
 function mirrorGrowth(v) {
+  state.save.stars = cleanStars(v.stars);
   state.save.career = cleanCareer(v.career); state.save.daily = cleanDaily(v.daily); state.save.achievements = cleanAchievements(v.achievements);
 }
 // A stored save with no tipsSeen is from before the first-game tips: its next write must say seen, not take the new-player default.
@@ -102,14 +103,14 @@ function seasonWritable() {
   }
   return true; // Memory play remains available; persist refuses any unsafe write.
 }
-function advanceSeason(change, awardKind) {
+function advanceSeason(change, awardKind, how) { // how: { diff, assist } of the final that was played, kept with the banner (S3-04)
   if (!seasonWritable()) return false;
   const before = copy(state.season);
   change();
   const S = state.season, awards = [];
   if (S.champion && (awardKind === 'played' || (awardKind === 'sim' && !state.save.trophies.some(t => t.seasonSeed === S.seed && t.school === S.school)))) {
     const award = { school: S.school, program: S.program, cls: S.cls, label: 'Season ' + (state.save.trophies.length + 1) + ' state champions', record: S.w + '-' + S.l };
-    if (awardKind === 'sim') award.seasonSeed = S.seed;
+    if (awardKind === 'sim') award.seasonSeed = S.seed; else if (how) { award.diff = how.diff; award.assist = !!how.assist; }
     awards.push(award); state.save.trophies.push(award);
   }
   const result = persist({ season: { base: pendingSave.season ? pendingSave.season.base : seasonBase, value: S, trophies: awards } });
@@ -452,7 +453,7 @@ function playSeasonGame(o = {}) {
 function finishSeasonGame() {
   const m = state.match, S = state.season, ut = m.user.team;
   const wasFinal = S.phase === 'bracket' && S.bracket.round === 2;
-  advanceSeason(() => recordResult(state.season, m.teams[ut].score, m.teams[1 - ut].score, state.settings.qLen), wasFinal ? 'played' : null);
+  advanceSeason(() => recordResult(state.season, m.teams[ut].score, m.teams[1 - ut].score, state.settings.qLen), wasFinal ? 'played' : null, { diff: m.difficulty, assist: m.assist });
   return wasFinal && !!state.season.champion;
 }
 
@@ -473,6 +474,9 @@ function challengeResult() {
   const m = state.match, c = challenge(state.chal.id), step = c.steps[state.chal.step];
   const ut = m.user.team;
   let ok = m.winner === ut;
+  const margin = m.teams[ut].score - m.teams[1 - ut].score;
+  if (state.chal.step === 0 || !state.chalAcc) state.chalAcc = { margin: Infinity, skill: true }; // the stars of a two-part challenge count every final
+  const acc = state.chalAcc;
   let note = '';
   if (ok && step.maxAllowed != null) {
     const allowed = m.teams[1 - ut].score - (m.startScore ? m.startScore[1 - ut] : 0);
@@ -480,12 +484,17 @@ function challengeResult() {
     note = `You allowed ${allowed} point${allowed === 1 ? '' : 's'} (goal: ${step.maxAllowed} or fewer).`;
   }
   const more = ok && state.chal.step + 1 < c.steps.length;
+  if (ok) { acc.margin = Math.min(acc.margin, margin); acc.skill = acc.skill && m.difficulty >= 1 && !m.assist; }
+  let stars = null;
   if (ok && !more) {
+    const had = goalsMet(state.save, c.id), g = starMask({ ok, margin: acc.margin, skill: acc.skill });
+    stars = { g, had, now: had | g };
+    state.save.stars = applyStar(state.save.stars, { id: c.id, g, m: acc.margin });
     state.save.challenges[c.id] = true;
     if (c.unlock && !state.save.unlocks[c.unlock]) { state.save.unlocks[c.unlock] = true; toast('Unlocked', '1912 throwback kit', '', true); } // the challenge's own sting is its sound
-    persist({ challenges: [c.id], unlocks: c.unlock ? [c.unlock] : [] });
+    persist({ challenges: [c.id], stars: [{ id: c.id, g, m: acc.margin }], unlocks: c.unlock ? [c.unlock] : [] });
   }
-  return { ok, more, note, c };
+  return { ok, more, note, c, stars };
 }
 
 // ---------------------------------------------------------------- shootout
@@ -550,7 +559,7 @@ function finalHTML(st) {
   let extra = '';
   if (state.mode === 'challenge' && state.chalResult) {
     const cr = state.chalResult;
-    extra = `<section class="card ${cr.ok ? 'ok' : 'bad'}"><h3>${cr.ok ? (cr.more ? 'Step complete' : 'Challenge complete!') : 'Challenge not completed'}</h3><p>${UI.esc(cr.note || (cr.ok ? (cr.more ? 'One down. The next final is up.' : cr.c.unlock ? 'You unlocked the 1912-style throwback kit.' : 'Saved to your Trophy Room.') : 'Give it another try.'))}</p></section>`;
+    extra = `<section class="card ${cr.ok ? 'ok' : 'bad'}"><h3>${cr.ok ? (cr.more ? 'Step complete' : 'Challenge complete!') : 'Challenge not completed'}</h3><p>${UI.esc(cr.note || (cr.ok ? (cr.more ? 'One down. The next final is up.' : cr.c.unlock ? 'You unlocked the 1912-style throwback kit.' : 'Saved to your Trophy Room.') : 'Give it another try.'))}</p>${UI.starsLine(cr.stars)}</section>`;
   }
   if (state.mode === 'season' && state.season) {
     const S = state.season;
@@ -729,7 +738,10 @@ function endShootout() {
   const memoryBest = state.save.best.shootout || 0;
   state.save.best.shootout = Math.max(memoryBest, so.score);
   state.save.best.recent = pushRecent(state.save.best.recent, so.score); // kept in memory if saving fails; a good save replaces it with the stored list
-  const saved = persist({ score: so.score });
+  const tier = tierKey(so.difficulty, so.assist), tierBefore = cleanTiers(state.save.best.tiers)[tier] || 0; // the best for this difficulty, the assist kept apart (S3-04)
+  state.save.best.tiers = applyTier(state.save.best.tiers, tier, so.score);
+  so.tierBest = so.score > tierBefore && tierBefore > 0;
+  const saved = persist({ score: so.score, tiers: [{ k: tier, s: so.score }] });
   so.newBest = so.score > (saved.previousBest ?? memoryBest);
   state.awards = award({ shootout: so.score });
   play(so.newBest ? 'win' : 'buzzer'); duck(6, 1200);
@@ -1333,7 +1345,7 @@ function sumState() {
       games: S.games.map((g) => ({ opp: g.opp, home: g.home, month: g.month, rival: g.rival, result: g.result })), next: nextGame(S), bracket: S.bracket } : null,
     shootout: state.so ? { t: +state.so.t.toFixed(2), score: state.so.score, streak: state.so.streak, mult: state.so.mult, made: state.so.made, att: state.so.att, spot: state.so.spot, phase: state.so.phase, ball: state.so.ball.state, shooter: fullName(state.so.r) } : null,
     challenge: state.chal, chalResult: state.chalResult ? { ok: state.chalResult.ok, more: state.chalResult.more, note: state.chalResult.note } : null,
-    trophies: state.save.trophies, unlocks: state.save.unlocks, best: state.save.best, challenges: state.save.challenges,
+    trophies: state.save.trophies, unlocks: state.save.unlocks, best: state.save.best, challenges: state.save.challenges, stars: state.save.stars,
     career: state.save.career, daily: state.save.daily, achievements: state.save.achievements, awards: state.awards || null, date: today(), look: { ball: R.look.ball.id || ballSkin(state.settings.ball).id, floor: R.look.floor.id },
     title: { idle: titleIdle, frames: titleFrames, running: raf !== 0, idleMs: titleIdleMs },
     replayGate: { at: state.lastReplayAt ?? null, pending: !!state.replayPending, frames: REC.buf.length },

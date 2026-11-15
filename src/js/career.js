@@ -162,3 +162,40 @@ export function nextMedal(score, diff) {
 export const cleanRecent = (x) => (Array.isArray(x) ? x.filter((v) => Number.isFinite(v) && v >= 0).map(Math.floor).slice(-RECENT_RUNS) : []);
 export const pushRecent = (x, score) => cleanRecent([...cleanRecent(x), score]);
 export const recentAverage = (x) => { const r = cleanRecent(x); return r.length ? Math.round(r.reduce((a, b) => a + b, 0) / r.length) : null; };
+
+// ---------------------------------------------------------------- Hot Streak bests by difficulty (S3-04)
+// One best for every difficulty and for the meter assist (which widens the window by half) is not a record to chase: the best is also kept for each
+// difficulty, with the assist apart. Keys: '0' Rookie, '1' Varsity, '2' All-State, and the same with an 'a' for a run played with the assist on.
+export const tierKey = (diff, assist) => `${[0, 1, 2].includes(diff) ? diff : 1}${assist ? 'a' : ''}`;
+const TIER_KEYS = ['0', '1', '2', '0a', '1a', '2a'];
+export const cleanTiers = (raw) => { const out = {}; if (obj(raw)) for (const k of TIER_KEYS) if (Number.isFinite(raw[k]) && raw[k] > 0) out[k] = Math.min(9999, Math.floor(raw[k])); return out; };
+// A finished run: the best for its tier only ever goes up.
+export const applyTier = (tiers, key, score) => { const t = cleanTiers(tiers); if (TIER_KEYS.includes(key) && Number.isFinite(score) && score > (t[key] || 0)) t[key] = Math.min(9999, Math.floor(score)); return t; };
+
+// ---------------------------------------------------------------- Banner Challenge stars (S3-06)
+// A challenge's win is still saved as `challenges[id] = true`; its stars are saved beside it as `stars[id] = { g, m }`: g is a bit mask of the goals
+// met (1 win, 2 margin, 4 skill) and m the best winning margin. An old save with a win and no stars entry counts as one star (the win).
+export const STAR_GOALS = [
+  { bit: 1, text: 'Win the challenge.' },
+  { bit: 2, text: 'Win by 5 or more.' },
+  { bit: 4, text: 'Win on Varsity or All-State with the meter assist off.' },
+];
+export const STAR_MARGIN = 5;
+// Goals met by a finished challenge: ok (it was won), margin (the smallest winning margin of its finals), skill (every final on Varsity or higher without the assist).
+export const starMask = ({ ok, margin, skill }) => (ok ? 1 | (margin >= STAR_MARGIN ? 2 : 0) | (skill ? 4 : 0) : 0);
+export const starCount = (g) => (g & 1) + ((g >> 1) & 1) + ((g >> 2) & 1);
+export function cleanStars(raw) {
+  const out = {};
+  if (obj(raw)) for (const k of Object.keys(raw)) if (KEY_OK(k) && obj(raw[k])) out[k] = { g: n0(raw[k].g) & 7, m: Math.min(999, n0(raw[k].m)) };
+  return out;
+}
+// A finished challenge, { id, g, m }: goals are only ever added, the margin only ever improves.
+export function applyStar(stars, rec) {
+  const s = cleanStars(stars);
+  if (!obj(rec) || !KEY_OK(rec.id)) return s;
+  const old = s[rec.id] || { g: 0, m: 0 };
+  s[rec.id] = { g: old.g | (n0(rec.g) & 7), m: Math.max(old.m, Math.min(999, n0(rec.m))) };
+  return s;
+}
+// The goals met for one challenge, counting an old save's plain win.
+export const goalsMet = (sv, id) => ((sv.stars && sv.stars[id] ? sv.stars[id].g : 0) | (sv.challenges && sv.challenges[id] ? 1 : 0)) & 7;

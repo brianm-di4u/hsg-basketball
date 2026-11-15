@@ -142,3 +142,47 @@ tests.push({
     t.equal(await t.page.locator('#screen .card.why').count(), 0, 'a win has none');
   },
 });
+
+tests.push({
+  name: 'S4-14: the home crowd starts fuller in a bigger gym and against a rival (node)',
+  node: true,
+  async run(t) {
+    const D = await load('data.js');
+    const hs = D.team('hot-springs'), lh = D.team('lake-hamilton'), cms = D.team('cutter-morning-star'), lk = D.team('lakeside');
+    t.expect(hs.gymSeats === 2200 && lh.gymSeats === 2280 && cms.gymSeats === 1500 && lk.gymSeats == null, 'seats come from the research data and only where it has a figure');
+    const g = (tm, away) => D.gymCrowd(tm, away);
+    t.expect(g(lh, 'fountain-lake') > g(cms, 'fountain-lake'), `a 2,280-seat gym (${g(lh, 'fountain-lake')}) starts above a 1,500-seat one (${g(cms, 'fountain-lake')})`);
+    t.expect(g(cms, 'fountain-lake') > g(lk, 'fountain-lake'), `and above a gym with no seat figure (${g(lk, 'fountain-lake')})`);
+    t.expect(g(hs, 'lakeside') > g(hs, 'fountain-lake') + 0.1, `a rival coming to Hot Springs raises the start (${g(hs, 'lakeside')} against ${g(hs, 'fountain-lake')})`);
+    t.expect(g(hs, 'lakeside') <= 0.6, 'but not past the 0.6 where the crowd starts to help: the home side still has to score first');
+    t.equal(g(hs, 'thistledown'), g(hs, 'fountain-lake'), 'a fictional visitor is no rival');
+  },
+});
+
+tests.push({
+  name: 'S4-14: an exhibition at home in a real gym has the crowd meter; away from home it does not',
+  viewports: ['desktop', 'mobile'],
+  async run(t) {
+    await t.game('newGame', { mode: 'exhibition', home: 'hot-springs', away: 'lakeside', program: 'boys', user: 'home', seed: 3, paused: true });
+    let s = await t.state();
+    t.equal(s.match.crowdTeam, 0, 'the home gym crowd backs the player at home');
+    t.expect(Math.abs(s.match.crowd - 0.52) < 0.011, `Hot Springs against a rival starts at about 0.52 (${s.match.crowd})`);
+    t.equal(await t.page.locator('#sb .sb-crowd').count(), 1, 'and the scoreboard shows the crowd bar');
+    await t.game('newGame', { mode: 'exhibition', home: 'hot-springs', away: 'fountain-lake', program: 'boys', user: 'home', seed: 3, paused: true });
+    s = await t.state();
+    t.expect(Math.abs(s.match.crowd - 0.37) < 0.011, `a non-rival starts at about 0.37 (${s.match.crowd})`);
+    await t.game('newGame', { mode: 'exhibition', home: 'hot-springs', away: 'lakeside', program: 'boys', user: 'away', seed: 3, paused: true });
+    s = await t.state();
+    t.equal(s.match.crowdTeam, -1, 'playing away gets no crowd, as before');
+    await t.game('newGame', { mode: 'exhibition', home: 'thistledown', away: 'lakeside', program: 'boys', user: 'home', seed: 3, paused: true });
+    s = await t.state();
+    t.equal(s.match.crowdTeam, -1, 'a fictional home team has none');
+    await t.game('newGame', { mode: 'exhibition', home: 'lakeside', away: 'hot-springs', program: 'boys', user: 'home', seed: 3, paused: true, venue: 'arena' });
+    s = await t.state();
+    t.equal(s.match.crowdTeam, 0, 'the finals arena crowd is unchanged');
+    t.expect(Math.abs(s.match.crowd - 0.3) < 0.011, `and still starts at 0.3 (${s.match.crowd})`);
+    await t.game('newGame', { mode: 'exhibition', home: 'hot-springs', away: 'lakeside', program: 'boys', user: 'home', seed: 3, paused: true });
+    await t.checkLayout();
+    await t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/S4-14-home-crowd-bar-${t.viewport}.png` });
+  },
+});

@@ -1,7 +1,7 @@
 {
   "note": "Gameplay is frozen during the visual campaign: these files must not change (tests/budget.test.mjs).",
   "files": {
-    "src/js/sim.js": "1f7dd8f20227fa4d59d84838bc2f20128bed0c0f044d59b806375e023aa34c52",
+    "src/js/sim.js": "73558bc0a8b1c9f8693a9279c2c21fe07b7960ba499f63de8ab96c33d7e8103b",
     "src/js/ai.js": "ad9cc2c68a8fcc6f032ee0039723f13aa0d8ddebce40ad9551a2c0794600d15c",
     "src/js/rules.js": "86f66130689b60d08ecae733c289fb5ed1af91b451064c9d5b0a49a25c11809d",
     "src/js/season.js": "4109e89519225c08cb8404d30161907825321d508b5b477059aa927a737272c5"

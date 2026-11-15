@@ -1,6 +1,6 @@
 // Team definitions: the seven real Garland County schools (setting only, from shared/data/schools.json)
 // plus clearly fictional out-of-county towns that fill schedules and brackets.
-import { contrast, shade } from './util.js';
+import { contrast, shade, clamp } from './util.js';
 import { STYLE_NEUTRAL } from './rules.js';
 
 /* global SCHOOLS, FACTS */
@@ -34,6 +34,7 @@ export const COUNTY = RAW.schools.map((s) => ({
   titles: titlesOf(s),
   // the home gym's name, only where the research confirmed it (S4-01); the others are shown as the school's home gym
   gym: s.venues && s.venues.basketball && s.venues.basketball.venueConfirmed ? s.venues.basketball.name : null,
+  gymSeats: (s.venues && s.venues.basketball && s.venues.basketball.capacity) || null, // seats, only where the research found a figure (S4-14)
 }));
 
 // Fictional towns: invented compound names, invented colors. None is a real school.
@@ -86,6 +87,13 @@ export function rivalry(a, b) {
   return RIVALRIES.find((r) => r.teams.includes(a) && r.teams.includes(b)) || null;
 }
 
+// How full the home crowd's meter starts in the home gym (S4-14): a bigger gym starts higher, a rivalry higher again. The finals arena keeps 0.3.
+export const GYM_CROWD = { small: 0.25, perSeat: 0.15, from: 1000, span: 1500, rival: 0.15 }; // a gym of unknown size, the extra for a full gym, where that scale starts and spans (seats), the rivalry bump
+export function gymCrowd(t, awayKey) {
+  const c = GYM_CROWD, seats = t && t.gymSeats;
+  const base = seats ? c.small + c.perSeat * clamp((seats - c.from) / c.span, 0, 1) : c.small;
+  return +clamp(base + (t && rivalry(t.key, awayKey) ? c.rival : 0), 0, 1).toFixed(2);
+}
 export const FINALS = { name: RAW.venues.basketballFinals.name, address: RAW.venues.basketballFinals.address, city: 'Hot Springs' };
 export const FACTS_LIST = (FACT_RAW && FACT_RAW.facts) || [];
 

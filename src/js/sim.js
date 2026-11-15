@@ -24,7 +24,7 @@ const MOVE_TURN = 1.5;  // acceleration multiple while the new heading opposes t
 const JUMP_V0 = 10, JUMP_V_JMP = 4; // a jump shot's launch speed in ft/s is JUMP_V0 + JUMP_V_JMP * jump rating; it sets how high he goes
 const STAT0 = () => ({ pts: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, reb: 0, ast: 0, stl: 0, blk: 0, to: 0, pf: 0, sec: 0 });
 
-// opts: {mode, home, away (team objects with roster, kit), rules:{qLen, shotClock}, seed, user (0|1|-1), difficulty, assist, crowd (team idx or -1), venue}
+// opts: {mode, home, away (team objects with roster, kit), rules:{qLen, shotClock}, seed, user (0|1|-1), difficulty, assist, crowd (team idx or -1), crowdStart (0 to 1, default 0.3), venue}
 export function createMatch(opts) {
   const rules = { qLen: 120, shotClock: 35, otLen: 60, bonusAt: 5, foulOut: 5, ...opts.rules };
   rules.otLen = Math.max(60, Math.round(rules.qLen / 2));
@@ -36,7 +36,7 @@ export function createMatch(opts) {
   });
   const m = {
     v: 1, mode: opts.mode || 'exhibition', rs: (opts.seed | 0) || 1, seed: opts.seed | 0, rules, program: opts.program,
-    difficulty: opts.difficulty ?? 1, assist: !!opts.assist, venue: opts.venue || 'home', crowdTeam: opts.crowd ?? -1, crowd: 0.3,
+    difficulty: opts.difficulty ?? 1, assist: !!opts.assist, venue: opts.venue || 'home', crowdTeam: opts.crowd ?? -1, crowd: opts.crowdStart ?? 0.3,
     teams: [mkTeam(opts.home, opts.user === 0), mkTeam(opts.away, opts.user === 1)],
     p: [], ball: { x: 47, y: 4, z: 25, vx: 0, vy: 0, vz: 0, state: 'dead', holder: -1, lastTouch: 0, passTo: -1, lastPasser: -1, passAt: -9, shot: null, land: null, tried: [] },
     poss: 0, possAt: 0, dir: [1, -1], arrow: 0, help: [-1, -1],

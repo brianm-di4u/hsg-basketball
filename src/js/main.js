@@ -1,5 +1,5 @@
 // Boot, fixed-step loop, scenes, season and challenge flow, saves, and the window.__game test hooks.
-import { COUNTY, team, kitFor, banners, FACTS_LIST, FINALS } from './data.js';
+import { COUNTY, team, kitFor, banners, FACTS_LIST, FINALS, gymCrowd } from './data.js';
 import { makeRoster, fullName } from './roster.js';
 import { COURT, rimFor, sx, sy } from './court.js';
 import { DT, createMatch, tick, startNextPeriod, summary, forceShot, give, commitFoul, topPerformer, startAt, cancelShot } from './sim.js';
@@ -376,9 +376,13 @@ function startMatch(o) {
   }
   const user = o.user === 'away' ? 1 : o.user === 'none' ? -1 : 0;
   const venue = o.venue || 'home';
-  const crowd = venue === 'arena' && user >= 0 && !(user === 0 ? home.fictional : away.fictional) ? user : -1;
+  // The finals crowd backs the player's real school. In the home gym (S4-14, exhibition and season games, not the daily or a challenge) the home crowd backs the player's real school playing at home, and it starts fuller in a bigger gym or against a rival.
+  const arena = venue === 'arena' && user >= 0 && !(user === 0 ? home.fictional : away.fictional);
+  const gym = venue === 'home' && user === 0 && !home.fictional && (state.mode === 'exhibition' || state.mode === 'season');
+  const crowd = arena ? user : gym ? 0 : -1;
+  const crowdStart = gym ? gymCrowd(team(o.home), o.away) : undefined;
   const m = createMatch({
-    mode: o.mode, home, away, program, seed, user, venue, crowd,
+    mode: o.mode, home, away, program, seed, user, venue, crowd, crowdStart,
     rules: { qLen: o.qLen ?? state.settings.qLen, shotClock: o.shotClock ?? state.settings.shotClock },
     difficulty: o.difficulty ?? state.settings.difficulty, assist: state.settings.assist, autoBreak: !!o.autoBreak,
   });

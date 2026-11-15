@@ -1016,6 +1016,20 @@ function menuHeroes(sc, key) {
   return out;
 }
 
+// The shot meter again as a ring around the SHOOT button (S1-13), where a thumb already is: it fills as the meter rises, with the GOOD and PERFECT
+// zones drawn on it. The bar's scale is 0 to 1.18, as in render.js. Set only when it changes, and only the CSS variables: the ring itself is in main.css.
+const METER_TOP = 1.18;
+let ringKey = '';
+function padMeter(mt) {
+  const el = $('#b-shoot'), on = !!mt && mt.v > 0.001 && !!mt.win;
+  const deg = (v) => Math.round(Math.max(0, Math.min(1, v / METER_TOP)) * 3600) / 10;
+  const vars = on ? { '--mf': deg(mt.v) + 'deg', '--gs': deg(SWEET - 3 * mt.win) + 'deg', '--ps': deg(SWEET - mt.win) + 'deg', '--pe': deg(SWEET + mt.win) + 'deg', '--ge': deg(SWEET + 3 * mt.win) + 'deg' } : null;
+  const key = vars ? Object.values(vars).join() : '';
+  if (key === ringKey) return;
+  ringKey = key;
+  el.classList.toggle('metering', on);
+  if (vars) for (const k of Object.keys(vars)) el.style.setProperty(k, vars[k]);
+}
 function drawMatch(m, dt) {
   const ut = m.user.team;
   const players = m.p.map((pl) => {
@@ -1071,6 +1085,7 @@ function drawMatch(m, dt) {
     const tt = performance.now() / 1000, ang = Math.sin(tt * 0.05) * 0.85;
     G3.camOverride = { attract: true, p: [47 + Math.sin(ang) * 40, 21 + Math.sin(tt * 0.07) * 3, 25 + Math.cos(ang) * 40], t: [m.ball.x * 0.5 + 23.5, 5, 18], fov: 42 };
   } else if (G3.camOverride && G3.camOverride.attract) { G3.camOverride = null; R.snap = true; }
+  padMeter(meter);
   draw({ m, venue: venueOf(m), dt, camX, camZ: m.ball.z, players, ball: m.ball, meter, ftMeter, offscreen, cheer, cheerTeam: state.cheerTeam, cheerAge: state.cheerAt && state.cheerAt.m === m ? m.time - state.cheerAt.t : null, cheerX: state.cheerAt ? state.cheerAt.x : null, perfect, slam, vertical: verticalDir(m) });
   updateScoreboard();
 }

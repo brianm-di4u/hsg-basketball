@@ -1,5 +1,5 @@
 // Field-specific save intents. Ordinary preferences never replay cached progress.
-import { cleanCareer, applyGame, cleanDaily, applyDaily, cleanAchievements, DATE_RE } from './career.js';
+import { pushRecent, cleanCareer, applyGame, cleanDaily, applyDaily, cleanAchievements, DATE_RE } from './career.js';
 const object = x => !!x && typeof x === 'object' && !Array.isArray(x);
 const clone = x => JSON.parse(JSON.stringify(x));
 function ordered(x) { return Array.isArray(x) ? x.map(ordered) : object(x) ? Object.fromEntries(Object.keys(x).sort().map(k => [k, ordered(x[k])])) : x; }
@@ -16,7 +16,7 @@ export function mergeSave(latest, defaults, intent) {
   if (latest && !validSave(latest)) throw new Error('Unsupported current save');
   const value = clone(latest || { v: 1, settings: defaults, season: null, trophies: [], unlocks: { throwback: false }, best: { shootout: 0 }, challenges: {} });
   value.settings = { ...defaults, ...(value.settings || {}), ...(intent.settings || {}) };
-  if (Number.isFinite(intent.score) && intent.score >= 0) value.best = { ...(value.best || {}), shootout: Math.max(value.best?.shootout || 0, intent.score) };
+  if (Number.isFinite(intent.score) && intent.score >= 0) value.best = { ...(value.best || {}), shootout: Math.max(value.best?.shootout || 0, intent.score), recent: pushRecent(value.best?.recent, intent.score) }; // recent: the last runs, for the rolling average (S3-07)
   for (const k of intent.challenges || []) value.challenges = { ...(value.challenges || {}), [k]: true };
   for (const k of intent.unlocks || []) value.unlocks = { ...(value.unlocks || {}), [k]: true };
   // S3-01: finished games add to the career totals, a finished daily game to the daily record, an earned achievement to its list.

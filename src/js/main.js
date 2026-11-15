@@ -15,7 +15,7 @@ import { AU, unlock, play, setVolume, setOn, setAmbience, setMusic, setMusicTrac
 import { DIFF, meterQuality, SWEET } from './rules.js';
 import { writeSave, readSaveSnapshot, resetSave, store, fmtClock, hash, frameDue } from './util.js';
 import { mergeSave, seasonText } from './save-policy.js';
-import { ACHIEVEMENTS, BALLS, FLOORS, ballSkin, floorFinish, unlockKey, kitKey, hasAlt, cleanCareer, cleanDaily, cleanAchievements, applyGame, applyDaily, emptyCareer, newBests, earnedAchievements, earnedCosmetics, liveStreak, addDays } from './career.js';
+import { pushRecent, ACHIEVEMENTS, BALLS, FLOORS, ballSkin, floorFinish, unlockKey, kitKey, hasAlt, cleanCareer, cleanDaily, cleanAchievements, applyGame, applyDaily, emptyCareer, newBests, earnedAchievements, earnedCosmetics, liveStreak, addDays } from './career.js';
 import { dailyDeal, localDate } from './daily.js';
 import * as UI from './ui.js';
 
@@ -727,6 +727,7 @@ function endShootout() {
   if (so.practice) { play('buzzer'); announce(`Time. ${so.made} of ${so.att} made.`); setCoach(null); go('shootoutEnd', false); return; } // practice is not scored or saved
   const memoryBest = state.save.best.shootout || 0;
   state.save.best.shootout = Math.max(memoryBest, so.score);
+  state.save.best.recent = pushRecent(state.save.best.recent, so.score); // kept in memory if saving fails; a good save replaces it with the stored list
   const saved = persist({ score: so.score });
   so.newBest = so.score > (saved.previousBest ?? memoryBest);
   state.awards = award({ shootout: so.score });

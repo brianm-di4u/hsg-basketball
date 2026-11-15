@@ -5,7 +5,7 @@ import { fullName, heightStr } from './roster.js';
 import { ROUNDS, nextGame } from './season.js';
 import { CHALLENGES } from './challenges.js';
 import { DIFF } from './rules.js';
-import { ACHIEVEMENTS, BALLS, FLOORS, KIT_WINS, hasAlt, kitKey, unlockKey, liveStreak, addDays } from './career.js';
+import { ladder, medalFor, nextMedal, cleanRecent, recentAverage, ACHIEVEMENTS, BALLS, FLOORS, KIT_WINS, hasAlt, kitKey, unlockKey, liveStreak, addDays } from './career.js';
 
 export const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 const crest = (t, px = 48, cls = 'crest') => `<img class="${cls}" src="${crestURL(t, px * 2)}" width="${px}" height="${px}" alt="">`;
@@ -244,6 +244,8 @@ export function championScreen(st) {
 }
 
 // ---------------------------------------------------------------- shootout
+// One lucky run is not how you shoot: the average of the last few finished runs sits beside the best (S3-07).
+const hotAverage = (best) => { const n = cleanRecent(best && best.recent).length; return n >= 2 ? ` · Average of your last ${n}: <b>${recentAverage(best.recent)}</b>` : ''; };
 export function shootoutSetupScreen(st) {
   const x = st.pick;
   return `<div class="panel wide">
@@ -251,11 +253,13 @@ export function shootoutSetupScreen(st) {
     <p>60 seconds, seven spots around the arc and the elbows. Inside spots are worth 2, beyond the arc 3. Three makes in a row fill the steam gauge for double points; six in a row for triple. Your shooter is the best jump shooter on the roster (fictional).</p>
     ${seg('pickProgram', [['boys', 'Boys'], ['girls', 'Girls']], x.program, 'Program')}
     ${grid('pickSchool', x.school, 'School')}
-    <p>Best score: <b>${st.save.best.shootout || 0}</b></p>
+    <p>Best score: <b>${st.save.best.shootout || 0}</b>${hotAverage(st.save.best)}</p>
+    <p class="fine">${esc(DIFF[st.settings.difficulty] ? DIFF[st.settings.difficulty].name : 'Varsity')} medals: Bronze ${ladder(st.settings.difficulty).bronze}, Silver ${ladder(st.settings.difficulty).silver}, Gold ${ladder(st.settings.difficulty).gold}.</p>
     <p class="fine">New to the shot meter? Practice is 30 seconds of free shooting from the same spots. It is not scored and does not touch your best.</p>
     <div class="row end">${btn('title', 'Back')}${btn('startPractice', 'Practice')}${btn('startShootout', 'Start', { cls: 'primary' })}</div>
   </div>`;
 }
+const hotMedal = (so) => { const m = medalFor(so.score, so.difficulty), nx = nextMedal(so.score, so.difficulty); return `<p class="medal">${m ? `<b>${m} medal.</b>` : 'No medal yet.'}${nx ? ` ${nx.name} is ${nx.at} points.` : ' That is the top of the ladder.'}</p>`; };
 export function shootoutEndScreen(st, so, isBest, awards = '') {
   if (so.practice) return `<div class="panel">
     <p class="kicker">Practice · time</p>
@@ -267,7 +271,8 @@ export function shootoutEndScreen(st, so, isBest, awards = '') {
     <p class="kicker">Hot Streak · time</p>
     <h2>${so.score} points</h2>
     <p>${so.made} of ${so.att} made${so.att ? ` (${Math.round((100 * so.made) / so.att)}%)` : ''}.</p>
-    <p>${isBest ? '<b>New best!</b>' : `Best: <b>${st.save.best.shootout}</b>`}</p>
+    <p>${isBest ? '<b>New best!</b>' : `Best: <b>${st.save.best.shootout}</b>`}${hotAverage(st.save.best)}</p>
+    ${hotMedal(so)}
     ${awards}
     <div class="row end">${btn('title', 'Menu')}${btn('startShootout', 'Go again', { cls: 'primary' })}</div>
   </div>`;

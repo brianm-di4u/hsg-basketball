@@ -319,3 +319,73 @@ tests.push({
     t.equal(await goal(), null, 'an exhibition shows no goal line');
   },
 });
+
+tests.push({
+  name: 'S3-07: Hot Streak medals by difficulty, and a saved list of recent runs for a rolling average (node)',
+  node: true,
+  async run(t) {
+    const S = await load('career.js'), P = await load('save-policy.js');
+    t.equal(S.medalFor(29, 1), null, 'Varsity: 29 is no medal');
+    t.equal(S.medalFor(30, 1), 'Bronze', 'Varsity: 30 is Bronze');
+    t.equal(S.medalFor(45, 1), 'Silver', 'Varsity: 45 is Silver');
+    t.equal(S.medalFor(60, 1), 'Gold', 'Varsity: 60 is Gold');
+    t.expect(S.medalFor(34, 0) === null && S.medalFor(35, 0) === 'Bronze', 'Rookie asks for 5 more');
+    t.expect(S.medalFor(28, 2) === 'Bronze' && S.medalFor(57, 2) === 'Gold', 'All-State asks for a little less');
+    t.equal(S.medalFor(40, 9), 'Bronze', 'an unknown difficulty reads as Varsity');
+    t.equal(JSON.stringify(S.nextMedal(10, 1)), JSON.stringify({ name: 'Bronze', at: 30 }), 'next medal from 10 is Bronze at 30');
+    t.equal(JSON.stringify(S.nextMedal(50, 1)), JSON.stringify({ name: 'Gold', at: 60 }), 'from 50 it is Gold at 60');
+    t.equal(S.nextMedal(70, 1), null, 'and nothing above Gold');
+    t.equal(JSON.stringify(S.cleanRecent([5, 'x', -3, NaN, 7.9, null, 12])), JSON.stringify([5, 7, 12]), 'damaged entries are dropped and scores made whole');
+    t.equal(JSON.stringify(S.cleanRecent('no')), '[]', 'a damaged list reads as empty');
+    t.equal(S.pushRecent(Array.from({ length: 10 }, (_, i) => i), 99).join(), '1,2,3,4,5,6,7,8,9,99', 'only the last ten runs are kept');
+    t.equal(S.recentAverage([40, 50, 60]), 50, 'the average');
+    t.equal(S.recentAverage([]), null, 'no runs, no average');
+    // Saving: a finished run adds to the stored list; the best is never lowered; old and damaged saves read as empty lists.
+    const defaults = { sound: true };
+    let v = P.mergeSave(null, defaults, { score: 40 }).value;
+    t.equal(JSON.stringify(v.best), JSON.stringify({ shootout: 40, recent: [40] }), 'a first run');
+    v = P.mergeSave(v, defaults, { score: 22 }).value;
+    t.expect(v.best.shootout === 40 && v.best.recent.join() === '40,22', `a lower run keeps the best and joins the list (${JSON.stringify(v.best)})`);
+    const old = { v: 1, settings: {}, trophies: [], unlocks: {}, best: { shootout: 33 }, challenges: {} };
+    v = P.mergeSave(old, defaults, { score: 10 }).value;
+    t.expect(v.best.shootout === 33 && v.best.recent.join() === '10', 'a save from before this change starts its list and keeps its best');
+    v = P.mergeSave({ ...old, best: { shootout: 33, recent: 'broken' } }, defaults, { score: 10 }).value;
+    t.equal(v.best.recent.join(), '10', 'a damaged list starts again');
+    t.expect(P.validSave({ ...old, best: { shootout: 33, recent: 'broken' } }), 'and never makes the save unreadable');
+    v = P.mergeSave(old, defaults, { settings: { sound: false } }).value;
+    t.expect(v.best.recent === undefined, 'a settings save does not add runs');
+  },
+});
+
+tests.push({
+  name: 'S3-07: the Hot Streak result shows a medal and the average of recent runs, and they survive a reload',
+  viewports: ['desktop', 'mobile'],
+  async run(t) {
+    const finish = async (score) => {
+      await t.game('newGame', { mode: 'shootout', paused: true });
+      await t.game('setState', { shootout: { phase: 'live', score, t: 0.05 } });
+      await t.game('pause', false);
+      return stepUntil(t, (x) => x.scene === 'shootoutEnd', 400, 10, 'the end');
+    };
+    await t.game('setState', { settings: { difficulty: 1 } });
+    await finish(47);
+    let txt = await t.page.innerText('#screen');
+    t.expect(/Silver medal\. Gold is 60 points\./.test(txt), `47 on Varsity: Silver, Gold at 60 (${txt.replace(/\n+/g, ' | ').slice(0, 200)})`);
+    t.expect(!/Average of your last/.test(txt), 'one run is not an average yet');
+    await t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/S3-07-hot-streak-medal-${t.viewport}.png` });
+    await finish(20);
+    txt = await t.page.innerText('#screen');
+    t.expect(/No medal yet\. Bronze is 30 points\./.test(txt), 'a weak run says what Bronze needs');
+    t.expect(/Best: 47/.test(txt) && /Average of your last 2: 34/.test(txt), 'the best stays and the average of the two runs sits beside it');
+    await t.checkLayout();
+    await t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/S3-07-hot-streak-average-${t.viewport}.png` });
+    await t.page.reload();
+    await waitFor(t, (s) => s.scene === 'title', 10000, 'reloaded');
+    const s = await t.state();
+    t.equal((s.best.recent || []).join(), '47,20', 'the recent runs are still there after a reload');
+    await t.page.click('[data-act="shootoutSetup"]');
+    txt = await t.page.innerText('#screen');
+    t.expect(/Best score: 47/.test(txt) && /Average of your last 2: 34/.test(txt) && /Varsity medals: Bronze 30, Silver 45, Gold 60/.test(txt), `the setup card shows the best, the average and the ladder (${txt.replace(/\n+/g, ' | ').slice(0, 260)})`);
+    await t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/S3-07-hot-streak-setup-${t.viewport}.png` });
+  },
+});

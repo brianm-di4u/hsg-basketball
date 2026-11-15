@@ -138,3 +138,27 @@ export function cleanAchievements(raw) {
 }
 // Does this school have an alternate strip the player has earned? Hot Springs' is the 1912-style throwback (a Banner Challenge); the others are Heritage kits.
 export const hasAlt = (unlocks, key) => !!(unlocks && (key === 'hot-springs' ? unlocks.throwback : unlocks[kitKey(key)]));
+
+// ---------------------------------------------------------------- Hot Streak medals and recent runs
+// Medals (S3-07): where a score sits on a ladder per difficulty, so one lucky or unlucky run does not stand for how you shoot. Varsity is the middle
+// ladder; the others move with how much the difficulty shifts a skilled shooter's average (about +5 on Rookie, -2 on All-State, in the council's probe).
+export const MEDALS = [
+  { bronze: 35, silver: 50, gold: 65 }, // Rookie
+  { bronze: 30, silver: 45, gold: 60 }, // Varsity
+  { bronze: 28, silver: 43, gold: 57 }, // All-State
+];
+export const RECENT_RUNS = 10; // how many finished runs the rolling average covers
+export const ladder = (diff) => MEDALS[diff] || MEDALS[1];
+export function medalFor(score, diff) {
+  const l = ladder(diff);
+  return score >= l.gold ? 'Gold' : score >= l.silver ? 'Silver' : score >= l.bronze ? 'Bronze' : null;
+}
+// The next medal up from a score, as { name, at }, or null once it is Gold.
+export function nextMedal(score, diff) {
+  const l = ladder(diff);
+  return score < l.bronze ? { name: 'Bronze', at: l.bronze } : score < l.silver ? { name: 'Silver', at: l.silver } : score < l.gold ? { name: 'Gold', at: l.gold } : null;
+}
+// The saved list of recent finished runs: whole non-negative scores only, newest last, at most RECENT_RUNS. Anything else reads as empty.
+export const cleanRecent = (x) => (Array.isArray(x) ? x.filter((v) => Number.isFinite(v) && v >= 0).map(Math.floor).slice(-RECENT_RUNS) : []);
+export const pushRecent = (x, score) => cleanRecent([...cleanRecent(x), score]);
+export const recentAverage = (x) => { const r = cleanRecent(x); return r.length ? Math.round(r.reduce((a, b) => a + b, 0) / r.length) : null; };

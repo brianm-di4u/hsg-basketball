@@ -362,3 +362,8 @@ body.reduced .coach-dot { animation: none; }
 #coach-skip:hover { border-color: #D4AF37; }
 @media (max-width: 600px) { #coach { max-width: calc(100% - 76px); left: 10px; transform: none; justify-content: flex-start; } }
 .goal { margin: 0 0 8px; }
+
+/* Banner Challenge goal line under the scoreboard (S2-03) */
+#sb .sb-goal { grid-column: 1 / -1; text-align: center; font: 600 var(--fs-sm)/1.2 var(--font-text); letter-spacing: .02em; color: #FFE9A8; padding: 1px 4px 0; overflow-wrap: anywhere; }
+#sb .sb-goal.bad { color: #FF9B8A; }
+@media (max-width: 520px) { #sb .sb-goal { font-size: .78rem; } }

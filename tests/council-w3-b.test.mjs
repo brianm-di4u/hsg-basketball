@@ -288,3 +288,34 @@ tests.push({
     t.expect(ui.includes('shared/data/schools.json'), 'the About tab points at shared/data/schools.json');
   },
 });
+
+tests.push({
+  name: 'S2-03: a Banner Challenge shows its goal and where you stand under the scoreboard, and a plain game shows none',
+  viewports: ['desktop', 'mobile'],
+  async run(t) {
+    const goal = async () => { await t.game('step', 2); return (await t.page.locator('#sb .sb-goal').count()) ? (await t.page.locator('#sb .sb-goal').innerText()).trim() : null; };
+    await t.game('newGame', { mode: 'challenge', challenge: '6a-trial', seed: 4, paused: true });
+    let g = await goal();
+    t.equal(g, '6A Trial Run: allowed 0 of 6', 'the 6A Trial shows how many points you may still allow');
+    await t.game('setState', { match: { score: [30, 32] } });
+    g = await goal();
+    t.equal(g, '6A Trial Run: allowed 4 of 6', 'and counts the points allowed since the start of the scenario');
+    await t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/S2-03-challenge-goal-${t.viewport}.png` });
+    await t.checkLayout();
+    await t.game('setState', { match: { score: [30, 36] } });
+    g = await goal();
+    t.equal(g, '6A Trial Run: allowed 8 of 6 - over the limit', 'it says so once the limit is passed');
+    t.equal(await t.page.locator('#sb .sb-goal.bad').count(), 1, 'in the warning colour');
+    await t.game('newGame', { mode: 'challenge', challenge: 'lady-trojans-five', seed: 4, paused: true });
+    g = await goal();
+    t.equal(g, 'Lady Trojans Five: down 6 - win it', 'a comeback shows the deficit');
+    await t.game('setState', { match: { score: [40, 40] } });
+    t.equal(await goal(), 'Lady Trojans Five: tied - win it', 'tied');
+    await t.game('setState', { match: { score: [42, 40] } });
+    t.equal(await goal(), 'Lady Trojans Five: up 2 - hold it', 'and ahead');
+    await t.game('newGame', { mode: 'challenge', challenge: 'double-crown', seed: 4, paused: true });
+    t.equal(await goal(), 'Double Crown (final 1 of 2): tied - win it', 'a two-step challenge says which final this is');
+    await t.game('newGame', { mode: 'exhibition', home: 'hot-springs', away: 'lakeside', program: 'boys', user: 'home', seed: 3, paused: true });
+    t.equal(await goal(), null, 'an exhibition shows no goal line');
+  },
+});

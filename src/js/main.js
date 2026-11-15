@@ -1076,6 +1076,20 @@ function drawShootout(dt) {
 
 // ---------------------------------------------------------------- scoreboard
 let sbCache = '';
+// The Banner Challenge's goal and where the player stands, as one line under the scoreboard (S2-03). Null outside a challenge.
+function challengeGoal(m) {
+  if (state.mode !== 'challenge' || !state.chal || m.user.team < 0) return null;
+  const c = challenge(state.chal.id), step = c && c.steps[state.chal.step];
+  if (!step) return null;
+  const ut = m.user.team, mine = m.teams[ut].score, theirs = m.teams[1 - ut].score;
+  const part = c.steps.length > 1 ? ` (final ${state.chal.step + 1} of ${c.steps.length})` : '';
+  if (step.maxAllowed != null) {
+    const allowed = theirs - (m.startScore ? m.startScore[1 - ut] : 0);
+    return { text: `${c.title}: allowed ${allowed} of ${step.maxAllowed}${allowed > step.maxAllowed ? ' - over the limit' : ''}`, bad: allowed > step.maxAllowed };
+  }
+  const d = mine - theirs;
+  return { text: `${c.title}${part}: ${d < 0 ? `down ${-d} - win it` : d > 0 ? `up ${d} - hold it` : 'tied - win it'}`, bad: false };
+}
 function updateScoreboard(force) {
   const sb = $('#sb');
   if (sb.hidden) return;
@@ -1102,7 +1116,8 @@ function updateScoreboard(force) {
     };
     const shotTxt = !m.rules.shotClock ? '' : m.clock.shotOff ? '--' : Math.ceil(Math.max(0, m.clock.shot - 0.001));
     const crowd = m.crowdTeam >= 0 ? `<span class="sb-crowd" role="img" aria-label="Home crowd ${Math.round(m.crowd * 100)} percent"><i style="width:${Math.round(m.crowd * 100)}%"></i></span>` : '';
-    html = `${side(0)}<div class="sb-mid"><span class="sb-q">${q}</span><span class="sb-clock">${fmtClock(m.clock.t)}</span>${m.rules.shotClock ? `<span class="sb-shot" title="Shot clock">${shotTxt}</span>` : '<span class="sb-shot off">CLASSIC</span>'}${crowd}</div>${side(1)}`;
+    const goal = challengeGoal(m);
+    html = `${side(0)}<div class="sb-mid"><span class="sb-q">${q}</span><span class="sb-clock">${fmtClock(m.clock.t)}</span>${m.rules.shotClock ? `<span class="sb-shot" title="Shot clock">${shotTxt}</span>` : '<span class="sb-shot off">CLASSIC</span>'}${crowd}</div>${side(1)}${goal ? `<div class="sb-goal${goal.bad ? ' bad' : ''}">${UI.esc(goal.text)}</div>` : ''}`;
   }
   if (html !== sbCache || force) { sbCache = html; sb.innerHTML = html; sb.classList.toggle('so', !!(state.so && SO_SCENES.has(sc))); }
 }

@@ -20,7 +20,7 @@ import { dailyDeal, localDate } from './daily.js';
 import * as UI from './ui.js';
 
 const $ = (s) => document.querySelector(s);
-const DEFAULTS = { sound: true, vol: 0.5, motion: 'auto', text: 100, theme: 'auto', difficulty: 1, qLen: 120, shotClock: 35, assist: false, touch: 'auto', graphics: 'auto', replays: true, ambience: true, music: true, ball: 'classic', floor: 'natural', tipsSeen: false };
+const DEFAULTS = { sound: true, vol: 0.5, motion: 'auto', text: 100, theme: 'auto', difficulty: 1, qLen: 120, shotClock: 35, assist: false, touch: 'auto', graphics: 'auto', replays: true, haptics: true, ambience: true, music: true, ball: 'classic', floor: 'natural', tipsSeen: false };
 const state = {
   scene: 'title', stack: [], settings: { ...DEFAULTS }, season: null,
   save: { trophies: [], unlocks: { throwback: false }, best: { shootout: 0 }, challenges: {}, career: emptyCareer(), daily: cleanDaily(null), achievements: {} },
@@ -121,7 +121,7 @@ const SETTING_OK = {
   sound: (v) => typeof v === 'boolean', vol: (v) => [0.25, 0.5, 0.8].includes(v), motion: (v) => ['auto', 'on', 'off'].includes(v),
   text: (v) => [100, 115, 130].includes(v), theme: (v) => ['auto', 'light', 'dark'].includes(v), difficulty: (v) => [0, 1, 2].includes(v),
   qLen: (v) => [120, 240, 480].includes(v), shotClock: (v) => [0, 35].includes(v), assist: (v) => typeof v === 'boolean',
-  touch: (v) => ['auto', 'on', 'off'].includes(v), graphics: (v) => ['auto', '3d', '2d'].includes(v), replays: (v) => typeof v === 'boolean', ambience: (v) => typeof v === 'boolean', music: (v) => typeof v === 'boolean',
+  touch: (v) => ['auto', 'on', 'off'].includes(v), graphics: (v) => ['auto', '3d', '2d'].includes(v), replays: (v) => typeof v === 'boolean', haptics: (v) => typeof v === 'boolean', ambience: (v) => typeof v === 'boolean', music: (v) => typeof v === 'boolean',
   ball: (v) => BALLS.some((b) => b.id === v), floor: (v) => FLOORS.some((f) => f.id === v), tipsSeen: (v) => typeof v === 'boolean',
 };
 function cleanSettings(raw) {
@@ -410,7 +410,7 @@ function newExhibition(o = {}) {
 
 function enterGame() {
   state.paused = false; state.finalShown = false; state.showBox = false;
-  state.lastReplayAt = null; state.replayPending = null; REC.buf.length = 0; // match time restarts at 0: the last game's replay cooldown, queued replay and frames do not carry over
+  state.mineShotAt = null; state.lastReplayAt = null; state.replayPending = null; REC.buf.length = 0; // match time restarts at 0: the last game's replay cooldown, queued replay and frames do not carry over
   state.factSeed = (state.match.seed || 1) + 3;
   state.track = newTrack(state.match); state.awards = null;
   state.coach = state.settings.tipsSeen ? null : newCoach();
@@ -853,6 +853,13 @@ function matchTension(m) {
   setTension(T);
   return T;
 }
+// Haptics (S5-07): short pulses for the player's own shot release, a rim hit, a basket and the buzzer. Only where the browser can
+// vibrate, the touch controls are in use, Vibration is on in Settings and reduced motion is not asked for.
+const HAPTIC = { release: 10, rim: 20, make: [15, 30, 15], buzzer: 40 };
+function haptic(kind) {
+  if (state.settings.haptics === false || !touchOn() || reducedMotion() || typeof navigator.vibrate !== 'function') return;
+  try { navigator.vibrate(HAPTIC[kind]); } catch (e) { /* the browser said no */ }
+}
 const WHY = { shotclock: 'SHOT CLOCK', oob: 'OUT OF BOUNDS', reach: 'FOUL', shoot: 'SHOOTING FOUL', '5sec': '5 SECONDS' };
 function matchEvents(m) {
   for (const e of m.ev) {
@@ -865,6 +872,7 @@ function matchEvents(m) {
         { // your basket gets the full roar, theirs a polite murmur and a groan from your crowd; taking the lead brings the house down
           const mine = mineSide(m, e.t), pan = panAt(m, COURT.rimX[side]), diff = m.teams[0].score - m.teams[1].score, before = diff - (e.t === 0 ? e.pts : -e.pts);
           play('cheer', { big: e.pts === 3 || m.teams[e.t].isUser, mine, pan });
+          if (m.user.team === e.t) haptic('make');
           if (!mine) play('groan', { pan: -pan * 0.5 });
           if (mine && before * diff < 0) play('roar', { pan: 0 });
           bump(mine ? (e.pts === 3 ? 0.8 : 0.55) : 0.3);
@@ -876,11 +884,11 @@ function matchEvents(m) {
         break;
       }
       case 'swish': netHit(rimSide(m.ball.x)); play('swish', { pan: panAt(m, m.ball.x) }); if (e.type === 'dunk') shake(0.6); state.lastMake = { dunk: e.type === 'dunk', buzzer: !!(m.ball.shot && m.ball.shot.buzzer), side: rimSide(m.ball.x) }; break;
-      case 'rim': rimHit(rimSide(m.ball.x)); play('rim', { hard: e.hard, v: m.ball.z < COURT.rimZ - 0.2 ? 0 : m.ball.z > COURT.rimZ + 0.2 ? 1 : 2, pan: panAt(m, m.ball.x) }); if (state.lastShot && m.time - state.lastShot < 2.5) { play('ooh', { pan: panAt(m, m.ball.x) }); bump(0.2); } break;
+      case 'rim': if (state.mineShotAt != null && m.time - state.mineShotAt < 3) haptic('rim'); rimHit(rimSide(m.ball.x)); play('rim', { hard: e.hard, v: m.ball.z < COURT.rimZ - 0.2 ? 0 : m.ball.z > COURT.rimZ + 0.2 ? 1 : 2, pan: panAt(m, m.ball.x) }); if (state.lastShot && m.time - state.lastShot < 2.5) { play('ooh', { pan: panAt(m, m.ball.x) }); bump(0.2); } break;
       case 'bounce': play('bounce', { pan: panAt(m, m.ball.x), far: e.i == null || !isUserBall(m, e.i) }); break;
       case 'floor': play('floor', { pan: panAt(m, m.ball.x) }); break;
       case 'whistle': play('whistle'); duck(5, 700); if (WHY[e.why]) pop(WHY[e.why], m.ball.x, 8, m.ball.z, '#FFB4A8'); if (e.why === 'shotclock') announce('Shot-clock violation.'); break;
-      case 'buzzer': play('buzzer'); duck(6, 1000); break;
+      case 'buzzer': play('buzzer'); haptic('buzzer'); duck(6, 1000); break;
       case 'steal': pop('STEAL!', m.p[e.i].x, 7, m.p[e.i].z, '#FFD84D'); play('steal', { pan: panAt(m, m.p[e.i].x) }); bump(0.15); break;
       case 'block': pop('BLOCKED!', m.p[e.i].x, 9, m.p[e.i].z, '#FFD84D'); play('block', { pan: panAt(m, m.p[e.i].x) }); bump(0.3); shake(0.4); state.cheer = 0.6; state.cheerTeam = m.p[e.i].t; break;
       case 'andone': pop('AND ONE!', m.p[e.i].x, 8, m.p[e.i].z, '#5FD38A', true); break;
@@ -888,7 +896,8 @@ function matchEvents(m) {
       case 'tip': play('squeak'); break;
       case 'airball': pop('AIRBALL', m.ball.x, 6, m.ball.z, '#FFB4A8'); play('sigh', { pan: panAt(m, m.ball.x) }); state.lastShot = 0; break;
       case 'gather': if (isUserBall(m, e.i)) { play('meter', { p: 0 }); meterAcc = 0; } break;
-      case 'shot': state.lastShot = e.three ? m.time : 0; play('release', { three: e.three, pan: panAt(m, m.p[e.i].x), far: !isUserBall(m, e.i) }); if (e.three) bump(0.25); break;
+      case 'shot': if (isUserBall(m, e.i)) { state.mineShotAt = m.time; haptic('release'); }
+        state.lastShot = e.three ? m.time : 0; play('release', { three: e.three, pan: panAt(m, m.p[e.i].x), far: !isUserBall(m, e.i) }); if (e.three) bump(0.25); break;
       case 'pass': play('pass', { pan: panAt(m, m.p[e.i].x), far: m.p[e.i].t !== m.user.team }); break;
       case 'catch': play('catch', { pan: panAt(m, m.p[e.i].x), far: m.p[e.i].t !== m.user.team }); break;
       case 'pump': play('fake', { pan: panAt(m, m.p[e.i].x), far: !isUserBall(m, e.i) }); break;
@@ -915,6 +924,10 @@ function soEvents(so) {
   for (const e of so.ev) {
     if (e.k === 'make' && e.mult > 1 && e.mult > (so.lastMult || 1)) play('streak', { p: (e.mult - 2) / 1 });
     if (e.k === 'make') so.lastMult = e.mult;
+    if (e.k === 'shot') haptic('release');
+    if (e.k === 'make') haptic('make');
+    if (e.k === 'miss') haptic('rim');
+    if (e.k === 'start' || e.k === 'end') haptic('buzzer');
     if (e.k === 'make') { pop(e.mult > 1 ? `+${e.pts} x${e.mult}` : `+${e.pts}`, e.x, 11.5, e.z, e.mult > 1 ? '#FFD84D' : '#FFF6E0', e.mult > 1); netHit(1); play('swish', { p: Math.min(1, ((e.mult || 1) - 1) / 2) }); bump(0.3); if (e.mult > 1) burst('steam', e.x, 10, e.z, 8, ['#fff']); }
     if (e.k === 'miss') { rimHit(1); play('rim'); play('ooh'); }
     if (e.k === 'start') play('buzzer');
@@ -1146,6 +1159,7 @@ const ACT = {
   setAssist: (a) => setSetting('assist', a === '1'),
   setTouch: (a) => setSetting('touch', a),
   setReplays: (a) => setSetting('replays', a === '1'),
+  setHaptics: (a) => { setSetting('haptics', a === '1'); if (a === '1') haptic('make'); }, // switching it on gives one pulse, so the player can feel that it works
   setGraphics: (a) => { setSetting('graphics', a); if (a !== '2d') start3d(); R.snap = true; drawFrame(0); },
   startExhibition: () => { if (state.pick.home !== state.pick.away) newExhibition(); },
   rematch: () => { state.match = startMatch(state.mode === 'daily' ? state.lastOpts : { ...state.lastOpts, seed: undefined }); enterGame(); }, // the daily game is the same game each time

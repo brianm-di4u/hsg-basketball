@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { exhibition, hqSettled, ready3d } from './helpers.mjs';
+import { exhibition, hqSettled, ready3d, shotFromInPage } from './helpers.mjs';
 
 const game = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -288,5 +288,107 @@ tests.push({
     await t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/S4-08-replay-${t.viewport}.png` });
     await t.game('act', 'endReplay');
     t.equal((await t.state()).gfx.post.cinema, false, 'and the effects are off again after it');
+  },
+});
+
+// Vibration: navigator.vibrate is replaced by a recorder.
+const recordVibrate = () => { window.__vib = []; Object.defineProperty(navigator, 'vibrate', { value: (p) => { window.__vib.push(p); return true; }, configurable: true, writable: true }); };
+const vib = (t) => t.page.evaluate(() => window.__vib.slice());
+const clearVib = (t) => t.page.evaluate(() => { window.__vib.length = 0; });
+const has = (list, p) => list.some((x) => JSON.stringify(x) === JSON.stringify(p));
+
+tests.push({
+  name: 'S5-07: a shot release, a rim hit, a basket and the buzzer vibrate a touch player, and nothing else does',
+  viewports: ['desktop', 'mobile'],
+  initScript: recordVibrate,
+  async run(t) {
+    await t.game('setState', { settings: { touch: 'on', haptics: true, motion: 'off' } });
+    // a forced perfect shot, seed by seed, until one drops
+    let made = null;
+    for (let seed = 1; seed <= 8 && !made; seed++) {
+      await clearVib(t);
+      const pts = await t.page.evaluate(shotFromInPage, [seed, 1]);
+      if (pts > 0) made = await vib(t);
+    }
+    t.expect(made, 'a forced perfect release scored for one of the first eight seeds');
+    t.equal(JSON.stringify(made && made[0]), JSON.stringify(10), 'the first pulse is the release: 10 ms');
+    t.expect(made && has(made, [15, 30, 15]), 'the basket gives the three-part pulse');
+    t.expect(made && made.every((p) => p === 10 || p === 20 || has([p], [15, 30, 15])), `and nothing else (${JSON.stringify(made)})`);
+    // a rim hit on your own shot: 20 ms
+    let rim = null;
+    for (let seed = 1; seed <= 12 && !rim; seed++) {
+      await clearVib(t);
+      await t.page.evaluate(shotFromInPage, [seed, 0.35]);
+      const v = await vib(t);
+      if (v.includes(20)) rim = v;
+    }
+    t.expect(rim, 'a mistimed release hit the rim for one of the first twelve seeds');
+    // the buzzer
+    await exhibition(t, { seed: 3 });
+    await t.game('step', 60);
+    await clearVib(t);
+    await t.game('setState', { match: { t: 0.3 } });
+    await t.stepUntil((s) => s.scene === 'break', { max: 900, chunk: 10, label: 'the end of the quarter' });
+    t.expect((await vib(t)).includes(40), 'the buzzer at the end of a quarter gives 40 ms');
+    // Hot Streak: release, make or miss, start
+    await t.game('newGame', { mode: 'shootout', seed: 4 });
+    await clearVib(t);
+    await t.game('act', 'input', { shoot: true }); await t.game('step', 3);
+    await t.game('act', 'input', { shoot: false });
+    await t.game('act', 'shootoutShot', 1); await t.game('step', 150);
+    const so = await vib(t);
+    t.expect(so.includes(40), 'the start buzzer vibrates');
+    t.expect(so.includes(10), 'the release vibrates');
+    t.expect(has(so, [15, 30, 15]) || so.includes(20), 'and so does the result, a basket or a rim');
+  },
+});
+tests.push({
+  name: 'S5-07: no vibration with the setting off, with touch controls off, or under reduced motion; the setting is saved',
+  viewports: ['mobile'],
+  initScript: recordVibrate,
+  async run(t) {
+    const shot = async () => { await clearVib(t); await t.page.evaluate(shotFromInPage, [2, 1]); return vib(t); };
+    await t.game('setState', { settings: { touch: 'on', haptics: true, motion: 'off' } });
+    t.expect((await shot()).length > 0, 'the baseline: pulses when everything is on');
+    await t.game('setState', { settings: { haptics: false } });
+    t.equal((await shot()).length, 0, 'Vibration off: silent');
+    await t.game('setState', { settings: { haptics: true, touch: 'off' } });
+    t.equal((await shot()).length, 0, 'touch controls off: silent');
+    await t.game('setState', { settings: { touch: 'on', motion: 'on' } });
+    t.equal((await shot()).length, 0, 'reduced motion: silent');
+    await t.game('setState', { settings: { motion: 'off' } });
+    // the Settings row
+    await t.game('scene', 'settings');
+    t.expect(/Vibration/.test(await t.page.innerText('#screen')), 'Settings has a Vibration switch');
+    await t.page.locator('[aria-label="Vibration"]').scrollIntoViewIfNeeded();
+    await t.shot('s5-07-settings-vibration');
+    await t.page.screenshot({ path: `${SHOTS}/S5-07-settings-vibration-${t.viewport}.png` });
+    await clearVib(t);
+    await t.page.click('[data-act="setHaptics"][data-arg="0"]');
+    t.equal((await t.state()).settings.haptics, false, 'Off is chosen');
+    t.equal((await vib(t)).length, 0, 'and gives no pulse');
+    await t.reload();
+    t.equal((await t.state()).settings.haptics, false, 'it is saved');
+    await t.game('scene', 'settings');
+    await clearVib(t);
+    await t.page.click('[data-act="setHaptics"][data-arg="1"]');
+    t.equal(JSON.stringify(await vib(t)), JSON.stringify([[15, 30, 15]]), 'switching it on gives one pulse to feel');
+    await t.checkLayout({ allowScrollY: true });
+  },
+});
+tests.push({
+  name: 'S5-07: an old save, or a damaged value, gets Vibration on; a browser that cannot vibrate does not show the switch',
+  viewports: ['desktop'],
+  initScript: () => { delete Navigator.prototype.vibrate; try { delete navigator.vibrate; } catch (e) { /* none */ } },
+  async run(t) {
+    await t.page.evaluate(([k]) => localStorage.setItem(k, JSON.stringify({ v: 1, settings: { sound: false, haptics: 'yes' }, trophies: [], unlocks: { throwback: false }, best: { shootout: 0 }, challenges: {} })), [KEY]);
+    await t.reload();
+    const s = await t.state();
+    t.equal(s.settings.haptics, true, 'a damaged value reads as the default, on');
+    t.equal(s.settings.sound, false, 'and the rest of the old save is as it was');
+    await t.game('scene', 'settings');
+    t.expect(!/Vibration/.test(await t.page.innerText('#screen')), 'no Vibration switch where the browser cannot vibrate');
+    await t.game('setState', { settings: { touch: 'on' } }); // a shot with no vibrate function must not throw (the harness fails the test on any page error)
+    await t.page.evaluate(shotFromInPage, [2, 1]);
   },
 });

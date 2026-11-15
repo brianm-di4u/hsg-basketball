@@ -460,6 +460,7 @@ export function settingsScreen(st, saving) {
     ${seg('setTouch', [['auto', 'Auto'], ['on', 'Always'], ['off', 'Never']], s.touch, 'Touch controls')}
     ${seg('setGraphics', [['auto', 'Auto'], ['3d', '3D gym'], ['2d', 'Classic 2D']], s.graphics || 'auto', 'Graphics')}
     ${seg('setReplays', [[1, 'On'], [0, 'Off']], s.replays === false ? 0 : 1, 'Highlight replays')}
+    ${typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function' ? seg('setHaptics', [[1, 'On'], [0, 'Off']], s.haptics === false ? 0 : 1, 'Vibration') : ''}
     ${seg('setTips', [[1, 'Show'], [0, 'Hide']], s.tipsSeen ? 0 : 1, 'First-game tips')}
     ${saveNote(saving)}
     <div class="row end">${btn('back', 'Done', { cls: 'primary' })}</div>

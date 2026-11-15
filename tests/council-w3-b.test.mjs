@@ -228,3 +228,42 @@ tests.push({
     t.expect(frameDue(1000, 0, 0), 'with no limit every frame is due');
   },
 });
+
+tests.push({
+  name: 'S1-14: timing pays more for the player: a PERFECT release is worth more, cancels half the contest, a late one is unchanged, the AI is untouched (node)',
+  node: true,
+  async run(t) {
+    const rules = await load('rules.js');
+    const c = (o) => rules.shotChance({ dist: 24, type: 'jumper', sht: 0.55, ins: 0.55, ...o });
+    const ai = { perfect: c({ quality: 1 }), good: c({ quality: 0.75 }), late: c({ quality: 0.3 }), contested: c({ quality: 1, contest: 0.62 }) };
+    t.expect(Math.abs(ai.perfect - 0.459) < 0.002 && Math.abs(ai.good - 0.34) < 0.002 && Math.abs(ai.contested - 0.284) < 0.002, `the AI's numbers are as before (${ai.perfect.toFixed(3)}, ${ai.good.toFixed(3)}, ${ai.contested.toFixed(3)})`);
+    const hu = { perfect: c({ quality: 1, human: true }), good: c({ quality: 0.75, human: true }), late: c({ quality: 0.3, human: true }), contested: c({ quality: 1, contest: 0.62, human: true }) };
+    t.expect(hu.perfect >= 0.55, `a PERFECT open three at an average rating goes in at least 55% (${hu.perfect.toFixed(3)}; it was 46%)`);
+    t.expect(hu.contested >= 0.45, `a contested PERFECT three goes in at least 45% (${hu.contested.toFixed(3)}; it was 28%)`);
+    t.expect(hu.late === ai.late, 'a late release is worth what it was');
+    t.expect(hu.good < ai.good && hu.good > 0.22, `a GOOD one pays a little less to keep ordinary timing near where it was (${hu.good.toFixed(3)} against ${ai.good.toFixed(3)})`);
+    // Expected chance over a spread of release times, a mix of shots (the council's probe, one defender distance each).
+    const mean = (sd, human) => {
+      let a = 0, w = 0;
+      for (const [dist, type, weight, contest] of [[24, 'jumper', 3, 1], [24, 'jumper', 2, 0.8], [15, 'jumper', 2, 1], [15, 'jumper', 2, 0.8], [3, 'layup', 2, 1], [3, 'layup', 2, 0.62]]) {
+        for (let z = -4; z <= 4; z += 0.05) { const q = rules.meterQuality(Math.max(0.05, rules.SWEET + z * sd), 1, 'jumper').q, p = Math.exp(-z * z / 2); a += weight * p * rules.shotChance({ dist, type, sht: 0.6, ins: 0.6, contest, quality: q, human }); w += weight * p; }
+      }
+      return a / w;
+    };
+    const gainMaster = mean(0.05, true) / mean(0.05, false) - 1, gainCasual = mean(0.22, true) / mean(0.22, false) - 1;
+    t.expect(gainMaster >= 0.12, `a player who has the window (spread 0.05) scores at least 12% more (${(gainMaster * 100).toFixed(1)}%)`);
+    t.expect(Math.abs(gainCasual) <= 0.02, `one with loose timing (spread 0.22) is within 2% of before (${(gainCasual * 100).toFixed(1)}%)`);
+    t.expect(mean(0.05, true) - mean(0.16, true) > 1.4 * (mean(0.05, false) - mean(0.16, false)), 'the gap between a sharp and a loose shooter is at least 40% wider');
+    // Wired into the match: the user's own shot gets the human rule, the same shot taken by the AI does not.
+    const probOf = async (auto) => {
+      const { m, sim, step } = await soloMatch();
+      Object.assign(m.p[0], { x: 70, z: 25, tx: 70, tz: 25 });
+      m.user.auto = auto;
+      sim.forceShot(m, 0, 1);
+      for (let n = 0; n < 120 && m.ball.state === 'held'; n++) step();
+      return m.ball.shot && m.ball.shot.prob;
+    };
+    const hp = await probOf(false), ap = await probOf(true);
+    t.expect(hp > ap * 1.2, `the player's forced PERFECT three is rated ${hp && hp.toFixed(3)} and the AI's ${ap && ap.toFixed(3)}`);
+  },
+});

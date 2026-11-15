@@ -249,7 +249,7 @@ function release(m, i) {
   const jumping = nd.idx >= 0 && m.p[nd.idx].y > 0.5 && !beaten;
   const contest = contestFactor(beaten ? nd.d + 2.5 : nd.d, jumping);
   const bonus = m.crowdTeam === t && m.crowd > 0.6 ? 1.05 : 1;
-  const prob = shotChance({ dist, type, sht: r.sht, ins: r.ins, contest, quality, energy: r.energy, bonus });
+  const prob = shotChance({ dist, type, sht: r.sht, ins: r.ins, contest, quality, energy: r.energy, bonus, human: userShot });
   const make = rnd(m) < prob;
   let foul = null;
   if (!m.noFouls && nd.idx >= 0 && nd.d < 3.2) {

@@ -32,7 +32,15 @@ export function contestFactor(dd, jumping) {
   return c;
 }
 
-export function shotChance({ dist, type, sht, ins, contest = 1, quality = 0.75, energy = 1, bonus = 1 }) {
+// How the meter pays the player (S1-14). A PERFECT release by the human is worth more and also cancels half of the defender's contest; a GOOD one a
+// little less, so a player with ordinary timing scores about as before and one who has mastered the window scores up to a quarter more. The AI's
+// shots keep the old numbers, so the opponent, the teammates and the AI's own shot choices are exactly as they were. The late floor stays at 0.3.
+export const PERFECT_MULT = 1.35;        // the AI's: PERFECT
+export const HUMAN_PERFECT_MULT = 1.75;  // the player's PERFECT (was 1.35)
+export const HUMAN_GOOD_MULT = 0.78;     // the player's GOOD (was 1)
+export const HUMAN_PERFECT_RELIEF = 0.5; // the share of the contest penalty the player's PERFECT cancels (was 0)
+
+export function shotChance({ dist, type, sht, ins, contest = 1, quality = 0.75, energy = 1, bonus = 1, human = false }) {
   let base;
   if (type === 'dunk') base = 0.9;
   else if (type === 'layup') base = 0.72;
@@ -41,8 +49,9 @@ export function shotChance({ dist, type, sht, ins, contest = 1, quality = 0.75, 
   else base = 0.33 - Math.max(0, dist - 24) * 0.035;
   const rating = type === 'layup' || type === 'dunk' ? ins : sht;
   const skill = 0.7 + 0.6 * rating;
-  const timing = quality >= 1 ? 1.35 : quality >= 0.75 ? 1 : 0.3 + quality * 0.8;
-  return clamp(base * skill * contest * timing * (0.9 + 0.1 * energy) * bonus, 0.02, 0.97);
+  const timing = quality >= 1 ? (human ? HUMAN_PERFECT_MULT : PERFECT_MULT) : quality >= 0.75 ? (human ? HUMAN_GOOD_MULT : 1) : 0.3 + quality * 0.8;
+  const contested = human && quality >= 1 ? 1 - (1 - contest) * (1 - HUMAN_PERFECT_RELIEF) : contest;
+  return clamp(base * skill * contested * timing * (0.9 + 0.1 * energy) * bonus, 0.02, 0.97);
 }
 
 export function ftChance(ft, q) {

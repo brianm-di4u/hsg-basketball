@@ -3,7 +3,7 @@ import { COUNTY, team, kitFor, banners, FACTS_LIST, FINALS, gymCrowd } from './d
 import { makeRoster, fullName } from './roster.js';
 import { COURT, rimFor, sx, sy } from './court.js';
 import { DT, createMatch, tick, startNextPeriod, summary, forceShot, give, commitFoul, topPerformer, startAt, cancelShot } from './sim.js';
-import { createSeason, teamFor, nextGame, recordResult, simCurrent } from './season.js';
+import { createSeason, teamFor, nextGame, recordResult, simCurrent, ROUNDS } from './season.js';
 import { createShootout, shootoutTick, forceShootoutShot, cancelShootoutShot, SPOTS } from './shootout.js';
 import { challenge } from './challenges.js';
 import { R, initRender, resize, draw, pop, burst, shake, netHit, rimHit, confetti, is3d, setLook } from './render.js';
@@ -553,6 +553,16 @@ function saveStatus() {
   if (read.kind === 'invalid') return read.newer ? 'newer' : 'unreadable';
   return read.kind === 'unavailable' || !store.ok ? 'unavailable' : 'ok';
 }
+// What the game that just ended did to the season (S3-12): the seed when the regular season closes, the next round, or the end.
+function seasonAfter(S) {
+  if (S.phase === 'done') return S.champion ? 'You are state champions.' : `Eliminated in the ${(S.eliminated || 'bracket').toLowerCase()}.`;
+  if (S.phase === 'bracket') {
+    const first = S.bracket.round === 0 && !S.bracket.rounds[0].some((g) => g.winner);
+    return first ? UI.seedLine(S) : `Through to the ${ROUNDS[S.bracket.round].toLowerCase()}.`;
+  }
+  const left = S.games.length - S.idx;
+  return `${left} regular-season game${left === 1 ? '' : 's'} left before the state bracket.`;
+}
 function finalHTML(st) {
   const m = state.match;
   const tops = [0, 1].map((t) => { const r = topPerformer(m, t); return { team: m.teams[t].short, num: r.num, name: fullName(r), pts: r.st.pts, reb: r.st.reb, ast: r.st.ast }; });
@@ -563,7 +573,7 @@ function finalHTML(st) {
   }
   if (state.mode === 'season' && state.season) {
     const S = state.season;
-    extra = `<p class="fine">Season record now ${S.w}-${S.l}.</p>`;
+    extra = `<section class="card"><h3>Season</h3><p>Record now <b>${S.w}-${S.l}</b>. ${UI.esc(seasonAfter(S))}</p></section>`;
   }
   if (state.mode === 'daily' && state.daily) {
     const e = state.save.daily.days[state.daily.date], s = liveStreak(state.save.daily, state.daily.date);

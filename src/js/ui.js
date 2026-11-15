@@ -1,8 +1,8 @@
 // DOM screens as HTML strings. main.js owns state and handles `data-act` clicks.
 import { COUNTY, team, banners, FACTS_LIST, FINALS, rivalry } from './data.js';
 import { crestURL } from './art.js';
-import { fullName, heightStr } from './roster.js';
-import { ROUNDS, nextGame } from './season.js';
+import { fullName, heightStr, teamRating } from './roster.js';
+import { ROUNDS, nextGame, teamFor } from './season.js';
 import { CHALLENGES } from './challenges.js';
 import { DIFF } from './rules.js';
 import { STAR_GOALS, starCount, goalsMet, tierKey, cleanTiers, ladder, medalFor, nextMedal, cleanRecent, recentAverage, ACHIEVEMENTS, BALLS, FLOORS, KIT_WINS, hasAlt, kitKey, unlockKey, liveStreak, addDays } from './career.js';
@@ -85,6 +85,16 @@ export function seasonSetupScreen(st) {
 }
 
 // ---------------------------------------------------------------- season hub
+// How strong the next opponent is beside your own team (S3-12): both ratings as the roster screen's Ovr, and three bars for the gap.
+// teamRating is on the Ovr scale of the roster screen; a gap of THREAT_GAP or more either way is a clear favourite or underdog.
+export const THREAT_GAP = 4;
+export function threatOf(S, oppKey) {
+  const rate = (k) => Math.round(teamRating(teamFor(k, S.program, S.cls, S.seed).roster));
+  const mine = rate(S.school), theirs = rate(oppKey), gap = theirs - mine;
+  const bars = gap >= THREAT_GAP ? 3 : gap <= -THREAT_GAP ? 1 : 2;
+  return { mine, theirs, bars, word: bars === 3 ? 'tougher than you' : bars === 1 ? 'weaker than you' : 'an even match' };
+}
+const threatLine = (S, oppKey) => { const t = threatOf(S, oppKey); return `<p class="threat">Overall <b>${t.theirs}</b> (yours ${t.mine}) · Threat <span class="bars" role="img" aria-label="${t.bars} of 3: ${t.word}">${'▮'.repeat(t.bars)}${'▯'.repeat(3 - t.bars)}</span> ${t.word}</p>`; };
 export function hubScreen(st, fact) {
   const S = st.season;
   const me = team(S.school);
@@ -99,7 +109,9 @@ export function hubScreen(st, fact) {
       <p class="big">${esc(me.short)} ${esc(me.mascot)} vs ${esc(opp.short)} ${esc(opp.mascot)}</p>
       <p>${where}${g.rival ? ` · <span class="tag">Rivalry game</span>` : ''}${opp.fictional ? ' · <span class="tag">fictional town</span>' : ''}</p>
       <p class="sub">They play: <b>${esc(opp.style.name)}</b>. ${esc(opp.style.blurb)}</p>
+      ${threatLine(S, g.opp)}
       <div class="row">${btn('playSeason', 'Play game', { cls: 'primary' })}${btn('simSeason', 'Sim game')}</div>
+      <p class="fine">Sim game rates both rosters and scores a result for you. It counts toward your record and seed.</p>
     </section>`;
   } else if (S.done) {
     next = S.champion
@@ -134,6 +146,11 @@ export function rosterScreen(st, key, program, roster) {
   </div>`;
 }
 
+// Why the player sits where they do in the bracket (S4-17): the seed follows the regular-season record, the other teams are seeded by rating.
+export function seedLine(S) {
+  const played = S.games.filter((x) => x.result), w = played.filter((x) => x.result.us > x.result.them).length;
+  return `Seeded ${S.bracket.seeds.indexOf(S.school) + 1} on a regular-season record of ${w}-${played.length - w}. Your seed follows your record; the other teams are seeded by rating.`;
+}
 export function bracketScreen(st) {
   const S = st.season, B = S.bracket;
   const col = (r) => {
@@ -147,6 +164,7 @@ export function bracketScreen(st) {
   return `<div class="panel wide">
     <h2>Class ${esc(S.cls)} state bracket · ${progLabel(S.program)}</h2>
     <p class="fine">Garland County schools of this class plus fictional out-of-county towns. Results other than yours are simulated.</p>
+    <p class="fine seed-line">${esc(seedLine(S))}</p>
     <div class="bracket">${col(0)}${col(1)}${col(2)}</div>
     <div class="row end">${btn('back', 'Back', { cls: 'primary' })}</div>
   </div>`;

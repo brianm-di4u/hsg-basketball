@@ -165,3 +165,38 @@ tests.push({
     t.equal(await rect(t, '#b-mute'), null, 'the speaker is not on the title');
   },
 });
+
+const blockStorage = () => {
+  for (const f of ['getItem', 'setItem', 'removeItem']) Storage.prototype[f] = () => { throw new Error('storage blocked'); };
+};
+const warns = (t) => t.page.evaluate(() => [...document.querySelectorAll('#screen .warn')].map((e) => e.textContent.trim()));
+
+tests.push({
+  name: 'S2-28: with storage blocked the title says progress will not be kept, once',
+  viewports: ['desktop', 'mobile'],
+  initScript: blockStorage,
+  async run(t) {
+    await t.game('scene', 'title');
+    const w = await warns(t);
+    t.equal(w.length, 1, `one warning on the title (${w.length})`);
+    t.expect(/Saving is unavailable/.test(w[0] || '') && /close the page/.test(w[0] || ''), `it says saving is unavailable: "${w[0]}"`);
+    t.equal(await t.page.getAttribute('#screen .warn', 'role'), 'status', 'it is announced as a status');
+    await t.shot('s2-28-title-storage-blocked');
+    await t.page.screenshot({ path: `${SHOTS}/S2-28-title-storage-blocked-${t.viewport}.png` });
+    await t.checkLayout();
+    // a change that tries to save raises the usual notice: the title must not say it twice
+    await t.game('setState', { settings: { sound: false } });
+    await t.game('scene', 'settings');
+    await t.game('scene', 'title');
+    t.equal((await warns(t)).length, 1, 'still one warning after a save attempt fails');
+  },
+});
+tests.push({
+  name: 'S2-28: the title has no saving warning when storage works',
+  viewports: ['desktop'],
+  async run(t) {
+    await t.game('scene', 'title');
+    t.equal((await warns(t)).length, 0, 'no warning');
+    t.expect(!/Saving is unavailable/.test(await t.page.innerText('#screen')), 'and no mention of saving');
+  },
+});

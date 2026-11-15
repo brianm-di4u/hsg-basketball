@@ -40,6 +40,7 @@ export function titleScreen(st) {
       ${btn('trophies', 'Trophy Room')}
       <div class="menu-row">${btn('help', 'How to play')}${btn('settings', 'Settings')}</div>
     </nav>
+    ${st.saving === 'unavailable' ? saveNote('unavailable') : ''}
     <p class="fine">${FICTION_NOTE}</p>
   </div>`;
 }

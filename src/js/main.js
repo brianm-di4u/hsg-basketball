@@ -512,7 +512,7 @@ function screenHTML() {
   const st = { ...state, settings: state.settings, save: state.save, mode: state.mode, dailyStreak: liveStreak(state.save.daily, today()) };
   const m = state.match;
   switch (state.scene) {
-    case 'title': return UI.titleScreen(st);
+    case 'title': return UI.titleScreen({ ...st, saving: saveNotice ? '' : saveStatus() }); // a notice already up says the same thing
     case 'select': return UI.selectScreen(st);
     case 'seasonSetup': return UI.seasonSetupScreen({ ...st, season: setupSeason });
     case 'hub': return state.season ? UI.hubScreen(st, UI.pickFact(state.season.w * 3 + state.season.l * 7 + state.season.seed)) : UI.titleScreen(st);

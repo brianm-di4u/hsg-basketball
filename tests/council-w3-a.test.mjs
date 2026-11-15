@@ -392,3 +392,97 @@ tests.push({
     await t.page.evaluate(shotFromInPage, [2, 1]);
   },
 });
+
+// A game pad the test controls: navigator.getGamepads() returns window.__pad.
+const fakePad = () => {
+  window.__pad = null;
+  Object.defineProperty(navigator, 'getGamepads', { value: () => [window.__pad], configurable: true, writable: true });
+};
+const pad = (t, axes = [0, 0], down = []) => t.page.evaluate(([a, d]) => {
+  window.__pad = { connected: true, id: 'test pad', index: 0, mapping: 'standard', axes: a, buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: d.includes(i), value: d.includes(i) ? 1 : 0 })) };
+  window.dispatchEvent(new Event('gamepadconnected'));
+}, [axes, down]);
+const release = async (t) => { await pad(t, [0, 0], []); await t.waitFrames(3); }; // a press counts once the poll has seen the button up
+const tap = async (t, b) => { await pad(t, [0, 0], [b]); await t.waitFrames(2); await release(t); };
+const A = 0, B = 1, X = 2, Y = 3, RB = 5, START = 9, UP = 12, DOWN = 13;
+const inputIs = (t, f, label) => t.page.waitForFunction(`(${f})(window.__game.getState().input)`, null, { timeout: 5000 }).catch(() => t.fail(`timed out waiting for ${label}`));
+
+tests.push({
+  name: 'S2-15: a game pad plays the game: stick moves, A shoots (hold and release), X passes, Y switches, a bumper sprints',
+  viewports: ['desktop'],
+  initScript: fakePad,
+  async run(t) {
+    await exhibition(t, { seed: 4 });
+    await pad(t, [0.1, -0.1]);
+    await t.waitFrames(4);
+    let s = (await t.state()).input;
+    t.expect(s.mx === 0 && s.mz === 0, 'a stick inside the dead zone does nothing');
+    await pad(t, [1, -1]);
+    await inputIs(t, (i) => i.mx === 1 && i.mz === -1, 'the stick at full tilt to move');
+    await pad(t, [0.6, 0]);
+    await inputIs(t, (i) => Math.abs(i.mx - 0.5) < 0.01 && i.mz === 0, 'a half tilt to move at half strength');
+    await pad(t, [0, 0], [UP]);
+    await inputIs(t, (i) => i.mx === 0 && i.mz === -1, 'the D-pad up to move away from the screen');
+    await pad(t, [0, 0], [RB]);
+    await inputIs(t, (i) => i.sprint === true && i.mx === 0, 'the bumper to sprint');
+    await release(t);
+    await inputIs(t, (i) => i.sprint === false, 'letting go of the bumper');
+    await pad(t, [0, 0], [A]);
+    await inputIs(t, (i) => i.shoot && i.shootP, 'A to start a shot');
+    await t.game('step', 1); // the step consumes the press edge
+    await release(t);
+    await inputIs(t, (i) => !i.shoot && i.shootR, 'letting go of A to release it');
+    await t.game('step', 1);
+    await pad(t, [0, 0], [X]);
+    await inputIs(t, (i) => i.passP, 'X to pass');
+    await t.game('step', 1);
+    await pad(t, [0, 0], [Y]);
+    await inputIs(t, (i) => i.switchP, 'Y to switch');
+    await t.game('step', 1);
+    await release(t);
+    // Start pauses and resumes
+    await pad(t, [0, 0], [START]);
+    await t.page.waitForFunction(() => window.__game.getState().scene === 'pause', null, { timeout: 5000 });
+    await release(t);
+    await pad(t, [0, 0], [START]);
+    await t.page.waitForFunction(() => window.__game.getState().scene === 'game', null, { timeout: 5000 });
+    await release(t);
+    // unplugged while A is held: the shot is released, the movement stops
+    await pad(t, [1, 0], [A]);
+    await inputIs(t, (i) => i.shoot && i.mx === 1, 'a held shot and a held stick');
+    await t.page.evaluate(() => { window.__pad = null; });
+    await inputIs(t, (i) => !i.shoot && i.mx === 0, 'the pad unplugged: nothing stays held');
+  },
+});
+tests.push({
+  name: 'S2-15: a game pad moves through the menus (D-pad, A, B) and Start presses the main button',
+  viewports: ['desktop', 'mobile'],
+  initScript: fakePad,
+  async run(t) {
+    await t.game('scene', 'title');
+    const focus = async () => (await t.state()).ui.focus;
+    t.equal(await focus(), 'seasonSetup', 'the first button has the focus');
+    await tap(t, DOWN);
+    await t.page.waitForFunction(() => window.__game.getState().ui.focus !== 'seasonSetup', null, { timeout: 5000 }).catch(() => t.fail('D-pad down did not move the focus'));
+    const at = await focus(); // a pad held down repeats; a tap moves one step, but A presses wherever the focus is
+    t.expect(at && at !== 'seasonSetup', `the focus moved down the menu (${at})`);
+    await tap(t, A);
+    await t.page.waitForFunction((f) => window.__game.getState().scene === f, at, { timeout: 5000 }).catch(() => t.fail(`A did not press the focused button (${at})`));
+    await tap(t, B);
+    await t.page.waitForFunction(() => window.__game.getState().scene === 'title', null, { timeout: 5000 }).catch(() => t.fail('B did not go back'));
+    await tap(t, START);
+    await t.page.waitForFunction(() => window.__game.getState().scene === 'seasonSetup', null, { timeout: 5000 }).catch(() => t.fail('Start did not press the main button'));
+    await t.game('scene', 'title');
+    // a pad in the title keeps the touch deck away and does not shoot
+    const s = (await t.state()).input;
+    t.expect(!s.shootP && !s.passP, 'menu presses are not game presses');
+    // the Help screen lists the pad
+    await t.game('scene', 'help');
+    const txt = await t.page.innerText('#screen');
+    t.expect(/Game pad/.test(txt) && /Start/.test(txt), 'How to play lists the game pad');
+    await t.page.locator('#screen h3', { hasText: 'Game pad' }).scrollIntoViewIfNeeded();
+    await t.shot('s2-15-help-game-pad');
+    await t.page.screenshot({ path: `${SHOTS}/S2-15-help-game-pad-${t.viewport}.png` });
+    await t.checkLayout({ allowScrollY: true });
+  },
+});

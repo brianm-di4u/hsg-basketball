@@ -10,7 +10,7 @@ import { R, initRender, resize, draw, pop, burst, shake, netHit, rimHit, confett
 import { G3, load3d, pickTier, info3d, glProbe, resize3d, setTier, animCtl } from './gl/scene3d.js';
 import { startHQ, hqInfo } from './gl/hq.js';
 import { CREST_KEYS, crestURL } from './art.js';
-import { I, initInput, initTouch, setEnabled, drain, cancelHeld } from './input.js';
+import { I, pollGamepad, initInput, initTouch, setEnabled, drain, cancelHeld } from './input.js';
 import { AU, unlock, play, setVolume, setOn, setAmbience, setMusic, setMusicTrack, setScene, setPaused, setCrowd, setTension, duck, suspendAudio, audioList, audioRender } from './audio.js';
 import { DIFF, meterQuality, SWEET } from './rules.js';
 import { writeSave, readSaveSnapshot, resetSave, store, fmtClock, hash } from './util.js';
@@ -1197,6 +1197,32 @@ function interrupt() {
   else if (sc === 'shootout' && state.so) { cancelShootoutShot(state.so); pauseGame(); }
 }
 
+// Game pad (S2-15). A pad is read once a frame, only while one is connected; input.js turns it into the same intents as the keys.
+// Here: Start pauses and resumes, and in the menus the D-pad or stick moves the focus, A presses the focused button and B goes back.
+let padRaf = 0;
+function padFrame(ts) {
+  padRaf = 0;
+  let e = null;
+  try { e = pollGamepad(ts); } catch (err) { fail(err); return; }
+  if (!e) return; // none connected: the polling stops, and 'gamepadconnected' starts it again
+  if (e.used) { unlock(); setTouchSeen(false); }
+  let sc = state.scene;
+  if (e.start) {
+    if (sc === 'game' || sc === 'shootout') pauseGame();
+    else if (sc === 'pause' || sc === 'soPause') ACT.resume();
+    else if (!IN_PLAY.has(sc)) { const p = $('#screen .btn.primary:not([disabled])'); if (p) p.click(); }
+    sc = state.scene;
+  }
+  if (!IN_PLAY.has(sc) && !$('#screen').hidden) {
+    const scr = $('#screen'), items = [...scr.querySelectorAll('button:not([disabled])')].filter((b) => b.offsetParent);
+    if (e.nav && items.length) { const at = items.indexOf(document.activeElement); items[at < 0 ? 0 : (at + e.nav + items.length) % items.length].focus(); }
+    if (e.ok && document.activeElement && scr.contains(document.activeElement)) document.activeElement.click();
+    if (e.back) onKey({ code: 'Escape', repeat: false });
+  }
+  padRaf = requestAnimationFrame(padFrame);
+}
+const startPad = () => { if (!padRaf) padRaf = requestAnimationFrame(padFrame); };
+
 function onClick(e) {
   const b = e.target.closest('[data-act]');
   if (!b || b.disabled) return;
@@ -1238,6 +1264,8 @@ function boot() {
   document.addEventListener('visibilitychange', () => { if (document.hidden) interrupt(); });
   window.addEventListener('blur', interrupt);
   window.addEventListener('pagehide', interrupt);
+  window.addEventListener('gamepadconnected', startPad);
+  startPad();
   window.addEventListener('error', onFault);
   window.addEventListener('unhandledrejection', onFault);
   for (const q of ['(prefers-color-scheme: dark)', '(prefers-reduced-motion: reduce)']) {
@@ -1265,6 +1293,7 @@ function sumState() {
     replayGate: { at: state.lastReplayAt ?? null, pending: !!state.replayPending, frames: REC.buf.length },
     replay: state.replay ? { kind: state.replay.kind, f: Math.floor(state.replay.f), n: state.replay.frames.length } : null,
     coach: state.coach ? { cur: state.coach.cur, done: { ...state.coach.done }, text: state.coach.cur ? $('#coach-t').textContent : '', practice: state.coach.practice } : null, pick: { ...state.pick }, audio: { ctx: !!AU.ctx, on: AU.on, ambience: AU.ambOn, music: AU.musOn, track: AU.kit && AU.kit.music.score && AU.music ? AU.music : '', tension: AU.tension, bed: AU.kit && AU.kit.amb.scene && AU.scene ? AU.scene : '', held: !!(AU.kit && AU.kit.held), state: AU.ctx ? AU.ctx.state : null, crowd: AU.crowd ?? null, count: { ...AU.count } }, reduced: R.reduced, touch: touchOn(), fx: R.fx.parts.length, loop: !!raf,
+    input: { mx: I.mx, mz: I.mz, shoot: I.shoot, shootP: I.shootP, shootR: I.shootR, passP: I.passP, switchP: I.switchP, sprint: I.sprint },
     view: R.v ? { W: R.v.W, H: R.v.H, s: +R.v.s.toFixed(2), camX: +R.v.camX.toFixed(2) } : null,
     gfx: { mode: is3d() ? '3d' : '2d', gl: state.gl || null, ...info3d(), hq: hqInfo() },
     hud: hudState(),

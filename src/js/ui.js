@@ -394,8 +394,9 @@ export function helpScreen(st, tab = 'controls') {
     <tr><td>Crossover: flip the stick the other way while dribbling</td><td>Arrows or WASD, flipped</td><td>Stick, flicked</td></tr>
     <tr><td>Switch to another defender</td><td><kbd>C</kbd> or <kbd>K</kbd></td><td>SWITCH</td></tr>
     <tr><td>Pause</td><td><kbd>P</kbd> or <kbd>Esc</kbd></td><td>❚❚</td></tr>
-    <tr><td>Mute</td><td><kbd>M</kbd></td><td>Settings</td></tr></tbody></table>
-    <p>Menus: <kbd>Tab</kbd> to move, <kbd>Enter</kbd> to choose, <kbd>Esc</kbd> to go back.</p>`;
+    <tr><td>Mute</td><td><kbd>M</kbd></td><td>Speaker button</td></tr></tbody></table>
+    <p>Menus: <kbd>Tab</kbd> to move, <kbd>Enter</kbd> to choose, <kbd>Esc</kbd> to go back.</p>
+    <h3>Game pad</h3><p>Plug in or wake a pad and press a button. Left stick or D-pad: move. <b>A</b>: shoot (hold, then let go in the green) and jump to block. <b>X</b>: pass or steal. <b>Y</b> or <b>B</b>: switch defender. Bumpers or triggers: sprint. <b>Start</b>: pause. In menus the D-pad moves, <b>A</b> chooses and <b>B</b> goes back.</p>`;
   if (tab === 'play') body = `<h3>The shot meter</h3><p>Hold Shoot to rise into your jump. A bar fills beside your player. Let go when the marker reaches the bright green band at the top of the jump. You'll see <b>PERFECT</b>, <b>GOOD</b>, <b>EARLY</b> or <b>LATE</b>. Perfect releases go in far more often; open looks beat contested ones; close shots beat long ones. Near the rim the same button lays it in, and it is more forgiving.</p>
     <h3>Free throws</h3><p>A marker swings across a bar. Press Shoot when it is in the green middle.</p>
     <h3>Tip-off</h3><p>Press Shoot as the tossed ball reaches its peak to jump for it. Good timing wins more tips.</p>

@@ -1090,6 +1090,7 @@ function drawShootout(dt) {
 
 // ---------------------------------------------------------------- scoreboard
 let sbCache = '';
+const SHOT_WARN = 5; // seconds left on the shot clock when its number turns red
 // The Banner Challenge's goal and where the player stands, as one line under the scoreboard (S2-03). Null outside a challenge.
 function challengeGoal(m) {
   if (state.mode !== 'challenge' || !state.chal || m.user.team < 0) return null;
@@ -1129,9 +1130,10 @@ function updateScoreboard(force) {
         <span class="sb-fouls" aria-label="Team fouls ${n}"><span class="fl">FOULS</span> <span class="lamps" aria-hidden="true">${lamps}</span>${bonus(t) ? ' <b>BONUS</b>' : ''}</span></div>`;
     };
     const shotTxt = !m.rules.shotClock ? '' : m.clock.shotOff ? '--' : Math.ceil(Math.max(0, m.clock.shot - 0.001));
+    const low = m.rules.shotClock && !m.clock.shotOff && m.clock.shot > 0 && m.clock.shot <= SHOT_WARN; // red under five seconds (S2-06)
     const crowd = m.crowdTeam >= 0 ? `<span class="sb-crowd" role="img" aria-label="Home crowd ${Math.round(m.crowd * 100)} percent"><i style="width:${Math.round(m.crowd * 100)}%"></i></span>` : '';
     const goal = challengeGoal(m);
-    html = `${side(0)}<div class="sb-mid"><span class="sb-q">${q}</span><span class="sb-clock">${fmtClock(m.clock.t)}</span>${m.rules.shotClock ? `<span class="sb-shot" title="Shot clock">${shotTxt}</span>` : '<span class="sb-shot off">CLASSIC</span>'}${crowd}</div>${side(1)}${goal ? `<div class="sb-goal${goal.bad ? ' bad' : ''}">${UI.esc(goal.text)}</div>` : ''}`;
+    html = `${side(0)}<div class="sb-mid"><span class="sb-q">${q}</span><span class="sb-clock">${fmtClock(m.clock.t)}</span>${m.rules.shotClock ? `<span class="sb-shot${low ? ' low' : ''}" title="Shot clock"><small class="sb-shot-l">SHOT</small>${shotTxt}</span>` : '<span class="sb-shot off">CLASSIC</span>'}${crowd}</div>${side(1)}${goal ? `<div class="sb-goal${goal.bad ? ' bad' : ''}">${UI.esc(goal.text)}</div>` : ''}`;
   }
   if (html !== sbCache || force) { sbCache = html; sb.innerHTML = html; sb.classList.toggle('so', !!(state.so && SO_SCENES.has(sc))); syncCoachTop(); }
 }

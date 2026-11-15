@@ -449,3 +449,75 @@ tests.push({
   },
 });
 
+
+// ---------------------------------------------------------------- S1-05 steals reward position, blocks reward timing
+async function soloDefence() {
+  const sim = await load('sim.js');
+  const home = await mkTeam('aaa'), away = await mkTeam('bbb');
+  const mk = (seed) => {
+    const m = sim.createMatch({ mode: 'exhibition', home, away, seed, user: 0, difficulty: 1, rules: { qLen: 240, shotClock: 35 } });
+    for (const T of m.teams) for (const r of T.roster) { r.def = 0.65; r.hnd = 0.65; r.blk = 1; }
+    m.phase = 'live'; m.clock.running = true;
+    return m;
+  };
+  return { sim, mk };
+}
+
+tests.push({
+  name: 'S1-05: a steal from in front of the ball handler works more often than from beside him, and from behind least (node)',
+  node: true,
+  async run(t) {
+    const { sim, mk } = await soloDefence();
+    // The handler (team 0, slot 0) faces +x. The defender (team 1, slot 0) stands dx feet in front of him (+) or behind him (-), 2 feet to the side.
+    const rate = (dx, N = 600) => {
+      let won = 0;
+      for (let seed = 1; seed <= N; seed++) {
+        const m = mk(seed);
+        sim.give(m, 0);
+        const h = m.p[0], d = m.p[5];
+        for (let i = 1; i < 10; i++) if (i !== 5) { m.p[i].x = 80 + i; m.p[i].z = 5; }
+        Object.assign(h, { x: 40, z: 25, face: 1 });
+        Object.assign(d, { x: 40 + dx, z: 27, cool: 0, stun: 0 });
+        if (sim.trySteal(m, 5) && m.ball.holder === 5) won++;
+      }
+      return won / N;
+    };
+    const front = rate(2), side = rate(0), behind = rate(-2);
+    // These use the sim's own seeded stream, so the numbers are the same every run.
+    t.expect(front > side * 1.15 && side > behind * 1.6, `front ${front.toFixed(3)} beats side ${side.toFixed(3)} beats behind ${behind.toFixed(3)}`);
+    t.expect(side > 0.12 && side < 0.22, `the old rate for a mid-rated defender (${side.toFixed(3)}) is what the side position gives, about 0.16`);
+  },
+});
+
+tests.push({
+  name: 'S1-05: a block is likelier with the hands well above the ball and close to the shooter (node)',
+  node: true,
+  async run(t) {
+    const { sim, mk } = await soloDefence();
+    // A shot is in the air; the defender (`height` inches tall, in the air `y` feet) is `dist` feet from the ball.
+    const blocks = (dist, height, y, N = 500) => {
+      let n = 0;
+      for (let seed = 1; seed <= N; seed++) {
+        const m = mk(seed);
+        sim.give(m, 0);
+        m.teams[1].roster[m.p[5].r].height = height;
+        for (let i = 1; i < 10; i++) if (i !== 5) { m.p[i].x = 80 + i; m.p[i].z = 5; }
+        Object.assign(m.p[0], { x: 70, z: 25, tx: 70, tz: 25 });
+        sim.forceShot(m, 0, 1);
+        for (let k = 0; k < 120 && m.ball.state === 'held'; k++) sim.tick(m);
+        if (m.ball.state !== 'shot') continue;
+        const q = m.p[5];
+        for (let k = 0; k < 60 && m.ball.state === 'shot'; k++) {
+          Object.assign(q, { x: m.ball.x + dist, z: m.ball.z, y, vy: 0, stun: 0 });
+          sim.tick(m);
+          if (m.ev.some((e) => e.k === 'block')) { n++; break; }
+          m.ev.length = 0;
+        }
+      }
+      return n / N;
+    };
+    const good = blocks(0.3, 80, 1.5), poor = blocks(1.7, 66, 0.41);
+    t.expect(good > poor * 1.8, `a tall defender close to the shooter and well off the floor blocks ${good.toFixed(3)} against ${poor.toFixed(3)} for a short one at arm's length, hands just over the ball`);
+    t.expect(good < 0.35, `and a block is still never a sure thing (${good.toFixed(3)})`);
+  },
+});

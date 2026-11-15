@@ -31,3 +31,38 @@ export const tests = [
     },
   },
 ];
+
+// A context whose state the test can set, standing in for Safari's 'interrupted' (after a call or the lock screen).
+const fakeAudio = () => {
+  const Native = window.AudioContext;
+  window.__ac = { resumes: 0, fake: null, reject: false };
+  window.AudioContext = class extends Native {
+    get state() { return window.__ac.fake || super.state; }
+    resume() { window.__ac.resumes++; if (window.__ac.reject) return Promise.reject(new Error('refused')); window.__ac.fake = null; return super.resume(); }
+  };
+};
+const gesture = async (t) => { await t.page.mouse.click(4, 4); await t.page.waitForTimeout(100); };
+const ac = (t) => t.page.evaluate(() => ({ ...window.__ac, state: window.__game.getState().audio.state }));
+
+tests.push({
+  name: 'S6-10: audio that iOS left in the interrupted state is resumed by the next gesture, and a refused resume is not an error',
+  viewports: ['desktop'],
+  initScript: fakeAudio,
+  async run(t) {
+    await gesture(t);
+    t.equal((await ac(t)).state, 'running', 'the first gesture starts the audio');
+    await t.page.evaluate(() => { window.__ac.fake = 'interrupted'; });
+    t.equal((await ac(t)).state, 'interrupted', 'the context is interrupted');
+    const before = (await ac(t)).resumes;
+    await t.page.evaluate(() => { window.__ac.reject = true; });
+    await gesture(t);
+    let a = await ac(t);
+    t.expect(a.resumes > before, `a gesture asks an interrupted context to resume (${before} -> ${a.resumes})`);
+    t.equal(a.state, 'interrupted', 'a refused resume leaves it interrupted, with no error');
+    await t.page.evaluate(() => { window.__ac.reject = false; });
+    await gesture(t);
+    a = await ac(t);
+    t.equal(a.state, 'running', 'the next gesture brings it back');
+    t.equal((await t.page.evaluate(() => { const g = window.__game; return g.getState().audio.on; })), true, 'sound is still on');
+  },
+});

@@ -1210,6 +1210,7 @@ function boot() {
   initTouch($('#stick'), $('#knob'), { shoot: $('#b-shoot'), pass: $('#b-pass'), sw: $('#b-switch'), sprint: $('#b-sprint') });
   document.addEventListener('click', onClick);
   document.addEventListener('pointerdown', () => unlock(), { passive: true });
+  document.addEventListener('touchend', () => unlock(), { passive: true }); // iOS only lets a context resume from a finished touch
   $('#b-pause').addEventListener('click', () => pauseGame());
   window.addEventListener('resize', () => { layout(); wantLoop(); });
   window.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') setTouchSeen(true); }, { capture: true, passive: true });

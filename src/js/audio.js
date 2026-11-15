@@ -196,8 +196,14 @@ export function makeCues(ctx, master, kit) {
 }
 
 // ---------------------------------------------------------------- live audio
+// Safari on iOS reports 'interrupted' after a call, Siri or the lock screen: anything that is not running or closed gets a resume.
+// A resume that is refused (no gesture yet, a call still going) is not an error: the next gesture tries again.
+function wake(ctx) {
+  if (ctx.state === 'running' || ctx.state === 'closed') return;
+  try { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* the next gesture tries again */ }
+}
 export function unlock() {
-  if (AU.ctx) { if (AU.ctx.state === 'suspended') AU.ctx.resume(); return; }
+  if (AU.ctx) { wake(AU.ctx); return; }
   try {
     const C = window.AudioContext || window.webkitAudioContext;
     if (!C) return;
@@ -208,6 +214,7 @@ export function unlock() {
     AU.cues = makeCues(ctx, AU.master, AU.kit);
     AU.noise = AU.noiseFor(ctx);
     AU.ctx = ctx;
+    try { ctx.addEventListener('statechange', () => { if (ctx.state === 'interrupted' && !document.hidden) wake(ctx); }); } catch (e) { /* old browsers: the next gesture resumes */ }
     AU.kit.start();
     applyBeds();
   } catch (e) { AU.ctx = null; AU.kit = null; AU.cues = null; }

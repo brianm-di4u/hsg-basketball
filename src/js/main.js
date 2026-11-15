@@ -742,12 +742,12 @@ function onFinal() {
   go('final', false);
 }
 
-// A heavy loss on Varsity or All-State by someone who has never played a game on Rookie gets one suggestion a visit (S2-19). Nothing is saved: the career record says whether Rookie was ever tried.
+// A heavy loss by someone who has never played a game on Rookie gets one suggestion a visit (S2-19), so never on Rookie itself. Nothing is saved: the career record, which already holds this game, says whether Rookie was ever tried.
 const NUDGE_MARGIN = 15;
 let nudgeShown = false;
 function strugglingNudge(m) {
   const ut = m.user.team, w = m.winner;
-  if (nudgeShown || ut < 0 || w === ut || w < 0 || m.difficulty < 1 || m.teams[w].score - m.teams[ut].score < NUDGE_MARGIN) return false;
+  if (nudgeShown || ut < 0 || w === ut || w < 0 || m.teams[w].score - m.teams[ut].score < NUDGE_MARGIN) return false;
   const r = cleanCareer(state.save.career).byDiff['0'];
   if (r && r.g > 0) return false;
   nudgeShown = true;

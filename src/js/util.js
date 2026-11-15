@@ -87,3 +87,6 @@ export function shade(hex, f) { // f<0 darker, f>0 lighter
   const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => Math.round(f < 0 ? v * (1 + f) : v + (255 - v) * f));
   return '#' + ch.map((v) => v.toString(16).padStart(2, '0')).join('');
 }
+// Whether a frame at time ts (ms) is due when the last drawn one was at `last` and no more than one frame per `ms` is wanted. A little slack
+// (3 ms) lets a 60 Hz screen draw every second frame for 30 a second.
+export const frameDue = (ts, last, ms) => ts - last >= ms - 3;

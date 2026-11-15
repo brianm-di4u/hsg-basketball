@@ -13,7 +13,7 @@ import { CREST_KEYS, crestURL } from './art.js';
 import { I, pollGamepad, initInput, initTouch, setEnabled, drain, cancelHeld } from './input.js';
 import { AU, unlock, play, setVolume, setOn, setAmbience, setMusic, setMusicTrack, setScene, setPaused, setCrowd, setTension, duck, suspendAudio, audioList, audioRender } from './audio.js';
 import { DIFF, meterQuality, SWEET } from './rules.js';
-import { writeSave, readSaveSnapshot, resetSave, store, fmtClock, hash } from './util.js';
+import { writeSave, readSaveSnapshot, resetSave, store, fmtClock, hash, frameDue } from './util.js';
 import { mergeSave, seasonText } from './save-policy.js';
 import { ACHIEVEMENTS, BALLS, FLOORS, ballSkin, floorFinish, unlockKey, kitKey, hasAlt, cleanCareer, cleanDaily, cleanAchievements, applyGame, applyDaily, emptyCareer, newBests, earnedAchievements, earnedCosmetics, liveStreak, addDays } from './career.js';
 import { dailyDeal, localDate } from './daily.js';
@@ -596,7 +596,7 @@ function render() {
   $('#pad').hidden = !(IN_PLAY.has(sc) && touchOn());
   $('#pad').classList.toggle('so', sc === 'shootout');
   setEnabled(IN_PLAY.has(sc));
-  if (sc === 'title') ensureDemo();
+  if (sc === 'title') { ensureDemo(); titleActiveAt = performance.now(); titleIdle = false; }
   document.body.classList.toggle('gl', is3d());
   layout();
   if (sc === 'champion' && !state.confettiShown) { state.confettiShown = true; play('win'); duck(6, 1200); confetti(['#D4A017', '#F4F1EA', team(state.season.school).colors.primary, team(state.season.school).colors.secondary]); }
@@ -607,9 +607,17 @@ function render() {
 
 // ---------------------------------------------------------------- loop
 let raf = 0, last = 0, acc = 0;
+// The title's gym fly-through (S6-12) costs a phone battery while it sits there: it draws at most 30 frames a second and rests after a minute
+// with no key, touch or pointer movement. Any input wakes it. The settings and help screens are other scenes, so they stop it already.
+const TITLE_FRAME_MS = 33;
+let titleIdleMs = 60000, titleActiveAt = 0, titleIdle = false, titleFrames = 0;
+function wakeTitle() {
+  titleActiveAt = performance.now();
+  if (titleIdle) { titleIdle = false; if (state.scene === 'title') wantLoop(); }
+}
 function loopNeeded() {
   if (IN_PLAY.has(state.scene) && !state.paused) return true;
-  if (state.scene === 'title' && state.demo && !reducedMotion()) return true;
+  if (state.scene === 'title' && state.demo && !reducedMotion() && !titleIdle) return true;
   if (state.scene === 'champion' && !reducedMotion()) return true;
   return false;
 }
@@ -619,6 +627,7 @@ function wantLoop() {
 }
 function frame(ts) {
   raf = 0;
+  if (state.scene === 'title' && !frameDue(ts, last, TITLE_FRAME_MS)) { raf = requestAnimationFrame(frame); return; } // title: 30 frames a second, not 60
   try {
     const dt = Math.min(0.25, Math.max(0, (ts - last) / 1000)); last = ts;
     if (state.replay) stepReplay(dt);
@@ -626,6 +635,7 @@ function frame(ts) {
       acc += dt; let n = 0; while (acc >= DT && n < 30 && !state.replay) { stepOnce(); acc -= DT; n++; } if (n >= 30) acc = 0;
       if (state.replayPending && state.match && state.match.time - state.replayPending.at > 0.7 && state.scene === 'game') startReplay();
     }
+    if (state.scene === 'title') { titleFrames++; if (ts - titleActiveAt > titleIdleMs) titleIdle = true; }
     drawFrame(dt);
   } catch (e) {
     state.paused = true; if (state.scene === 'title') state.demo = null; // stop stepping whatever failed
@@ -1211,7 +1221,7 @@ function padFrame(ts) {
   let e = null;
   try { e = pollGamepad(ts); } catch (err) { fail(err); return; }
   if (!e) return; // none connected: the polling stops, and 'gamepadconnected' starts it again
-  if (e.used) { unlock(); setTouchSeen(false); }
+  if (e.used) { wakeTitle(); unlock(); setTouchSeen(false); }
   let sc = state.scene;
   if (e.start) {
     if (sc === 'game' || sc === 'shootout') pauseGame();
@@ -1270,6 +1280,7 @@ function boot() {
   document.addEventListener('visibilitychange', () => { if (document.hidden) interrupt(); });
   window.addEventListener('blur', interrupt);
   window.addEventListener('pagehide', interrupt);
+  for (const ev of ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart']) window.addEventListener(ev, wakeTitle, { passive: true });
   window.addEventListener('gamepadconnected', startPad);
   startPad();
   window.addEventListener('error', onFault);
@@ -1296,6 +1307,7 @@ function sumState() {
     challenge: state.chal, chalResult: state.chalResult ? { ok: state.chalResult.ok, more: state.chalResult.more, note: state.chalResult.note } : null,
     trophies: state.save.trophies, unlocks: state.save.unlocks, best: state.save.best, challenges: state.save.challenges,
     career: state.save.career, daily: state.save.daily, achievements: state.save.achievements, awards: state.awards || null, date: today(), look: { ball: R.look.ball.id || ballSkin(state.settings.ball).id, floor: R.look.floor.id },
+    title: { idle: titleIdle, frames: titleFrames, running: raf !== 0, idleMs: titleIdleMs },
     replayGate: { at: state.lastReplayAt ?? null, pending: !!state.replayPending, frames: REC.buf.length },
     replay: state.replay ? { kind: state.replay.kind, f: Math.floor(state.replay.f), n: state.replay.frames.length, speed: state.replay.speed } : null,
     coach: state.coach ? { cur: state.coach.cur, done: { ...state.coach.done }, text: state.coach.cur ? $('#coach-t').textContent : '', practice: state.coach.practice } : null, pick: { ...state.pick }, audio: { ctx: !!AU.ctx, on: AU.on, ambience: AU.ambOn, music: AU.musOn, track: AU.kit && AU.kit.music.score && AU.music ? AU.music : '', tension: AU.tension, bed: AU.kit && AU.kit.amb.scene && AU.scene ? AU.scene : '', held: !!(AU.kit && AU.kit.held), state: AU.ctx ? AU.ctx.state : null, crowd: AU.crowd ?? null, count: { ...AU.count } }, reduced: R.reduced, touch: touchOn(), fx: R.fx.parts.length, loop: !!raf,
@@ -1438,6 +1450,7 @@ const HOOKS = {
         if (ok && a[2] != null && typeof a[2] === 'object') { const fr = state.replay.frames; let k = fr.length - 1; while (k > 0 && fr[k].b[3] !== 'shot') k--; while (k > 0 && fr[k].b[3] !== 'held') k--; let k0 = k; while (k0 > 0 && fr[k0 - 1].b[3] === 'held' && fr[k0 - 1].b[4] === fr[k].b[4]) k0--; state.replay.f = Math.max(k0, Math.min(fr.length - 1, k + (a[2].release || 0))); } // never before the shooter had it
         else if (ok && a[2] != null) state.replay.f = a[2] * (state.replay.frames.length - 1);
         drawFrame(0); return ok; }
+      case 'titleIdleAfter': titleIdleMs = a[0] | 0; wakeTitle(); return titleIdleMs; // tests: how long the title may sit untouched before it rests
       case 'queueReplay': if (!m) return false; queueReplay(m, a[0] || 'THREE', rimSide(m.ball.x)); return !!state.replayPending;
       case 'endReplay': if (state.replay) endReplay(); drawFrame(0); return true;
       case 'roster': return makeRoster(a[0], a[1], a[2] || team(a[0]).cls, a[3] || 1);

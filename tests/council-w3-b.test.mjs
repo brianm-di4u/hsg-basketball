@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { exhibition, stepUntil } from './helpers.mjs';
+import { exhibition, stepUntil, waitFor } from './helpers.mjs';
 
 const game = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -184,5 +184,47 @@ tests.push({
     await t.game('newGame', { mode: 'exhibition', home: 'hot-springs', away: 'lakeside', program: 'boys', user: 'home', seed: 3, paused: true });
     await t.checkLayout();
     await t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/S4-14-home-crowd-bar-${t.viewport}.png` });
+  },
+});
+
+tests.push({
+  name: 'S6-12: the title draws at most about 30 frames a second, rests after a spell with no input, and wakes on a touch of the mouse',
+  viewports: ['desktop', 'mobile'],
+  async run(t) {
+    await waitFor(t, (s) => s.scene === 'title' && s.title && s.title.running, 10000, 'title loop running');
+    await t.game('act', 'titleIdleAfter', 60000);
+    const f0 = (await t.state()).title.frames;
+    await t.page.waitForTimeout(2000);
+    const f1 = (await t.state()).title.frames;
+    // An uncapped loop draws about 120 frames in 2 s at 60 Hz; the cap gives about 60. Slower machines draw fewer, never more.
+    t.log(`title frames in 2 s: ${f1 - f0}`);
+    t.expect(f1 - f0 <= 72, `no more than about 30 frames a second (${f1 - f0} in 2 s)`);
+    t.expect(f1 - f0 >= 1, `and it is still drawing (${f1 - f0} in 2 s)`);
+    await t.game('act', 'titleIdleAfter', 400);
+    await waitFor(t, (s) => s.title.idle && !s.title.running, 6000, 'the title resting');
+    const rested = (await t.state()).title.frames;
+    await t.page.waitForTimeout(400);
+    t.equal((await t.state()).title.frames, rested, 'a resting title draws nothing');
+    await t.page.mouse.move(40, 60);
+    await t.page.mouse.move(80, 100);
+    await waitFor(t, (s) => !s.title.idle && s.title.running && s.title.frames > rested, 6000, 'the title waking');
+    await t.game('act', 'titleIdleAfter', 400);
+    await waitFor(t, (s) => s.title.idle && !s.title.running, 6000, 'resting again');
+    await t.page.keyboard.press('Shift');
+    await waitFor(t, (s) => !s.title.idle && s.title.running, 6000, 'waking on a key');
+  },
+});
+
+tests.push({
+  name: 'S6-12: the title frame gate passes about 30 frames a second on 60, 120 and 144 Hz screens (node)',
+  node: true,
+  async run(t) {
+    const { frameDue } = await load('util.js');
+    for (const hz of [60, 120, 144]) {
+      let last = 0, drawn = 0;
+      for (let ts = 1000 / hz; ts <= 2000; ts += 1000 / hz) if (frameDue(ts, last, 33)) { drawn++; last = ts; }
+      t.expect(drawn >= 56 && drawn <= 64, `${hz} Hz: ${drawn} frames drawn in 2 s (about 60, which is 30 a second)`);
+    }
+    t.expect(frameDue(1000, 0, 0), 'with no limit every frame is due');
   },
 });

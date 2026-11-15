@@ -169,6 +169,7 @@ function P2(x, z, y = 0) { const v = R.v; _p2.X = sx(v, x); _p2.Y = sy(v, z, y);
 function drawHud(c, v, P, scene) {
   if (is3d() && !v.portrait) ballHalo(c, P, scene.ball); // landscape only: there the crowd is what sits behind the ball's arc
   for (const it of scene.players || []) if (it.user) chevron(c, v, P, it);
+  if (scene.passTo) passMark(c, v, P, scene.passTo);
   for (const p of R.fx.parts) {
     const q = P(p.x, p.z, p.y), X = q.X, Y = q.Y, s = q.s;
     if (p.kind === 'conf') { c.fillStyle = p.c; c.save(); c.translate(X, Y); c.rotate(p.t * 5 + p.r * 6); c.fillRect(-3, -1.5, 6, 3); c.restore(); }
@@ -316,6 +317,19 @@ function chevron(c, v, P, it) {
   const fs = Math.round(clamp(s * 0.6, 11, 18));
   c.font = `700 ${Math.round(fs * 1.12)}px "Barlow Condensed", system-ui, sans-serif`; c.textAlign = 'center'; c.textBaseline = 'bottom';
   c.lineWidth = 3; c.strokeText('YOU', X, top - s * 0.6); c.fillStyle = '#FFD84D'; c.fillText('YOU', X, top - s * 0.6);
+}
+
+// Who a pass would go to right now: a white ring on the floor under the receiver and a white arrow over his head,
+// so it is never mistaken for the gold YOU marker. It moves as the stick does; it is still, so reduced motion needs nothing.
+function passMark(c, v, P, it) {
+  const f = P(it.pl.x, it.pl.z), r = clamp(f.s * 1.25, 14, 40);
+  c.save();
+  c.lineWidth = 3; c.strokeStyle = 'rgba(20,18,31,0.85)'; c.beginPath(); c.ellipse(f.X, f.Y, r, r * 0.42, 0, 0, TAU); c.stroke();
+  c.lineWidth = 1.8; c.strokeStyle = '#FFFFFF'; c.beginPath(); c.ellipse(f.X, f.Y, r, r * 0.42, 0, 0, TAU); c.stroke();
+  const q = P(it.pl.x, it.pl.z, (it.pl.y || 0) + it.r.height / 12 + 0.4), s = clamp(q.s * 0.7, 9, 16);
+  c.fillStyle = '#FFFFFF'; c.strokeStyle = '#14121F'; c.lineWidth = 2;
+  c.beginPath(); c.moveTo(q.X - s * 0.55, q.Y - s * 1.1); c.lineTo(q.X + s * 0.55, q.Y - s * 1.1); c.lineTo(q.X, q.Y - s * 0.2); c.closePath(); c.fill(); c.stroke();
+  c.restore();
 }
 
 function hoopBack(c, v, side, venue) {

@@ -2,6 +2,7 @@
 import { COUNTY, team, kitFor, banners, FACTS_LIST, FINALS, gymCrowd } from './data.js';
 import { makeRoster, fullName } from './roster.js';
 import { COURT, rimFor, sx, sy } from './court.js';
+import { bestPassTarget } from './ai.js';
 import { DT, createMatch, tick, startNextPeriod, summary, forceShot, give, commitFoul, topPerformer, startAt, cancelShot } from './sim.js';
 import { createSeason, teamFor, nextGame, recordResult, simCurrent, ROUNDS } from './season.js';
 import { createShootout, shootoutTick, forceShootoutShot, cancelShootoutShot, SPOTS } from './shootout.js';
@@ -1075,10 +1076,15 @@ function drawMatch(m, dt) {
   if (is3d() && !verticalDir(m)) camX = Math.max(m.ball.x - 13, Math.min(m.ball.x + 13, camX));
   if (m.phase === 'ft' && m.ft) camX = rimFor(m.dir[m.ft.team]) - m.dir[m.ft.team] * 10;
   if (m.phase === 'tipoff') camX = 47;
-  let meter = null, ftMeter = null, offscreen = null;
+  let meter = null, ftMeter = null, offscreen = null, passTo = null;
   if (ut >= 0 && !m.user.auto && state.scene !== 'title') {
     const c = m.p[m.user.ctrl];
     if (c) {
+      if (m.phase === 'live' && m.ball.holder === c.idx && c.t === ut && !(c.act === 'shoot' || c.act === 'layup')) { // the receiver a pass would find, from the stick as the sim reads it
+        const vd = verticalDir(m), mx = vd ? -I.mz * vd : I.mx, mz = vd ? I.mx * vd : I.mz; // the sim reads the stick turned when the court is drawn sideways
+        const j = bestPassTarget(m, c.idx, mx, mz);
+        if (j >= 0) passTo = players[j];
+      }
       const r = m.teams[c.t].roster[c.r];
       const shooting = (c.act === 'shoot' || c.act === 'layup') && m.ball.holder === c.idx;
       const scale = (DIFF[m.difficulty] || DIFF[1]).win * (m.assist ? 1.5 : 1) * (m.crowdTeam === ut && m.crowd > 0.6 ? 1.3 : 1);
@@ -1090,6 +1096,7 @@ function drawMatch(m, dt) {
       ftMeter = { x: s.x, z: s.z, y: 9, mv: m.ft.mv, scale: m.assist ? 1.5 : 1, label: m.ft.label, n: m.ft.total - m.ft.left + 1, total: m.ft.total, user: m.ft.team === ut };
     }
   }
+  state.passTo = passTo ? passTo.pl.idx : null;
   const cheer = state.cheer || 0; state.cheer = 0;
   if (state.replay && state.scene === 'game') {
     const rs = replayScene(m);
@@ -1109,7 +1116,7 @@ function drawMatch(m, dt) {
     G3.camOverride = { attract: true, p: [47 + Math.sin(ang) * 40, 21 + Math.sin(tt * 0.07) * 3, 25 + Math.cos(ang) * 40], t: [m.ball.x * 0.5 + 23.5, 5, 18], fov: 42 };
   } else if (G3.camOverride && G3.camOverride.attract) { G3.camOverride = null; R.snap = true; }
   padMeter(meter);
-  draw({ m, venue: venueOf(m), dt, camX, camZ: m.ball.z, players, ball: m.ball, meter, ftMeter, offscreen, cheer, cheerTeam: state.cheerTeam, cheerAge: state.cheerAt && state.cheerAt.m === m ? m.time - state.cheerAt.t : null, cheerX: state.cheerAt ? state.cheerAt.x : null, perfect, slam, vertical: verticalDir(m) });
+  draw({ m, venue: venueOf(m), dt, camX, camZ: m.ball.z, players, ball: m.ball, meter, ftMeter, offscreen, passTo, cheer, cheerTeam: state.cheerTeam, cheerAge: state.cheerAt && state.cheerAt.m === m ? m.time - state.cheerAt.t : null, cheerX: state.cheerAt ? state.cheerAt.x : null, perfect, slam, vertical: verticalDir(m) });
   updateScoreboard();
 }
 
@@ -1414,7 +1421,7 @@ function hudState() {
   const m = state.match, sl = state.slam;
   const age = sl && m && sl.m === m ? m.time - sl.at : -1;
   const live = age >= 0 && age < SLAM_S && !(sl.liveAt != null && m.time - sl.liveAt >= 0.3) && state.scene !== 'title' && m.ball.state !== 'shot';
-  return { slam: live ? { text: sl.text, age: +age.toFixed(2) } : null, slamBox: live && R.slamBox ? { ...R.slamBox } : null, pops: R.fx.pops.map((p) => ({ text: p.text, age: +p.t.toFixed(2) })) };
+  return { passTo: state.passTo ?? null, vertical: state.match ? verticalDir(state.match) : 0, slam: live ? { text: sl.text, age: +age.toFixed(2) } : null, slamBox: live && R.slamBox ? { ...R.slamBox } : null, pops: R.fx.pops.map((p) => ({ text: p.text, age: +p.t.toFixed(2) })) };
 }
 
 function stepN(n) {

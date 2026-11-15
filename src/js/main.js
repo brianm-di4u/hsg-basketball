@@ -384,11 +384,12 @@ function startMatch(o) {
   });
   m.teams[0].gym = home.gym; m.teams[1].gym = away.gym; // the confirmed home-gym names (S4-01); the sim does not carry them
   if (o.start) startAt(m, { ...o.start, poss: o.start.poss === 'user' ? Math.max(0, user) : o.start.poss === 'opp' ? 1 - Math.max(0, user) : o.start.poss });
-  m.venueInfo = { kind: venue, homeKey: o.home, awayKey: o.away, pennants: venue === 'home' ? banners(o.home, program) : [] };
+  m.venueInfo = { kind: venue, homeKey: o.home, awayKey: o.away, pennants: venue === 'home' ? gymBanners(o.home, program) : [] };
   m.maxAllowed = o.maxAllowed ?? null;
   R.snap = true;
   return m;
 }
+const gymBanners = (key, program) => banners(key, program, state.save.trophies); // the real titles, then the seasons the player won with this school
 function venueOf(m) {
   return { kind: m.venueInfo.kind, home: m.teams[0], away: m.teams[1], pennants: m.venueInfo.pennants };
 }
@@ -935,7 +936,7 @@ function drawFrame(dt) {
   const key = state.season && (sc === 'hub' || sc === 'bracket' || sc === 'roster' || sc === 'champion') ? state.season.school : state.pick.home || 'hot-springs';
   const t = team(key);
   const finals = sc === 'bracket' || sc === 'champion';
-  const venue = { kind: finals ? 'arena' : 'home', home: t, away: team(state.pick.away === key ? 'lakeside' : state.pick.away), pennants: banners(key, (state.season && state.season.program) || state.pick.program) };
+  const venue = { kind: finals ? 'arena' : 'home', home: t, away: team(state.pick.away === key ? 'lakeside' : state.pick.away), pennants: gymBanners(key, (state.season && state.season.program) || state.pick.program) };
   if (sc === 'champion' && !R.reduced) {
     // the title moment: a slow sweep of the finals arena with the crowd on its feet
     const tt = performance.now() / 1000, ang = Math.sin(tt * 0.08) * 0.7, port = R.v && R.v.portrait;
@@ -1038,7 +1039,7 @@ function drawShootout(dt) {
   const scale = (DIFF[so.difficulty] || DIFF[1]).win * (so.assist ? 1.5 : 1);
   const meter = so.sh.act === 'shoot' && so.ball.state === 'held' ? { x: so.sh.x, z: so.sh.z, y: so.sh.y, h: so.r.height / 12, v: so.sh.meter, win: 0.05 * scale, label: null }
     : so.labelT > 0 ? { x: so.sh.x, z: so.sh.z, y: so.sh.y, h: so.r.height / 12, v: 0, win: 0.05 * scale, label: so.label } : null;
-  const venue = { kind: 'home', home: so.team, away: so.team, pennants: banners(so.team.key, so.r.id.includes('girls') ? 'girls' : 'boys') };
+  const venue = { kind: 'home', home: so.team, away: so.team, pennants: gymBanners(so.team.key, so.r.id.includes('girls') ? 'girls' : 'boys') };
   const vert = is3d() ? 1 : 0; // the 3D Hot Streak camera stands behind the shooter, looking at the basket
   draw({ venue, dt, camX: vert ? (so.sh.x + COURT.rimX[1]) / 2 - 4 : R.v && R.v.portrait ? (so.sh.x + COURT.rimX[1]) / 2 - 2 : COURT.rimX[1] - 14, camZ: (so.sh.z + 25) / 2, players, ball: so.ball, meter, vertical: vert });
   updateScoreboard();
@@ -1368,7 +1369,8 @@ const HOOKS = {
       case 'shootoutShot': return state.so ? forceShootoutShot(state.so, a[0]) : false;
       case 'facts': return FACTS_LIST;
       case 'crests': return { keys: CREST_KEYS, teams: COUNTY.map((t) => ({ key: t.key, crest: t.crest, colorsConfirmed: t.colorsConfirmed, cls: t.cls, mascot: t.mascot, name: t.name, colors: t.colors })) };
-      case 'banners': return banners(a[0], a[1]);
+      case 'banners': return banners(a[0], a[1], a[2]);
+      case 'pennants': return state.match ? state.match.venueInfo.pennants : null;
       case 'layout': {
         const rect = (s) => { const el = $(s); if (!el || el.hidden || !el.getClientRects().length) return null; const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; };
         return { stick: rect('#stick'), shoot: rect('#b-shoot'), pass: rect('#b-pass'), sw: rect('#b-switch'), sprint: rect('#b-sprint'), pause: rect('#b-pause'), stage: rect('#stage'), sb: rect('#sb') };

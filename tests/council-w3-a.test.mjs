@@ -1,4 +1,9 @@
-import { exhibition } from './helpers.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { exhibition, hqSettled, ready3d } from './helpers.mjs';
+
+const game = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 // Wave 3, batch A: saves, lifecycle and robustness.
 
@@ -198,5 +203,67 @@ tests.push({
     await t.game('scene', 'title');
     t.equal((await warns(t)).length, 0, 'no warning');
     t.expect(!/Saving is unavailable/.test(await t.page.innerText('#screen')), 'and no mention of saving');
+  },
+});
+
+const KEY = 'hsg-hoops-v1';
+const TRO = (school, program, n) => ({ school, program, cls: '5A', label: `Season ${n} state champions`, record: '10-1' });
+
+tests.push({
+  name: 'S3-17: the banners you win hang with the real ones, marked and numbered, for your school and program only (node)',
+  node: true,
+  async run(t) {
+    globalThis.SCHOOLS = JSON.parse(fs.readFileSync(path.join(game, 'shared/data/schools.json'), 'utf8'));
+    globalThis.FACTS = JSON.parse(fs.readFileSync(path.join(game, 'data/facts.json'), 'utf8'));
+    const { banners } = await import(pathToFileURL(path.join(game, 'src/js/data.js')).href);
+    const real = banners('hot-springs', 'girls').map((p) => p.year);
+    t.equal(JSON.stringify(real), JSON.stringify([1990, 1997, 1998, 2015, 2018]), 'with no list the real titles are unchanged');
+    t.expect(banners('hot-springs', 'girls').every((p) => !p.mine), 'and none is marked as yours');
+    const tro = [TRO('hot-springs', 'girls', 1), TRO('lakeside', 'boys', 2), TRO('hot-springs', 'girls', 3), TRO('hot-springs', 'boys', 4)];
+    const girls = banners('hot-springs', 'girls', tro);
+    t.equal(girls.length, 7, 'Hot Springs girls: five real banners and two of yours');
+    t.equal(JSON.stringify(girls.filter((p) => p.mine).map((p) => p.year)), JSON.stringify([1, 3]), 'yours carry the Trophy Room season numbers');
+    t.equal(JSON.stringify(girls.slice(0, 5).map((p) => p.year)), JSON.stringify(real), 'the real years come first and are untouched');
+    t.expect(girls.filter((p) => p.mine).every((p) => p.label === 'YOUR SEASON'), 'yours say YOUR SEASON');
+    t.equal(banners('hot-springs', 'boys', tro).filter((p) => p.mine).map((p) => p.year).join(), '4', 'the boys gym shows only the boys season');
+    t.equal(banners('lakeside', 'girls', tro).filter((p) => p.mine).length, 0, 'a title won in the boys program does not hang in the girls gym');
+    t.equal(banners('lakeside', 'boys', tro).filter((p) => p.mine).map((p) => p.year).join(), '2', 'another school\'s gym shows its own season');
+    t.equal(banners('jessieville', 'boys', tro).length, 0, 'a school you never won with stays bare');
+    const many = Array.from({ length: 9 }, (_, i) => TRO('jessieville', 'boys', i + 1));
+    t.equal(banners('jessieville', 'boys', many).map((p) => p.year).join(), '7,8,9', 'only the latest three hang, so the wall never overflows');
+    t.equal(banners('thistledown', 'boys', [TRO('thistledown', 'boys', 1)]).length, 1, 'a fictional school you won with hangs your banner (and no real ones)');
+    t.expect(banners('hot-springs', 'girls', [null, { school: 5 }, 7]).length === 5, 'damaged list entries are ignored');
+  },
+});
+tests.push({
+  name: 'S3-17: a saved season title hangs in the gym you play in, in 3D and in the classic court',
+  viewports: ['desktop', 'mobile'],
+  initScript: () => { try { if (!localStorage.getItem('hsg-hoops-v1')) localStorage.setItem('hsg-hoops-v1', JSON.stringify({ v: 1, settings: { graphics: '3d' }, trophies: [{ school: 'hot-springs', program: 'girls', cls: '5A', label: 'Season 1 state champions', record: '10-1' }, { school: 'lakeside', program: 'boys', cls: '5A', label: 'Season 2 state champions', record: '9-2' }], unlocks: { throwback: false }, best: { shootout: 0 }, challenges: {} })); } catch (e) { /* blocked */ } },
+  async run(t) {
+    await ready3d(t);
+    await t.game('newGame', { mode: 'exhibition', home: 'hot-springs', away: 'lakeside', program: 'girls', user: 'home', seed: 3, paused: true });
+    let pens = await t.game('act', 'pennants');
+    t.equal(pens.filter((p) => p.mine).length, 1, 'the girls gym at Hot Springs has your banner');
+    t.equal(pens.filter((p) => !p.mine).length, 5, 'beside the five real ones');
+    await t.game('step', 10);
+    await hqSettled(t);
+    await t.game('act', 'cam', { p: [0, 22, 70], t: [0, 14, -22], fov: 50 });
+    await t.shot('s3-17-end-wall-3d');
+    await t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/S3-17-your-banner-3d-${t.viewport}.png` });
+    await t.game('act', 'cam', null);
+    await t.game('newGame', { mode: 'exhibition', home: 'hot-springs', away: 'lakeside', program: 'boys', user: 'home', seed: 3, paused: true });
+    pens = await t.game('act', 'pennants');
+    t.equal(pens.filter((p) => p.mine).length, 0, 'the boys gym at Hot Springs has none of yours');
+    await t.game('newGame', { mode: 'exhibition', home: 'lakeside', away: 'hot-springs', program: 'boys', user: 'home', seed: 3, paused: true });
+    pens = await t.game('act', 'pennants');
+    t.equal(pens.filter((p) => p.mine).map((p) => p.year).join(), '2', 'Lakeside\'s gym hangs your Lakeside season');
+    await t.game('newGame', { mode: 'exhibition', home: 'lakeside', away: 'hot-springs', program: 'boys', user: 'away', seed: 3, paused: true, venue: 'arena' });
+    pens = await t.game('act', 'pennants');
+    t.equal(pens.length, 0, 'the finals arena hangs no gym pennants');
+    await t.game('setState', { settings: { graphics: '2d' } });
+    await t.game('newGame', { mode: 'exhibition', home: 'hot-springs', away: 'lakeside', program: 'girls', user: 'home', seed: 3, paused: true });
+    await t.game('step', 5);
+    await t.shot('s3-17-classic-court');
+    await t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/S3-17-your-banner-classic-${t.viewport}.png` });
   },
 });

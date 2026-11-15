@@ -89,13 +89,22 @@ export function rivalry(a, b) {
 export const FINALS = { name: RAW.venues.basketballFinals.name, address: RAW.venues.basketballFinals.address, city: 'Hot Springs' };
 export const FACTS_LIST = (FACT_RAW && FACT_RAW.facts) || [];
 
-// Pennants for a home gym: the real title years for that program (plus Lakeside's unspecified ones).
-export function banners(key, program) {
+// Pennants for a home gym: the real title years for that program (plus Lakeside's unspecified ones), then the banners the
+// player won there. Those are marked `mine` (drawn with a different trim), numbered as in the Trophy Room ("Season 3"), and
+// only the latest MY_BANNERS hang, so the wall never runs out of room. `trophies` is the save's list; none means real titles only.
+const MY_BANNERS = 3;
+export function banners(key, program, trophies = []) {
   const t = team(key);
-  if (!t || t.fictional) return [];
-  const own = (program === 'girls' ? t.titles.girls : t.titles.boys).map((y) => ({ year: y, label: program === 'girls' ? 'GIRLS STATE CHAMPS' : 'BOYS STATE CHAMPS' }));
-  const any = t.titles.any.map((y) => ({ year: y, label: 'STATE CHAMPIONS' }));
-  return [...own, ...any].sort((a, b) => a.year - b.year);
+  if (!t) return [];
+  let real = [];
+  if (!t.fictional) {
+    const own = (program === 'girls' ? t.titles.girls : t.titles.boys).map((y) => ({ year: y, label: program === 'girls' ? 'GIRLS STATE CHAMPS' : 'BOYS STATE CHAMPS' }));
+    const any = t.titles.any.map((y) => ({ year: y, label: 'STATE CHAMPIONS' }));
+    real = [...own, ...any].sort((a, b) => a.year - b.year);
+  }
+  const mine = [];
+  trophies.forEach((x, i) => { if (x && x.school === key && x.program === program) mine.push({ year: i + 1, label: 'YOUR SEASON', mine: true }); });
+  return [...real, ...mine.slice(-MY_BANNERS)];
 }
 
 // Jerseys. Home wears light, away wears dark; the alternate kit is always dark: Hot Springs' 1912-style throwback, or a

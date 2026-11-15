@@ -385,6 +385,10 @@ function pennantCanvas(p, team) {
   const col = team.colors.primary, ink = team.colors.secondary;
   c.fillStyle = col; c.beginPath(); c.moveTo(0, 0); c.lineTo(160, 0); c.lineTo(160, 170); c.lineTo(80, 220); c.lineTo(0, 170); c.closePath(); c.fill();
   c.strokeStyle = ink; c.lineWidth = 6; c.stroke();
+  if (p.mine) { // a banner the player won: gold edge with a pale line inside it, so it is never mistaken for a real title
+    c.strokeStyle = '#D4AF37'; c.lineWidth = 12; c.stroke();
+    c.strokeStyle = '#F4F1EA'; c.lineWidth = 3; c.beginPath(); c.moveTo(15, 15); c.lineTo(145, 15); c.lineTo(145, 163); c.lineTo(80, 202); c.lineTo(15, 163); c.closePath(); c.stroke();
+  }
   c.fillStyle = ink; c.textAlign = 'center'; c.textBaseline = 'middle';
   c.font = '900 46px "Arial Black", Impact, sans-serif'; c.fillText(String(p.year), 80, 62);
   // the label from data.js: "BOYS STATE CHAMPS", "GIRLS STATE CHAMPS" or "STATE CHAMPIONS" (program not recorded)

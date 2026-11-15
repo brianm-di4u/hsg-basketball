@@ -331,12 +331,12 @@ export function buildBackdrop(v, kind, home, away, pennants, dpr) {
     for (const pn of pennants) {
       const py = 2;
       c.fillStyle = home.colors.primary; c.beginPath(); c.moveTo(x, py); c.lineTo(x + pw, py); c.lineTo(x + pw, py + ph * 0.72); c.lineTo(x + pw / 2, py + ph); c.lineTo(x, py + ph * 0.72); c.closePath(); c.fill();
-      c.strokeStyle = fg; c.lineWidth = Math.max(1, s * 0.06); c.stroke();
+      c.strokeStyle = pn.mine ? '#D4AF37' : fg; c.lineWidth = Math.max(1, s * (pn.mine ? 0.12 : 0.06)); c.stroke(); // a banner the player won has a gold edge
       c.fillStyle = fg; c.textAlign = 'center'; c.textBaseline = 'middle';
       c.font = `800 ${Math.max(7, Math.min(pw * 0.27, ph * 0.3))}px "Arial Black", Impact, sans-serif`;
       c.fillText(String(pn.year), x + pw / 2, py + ph * 0.3);
       c.font = `700 ${Math.max(5, Math.min(pw * 0.12, ph * 0.13))}px system-ui, sans-serif`;
-      c.fillText(pn.label.split(' ')[0], x + pw / 2, py + ph * 0.58);
+      c.fillText(pn.mine ? 'SEASON' : pn.label.split(' ')[0], x + pw / 2, py + ph * 0.58);
       x += pw + gap;
     }
   }

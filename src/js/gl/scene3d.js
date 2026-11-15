@@ -318,6 +318,9 @@ function attachCrowd3d(v, players) {
   if (V.near && V.near.seats) { V.near3d = buildCrowd3d(V.near.seats, { ...o, seed: 23 }); V.near.g.add(V.near3d.g); V.near.crowd.visible = false; }
 }
 function captureProbe() {
+  // The first snapshot is taken before any frame has drawn, so the sun has no shadow map yet and a lit material would sample a
+  // texture that is not a depth texture (170 GL_INVALID_OPERATION warnings, and on a strict driver draws dropped). Draw the shadow map once first.
+  if (G3.sun.castShadow && !G3.sun.shadow.map) { G3.renderer.shadowMap.needsUpdate = true; G3.renderer.render(G3.scene, G3.camera); }
   const hide = [G3.ball, G3.blobs, G3.userRing, G3.trailFx.mesh, G3.vents.points, ...[...G3.players.values()].map((pm) => pm.root)];
   G3.envTex = G3.probe.capture(G3.scene, hide);
 }

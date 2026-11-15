@@ -35,44 +35,47 @@ const KIT_FRAG = `
 varying vec3 vRest;
 uniform vec3 uSkin, uJersey, uTrim, uShorts, uSock, uShoe, uHair, uStripe;
 uniform float uChest, uLight, uRef, uHairMix, uBand;
-float kitRough;
+float kitRough; bool kitCut;
 vec3 kitColor(vec3 p) {
   float h = p.y, ax = abs(p.x);
+  vec3 c = uSkin; // one exit through the bottom of the loop: with a return in every branch the D3D compiler warned that the result might be unset
   kitRough = 0.5;
+  do {
   if (h > 1.6) {
     // hair painted on the scalp: the hairline sits high at the brow, drops over the ears and low at the nape
     float back = smoothstep(0.07, -0.07, p.z);
     float hl = 1.792 - 0.118 * back - 0.02 * smoothstep(0.05, 0.09, ax) * (1.0 - back);
-    if (uBand > 0.5 && abs(h - hl + 0.004) < 0.014) { kitRough = 0.9; return uTrim; } // headband
-    if (uHairMix > 0.0 && h > hl) { kitRough = 0.9; return mix(uSkin, uHair, uHairMix); }
+    if (uBand > 0.5 && abs(h - hl + 0.004) < 0.014) { kitRough = 0.9; { c = uTrim; break; } } // headband
+    if (uHairMix > 0.0 && h > hl) { kitRough = 0.9; { c = mix(uSkin, uHair, uHairMix); break; } }
     // eyes, brows, nose shade and mouth
     vec2 e = vec2((ax - 0.036) / 0.011, (h - 1.722) / 0.0065);
-    if (p.z > 0.05 && dot(e, e) < 1.0) { kitRough = 0.2; return dot(e, e) < 0.6 ? vec3(0.04, 0.03, 0.03) : mix(uSkin, vec3(0.8, 0.78, 0.75), 0.4); }
-    if (p.z > 0.045 && h > 1.741 && h < 1.75 && ax > 0.018 && ax < 0.054) return mix(uSkin, uHair, 0.9);
-    if (p.z > 0.07 && h > 1.664 && h < 1.669 && ax < 0.02) return uSkin * 0.55;
-    return uSkin;
+    if (p.z > 0.05 && dot(e, e) < 1.0) { kitRough = 0.2; { c = dot(e, e) < 0.6 ? vec3(0.04, 0.03, 0.03) : mix(uSkin, vec3(0.8, 0.78, 0.75), 0.4); break; } }
+    if (p.z > 0.045 && h > 1.741 && h < 1.75 && ax > 0.018 && ax < 0.054) { c = mix(uSkin, uHair, 0.9); break; }
+    if (p.z > 0.07 && h > 1.664 && h < 1.669 && ax < 0.02) { c = uSkin * 0.55; break; }
+    { c = uSkin; break; }
   }
-  if (h < 0.118) { kitRough = 0.38; return h < 0.038 ? vec3(0.9, 0.89, 0.86) : (h < 0.05 ? uStripe : uShoe); }
-  if (uRef > 0.5 && h < 1.062 && ax < 0.27) { kitRough = 0.7; return vec3(0.025); }          // official: black slacks
-  if (h < 0.30 && ax < 0.2) { kitRough = 0.85; return (h > 0.255 && h < 0.276) ? uStripe : uSock; }
+  if (h < 0.118) { kitRough = 0.38; { c = h < 0.038 ? vec3(0.9, 0.89, 0.86) : (h < 0.05 ? uStripe : uShoe); break; } }
+  if (uRef > 0.5 && h < 1.062 && ax < 0.27) { kitRough = 0.7; { c = vec3(0.025); break; } }          // official: black slacks
+  if (h < 0.30 && ax < 0.2) { kitRough = 0.85; { c = (h > 0.255 && h < 0.276) ? uStripe : uSock; break; } }
   if (h >= 0.585 && h < 1.062 && ax < 0.27) {
     kitRough = 0.78;
-    if (h < 0.628 || h > 1.022) return uTrim;
-    if (h < 0.96 && ax - 0.1 > 0.058 - (0.96 - h) * 0.03) return uStripe;
-    return uShorts;
+    if (h < 0.628 || h > 1.022) { c = uTrim; break; }
+    if (h < 0.96 && ax - 0.1 > 0.058 - (0.96 - h) * 0.03) { c = uStripe; break; }
+    { c = uShorts; break; }
   }
   if (h >= 1.062 && h < 1.565) {
     float lim = h < 1.34 ? uChest + 0.03 : uChest + 0.03 - (h - 1.34) * 0.5;
     if (ax < lim) {
       kitRough = 0.8;
       float neck = p.z > 0.0 ? 1.535 - max(0.0, 0.082 - ax) * 1.5 : 1.53 - max(0.0, 0.07 - ax) * 0.4;
-      if (h > neck) return uSkin;
-      if (h > neck - 0.016 || ax > lim - 0.018) return uTrim;
-      if (uRef > 0.5) return mod(floor((p.x + 0.4) * 24.0), 2.0) < 1.0 ? vec3(0.02) : vec3(0.9); // official's stripes
-      return uJersey;
+      if (h > neck) { c = uSkin; break; }
+      if (h > neck - 0.016 || ax > lim - 0.018) { c = uTrim; break; }
+      if (uRef > 0.5) { c = mod(floor((p.x + 0.4) * 24.0), 2.0) < 1.0 ? vec3(0.02) : vec3(0.9); break; } // official's stripes
+      { c = uJersey; break; }
     }
   }
-  return uSkin;
+  } while (false);
+  return c;
 }
 `;
 
@@ -84,7 +87,7 @@ varying vec3 vRest; varying vec3 vZone;
 uniform vec3 uSkin, uJersey, uTrim, uShorts, uSock, uShoe, uHair, uStripe;
 uniform float uRef, uHairMix, uBand;
 uniform vec4 uHead; uniform vec3 uEye, uMouth, uHand, uBrow;
-float kitRough;
+float kitRough; bool kitCut; // kitCut: the pixel is outside the garment; a discard inside the function left its return value unset (an HLSL warning on D3D)
 // painted hair: a hairline high at the brow, dropping toward the nape; clear of the ears
 bool scalp(vec3 p) {
   vec3 d = p - uHead.xyz;
@@ -96,46 +99,48 @@ bool scalp(vec3 p) {
 vec3 kitColor(vec3 p) {
   float z = floor(vZone.r * 16.0 + 0.5), h = p.y;
   kitRough = 0.62;
+  vec3 kc = uSkin * vec3(0.86, 0.72, 0.7); // the lips; one exit through the bottom of the loop (a return in every branch drew an HLSL warning)
+  do {
   if (z < 0.5 && h > uHead.y - 0.09) {
     if (uHairMix > 0.0 && scalp(p)) {
       vec3 d = p - uHead.xyz; float back = clamp((0.04 - d.z) / 0.12, 0.0, 1.0);
       float line = 0.048 - 0.11 * back - 0.012 * smoothstep(0.05, 0.08, abs(d.x)) * (1.0 - back);
-      if (uBand > 0.5 && d.y - line < 0.016) { kitRough = 0.9; return uStripe; }        // headband
-      kitRough = 0.9; return mix(uSkin, uHair, uHairMix);
+      if (uBand > 0.5 && d.y - line < 0.016) { kitRough = 0.9; { kc = uStripe; break; } }        // headband
+      kitRough = 0.9; { kc = mix(uSkin, uHair, uHairMix); break; }
     }
     // brows: a soft arch over each eye, thicker toward the nose
     float bx = (abs(p.x) - uEye.x) / 0.022;
     vec2 e = vec2(abs(p.x) - uEye.x, h - uEye.y - 0.03 + uBrow.x * bx * bx - uBrow.y * bx);
-    if (p.z > uEye.z - 0.02 && abs(e.x) < 0.024 && abs(e.y) < uBrow.z + 0.0025 * clamp(-e.x / 0.02, 0.0, 1.0)) { kitRough = 0.9; return mix(uSkin, uHair, 0.92); }
+    if (p.z > uEye.z - 0.02 && abs(e.x) < 0.024 && abs(e.y) < uBrow.z + 0.0025 * clamp(-e.x / 0.02, 0.0, 1.0)) { kitRough = 0.9; { kc = mix(uSkin, uHair, 0.92); break; } }
     // upper lid line, and lips with a small colour shift
     vec2 le = vec2(abs(p.x) - uEye.x, h - uEye.y);
-    if (p.z > uEye.z - 0.012 && abs(le.x) < 0.017 && le.y > 0.0095 - 0.012 * le.x * le.x / 0.0003 && le.y < 0.0125 - 0.012 * le.x * le.x / 0.0003) return uSkin * 0.35;
+    if (p.z > uEye.z - 0.012 && abs(le.x) < 0.017 && le.y > 0.0095 - 0.012 * le.x * le.x / 0.0003 && le.y < 0.0125 - 0.012 * le.x * le.x / 0.0003) { kc = uSkin * 0.35; break; }
     vec2 m = vec2(p.x / 0.02, (h - uMouth.y + 0.031) / 0.0062); // (MakeHuman's mouth joint sits at the upper lip line)
-    if (p.z > uMouth.z - 0.02 && dot(m, m) < 1.0) return uSkin * vec3(0.78, 0.6, 0.6) + vec3(0.03, 0.0, 0.01);
+    if (p.z > uMouth.z - 0.02 && dot(m, m) < 1.0) { kc = uSkin * vec3(0.78, 0.6, 0.6) + vec3(0.03, 0.0, 0.01); break; }
   }
   if (z < 0.5 || (z > 13.5 && uRef > 0.5)) {
     float ax0 = abs(p.x);
     if (h < 0.3 && ax0 < 0.22) {                                    // socks, painted to a smooth top, tucked into the shoe
       kitRough = 0.85;
-      if (uRef > 0.5) return vec3(0.025);
-      return (h > 0.255 && h < 0.275) ? uStripe : uSock;
+      if (uRef > 0.5) { kc = vec3(0.025); break; }
+      { kc = (h > 0.255 && h < 0.275) ? uStripe : uSock; break; }
     }
-    if (uRef < 0.5) { float wd = length(vec3(ax0, h, p.z) - uHand); if (wd > 0.034 && wd < 0.085 && h > uHand.y - 0.004 && h < uHand.y + 0.11) { kitRough = 0.85; return uStripe; } }
-    if (uRef > 0.5 && h > 0.1 && h < 1.12 && ax0 < 0.27) { kitRough = 0.7; return vec3(0.025); }                // officials: slacks
+    if (uRef < 0.5) { float wd = length(vec3(ax0, h, p.z) - uHand); if (wd > 0.034 && wd < 0.085 && h > uHand.y - 0.004 && h < uHand.y + 0.11) { kitRough = 0.85; { kc = uStripe; break; } } }
+    if (uRef > 0.5 && h > 0.1 && h < 1.12 && ax0 < 0.27) { kitRough = 0.7; { kc = vec3(0.025); break; } }                // officials: slacks
     // and a full striped shirt over the tank's bare shoulders and chest: short sleeves to the elbow, a black crew neck
     if (uRef > 0.5 && h > 1.0 && h < 1.585 && ax0 < 0.34 && !(ax0 > 0.19 && h < 1.24)) {
       kitRough = 0.75;
-      if (h > 1.552 && ax0 < 0.1) return vec3(0.02);
-      if (ax0 > 0.19 && h < 1.29) return vec3(0.02);                // the sleeve hem
-      return mod(floor((p.x + 0.4) * 24.0), 2.0) < 1.0 ? vec3(0.02) : vec3(0.9);
+      if (h > 1.552 && ax0 < 0.1) { kc = vec3(0.02); break; }
+      if (ax0 > 0.19 && h < 1.29) { kc = vec3(0.02); break; }                // the sleeve hem
+      { kc = mod(floor((p.x + 0.4) * 24.0), 2.0) < 1.0 ? vec3(0.02) : vec3(0.9); break; }
     }
     kitRough = 0.48;
-    return uSkin * vec3(1.0, 0.985, 1.0) + vec3(0.0, 0.002, 0.012);
+    { kc = uSkin * vec3(1.0, 0.985, 1.0) + vec3(0.0, 0.002, 0.012); break; }
   }
   if (z < 1.5 || (z > 2.5 && z < 3.5)) {                         // jersey or shorts
     kitRough = 0.8;
     bool shorts = z > 2.5;
-    if (shorts && uRef > 0.5) discard; // officials wear slacks: the body's legs underneath are painted black
+    if (shorts && uRef > 0.5) { kitCut = true; { kc = uSkin; break; } } // officials wear slacks: the body's legs underneath are painted black
     float ax = abs(p.x), front = p.z > 0.0 ? 1.0 : 0.0;
     // the garment's edges as smooth curves of the rest pose (y up, +z forward): distance inside the edge, metres
     float d;
@@ -145,39 +150,40 @@ vec3 kitColor(vec3 p) {
       float arm = (h < 1.36 ? 0.212 : 0.212 - (h - 1.36) * 0.4) - ax;              // armholes narrowing into straps
       d = min(min(neck - h, arm), h - 0.985);
     }
-    if (d < 0.0) discard;                                           // outside the garment: the body shows
-    if (d < 0.017) return uTrim;                                     // piping on every edge
-    if (shorts && vZone.b > 0.78) return uStripe;                 // outer side panels
-    if (uRef > 0.5 && !shorts) return mod(floor((p.x + 0.4) * 24.0), 2.0) < 1.0 ? vec3(0.02) : vec3(0.9);
-    if (uRef > 0.5) return vec3(0.025);
-    return shorts ? uShorts : uJersey;
+    if (d < 0.0) { kitCut = true; { kc = uSkin; break; } }                   // outside the garment: the body shows
+    if (d < 0.017) { kc = uTrim; break; }                                     // piping on every edge
+    if (shorts && vZone.b > 0.78) { kc = uStripe; break; }                 // outer side panels
+    if (uRef > 0.5 && !shorts) { kc = mod(floor((p.x + 0.4) * 24.0), 2.0) < 1.0 ? vec3(0.02) : vec3(0.9); break; }
+    if (uRef > 0.5) { kc = vec3(0.025); break; }
+    { kc = shorts ? uShorts : uJersey; break; }
   }
-  if (z < 2.5 || z > 13.5) return uStripe;                        // trim, wristbands
-  if (z < 4.5) return uStripe;
-  if (z < 5.5) { kitRough = 0.85; return uRef > 0.5 ? vec3(0.025) : uSock; }
+  if (z < 2.5 || z > 13.5) { kc = uStripe; break; }                        // trim, wristbands
+  if (z < 4.5) { kc = uStripe; break; }
+  if (z < 5.5) { kitRough = 0.85; { kc = uRef > 0.5 ? vec3(0.025) : uSock; break; } }
   if (z < 7.5) {
-    if (h < 0.018) { kitRough = 0.7; return vec3(0.12); }                       // outsole
-    if (h < 0.034) { kitRough = 0.5; return vec3(0.9, 0.89, 0.86); }           // midsole
-    if (uRef > 0.5) { kitRough = 0.4; return vec3(0.02); }
-    kitRough = 0.4; return h < 0.042 ? uStripe : uShoe;
+    if (h < 0.018) { kitRough = 0.7; { kc = vec3(0.12); break; } }                       // outsole
+    if (h < 0.034) { kitRough = 0.5; { kc = vec3(0.9, 0.89, 0.86); break; } }           // midsole
+    if (uRef > 0.5) { kitRough = 0.4; { kc = vec3(0.02); break; } }
+    kitRough = 0.4; { kc = h < 0.042 ? uStripe : uShoe; break; }
   }
   if (z < 8.5) {
-    if (uHairMix > 0.0 && !scalp(p)) discard;                       // the cap's edge is the painted hairline
-    if (uBand > 0.5 && h < uHead.y + 0.04 && h > uHead.y + 0.02) { kitRough = 0.9; return uStripe; }
-    kitRough = 0.7; return mix(uSkin, uHair, uHairMix) * (0.9 + 0.25 * smoothstep(0.6, 1.0, sin((h - uHead.y) * 160.0)));
+    if (uHairMix > 0.0 && !scalp(p)) { kitCut = true; { kc = uSkin; break; } }                     // the cap's edge is the painted hairline
+    if (uBand > 0.5 && h < uHead.y + 0.04 && h > uHead.y + 0.02) { kitRough = 0.9; { kc = uStripe; break; } }
+    kitRough = 0.7; { kc = mix(uSkin, uHair, uHairMix) * (0.9 + 0.25 * smoothstep(0.6, 1.0, sin((h - uHead.y) * 160.0))); break; }
   }
   if (z < 11.5) {
     vec3 c = vec3(sign(p.x) * uEye.x, uEye.y, uEye.z - 0.012);
     vec3 n = normalize(p - c);
     float d = n.z;                                                  // 1 looking straight ahead
     kitRough = 0.05;
-    if (dot(n, normalize(vec3(-0.35 * sign(p.x), 0.4, 1.0))) > 0.9965) return vec3(1.6);  // catchlight
-    if (d > 0.982) return vec3(0.008);                              // pupil
-    if (d > 0.9) return mix(uHair * 0.5 + vec3(0.07, 0.04, 0.02), vec3(0.02), smoothstep(0.915, 0.9, d)); // iris, darker ring
-    kitRough = 0.15; return vec3(0.86, 0.84, 0.8);                // eye white
+    if (dot(n, normalize(vec3(-0.35 * sign(p.x), 0.4, 1.0))) > 0.9965) { kc = vec3(1.6); break; }  // catchlight
+    if (d > 0.982) { kc = vec3(0.008); break; }                              // pupil
+    if (d > 0.9) { kc = mix(uHair * 0.5 + vec3(0.07, 0.04, 0.02), vec3(0.02), smoothstep(0.915, 0.9, d)); break; } // iris, darker ring
+    kitRough = 0.15; { kc = vec3(0.86, 0.84, 0.8); break; }                // eye white
   }
-  if (z < 12.5) { kitRough = 0.9; return mix(uSkin, uHair, 0.92); } // brows
-  return uSkin * vec3(0.86, 0.72, 0.7);                           // lips
+  if (z < 12.5) { kitRough = 0.9; { kc = mix(uSkin, uHair, 0.92); break; } } // brows
+  } while (false);
+  return kc;
 }
 `;
 
@@ -196,7 +202,7 @@ function kitMaterial() {
     Object.assign(sh.uniforms, u);
     sh.vertexShader = V[0] + '\n' + sh.vertexShader.replace('#include <begin_vertex>', V[1]);
     sh.fragmentShader = (hq ? KIT3_FRAG : KIT_FRAG) + sh.fragmentShader
-      .replace('#include <color_fragment>', '#include <color_fragment>\n diffuseColor.rgb = kitColor(vRest);')
+      .replace('#include <color_fragment>', '#include <color_fragment>\n kitCut = false; diffuseColor.rgb = kitColor(vRest); if (kitCut) discard;')
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = kitRough;')
       // fill so dark skin keeps its modelling, plus a cool back light that rims the shoulders, heads and arms
       // (view space: from behind the players and above), which separates them from the floor and the crowd

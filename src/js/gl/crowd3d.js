@@ -120,6 +120,7 @@ float clipRow(int c, float t) {
   return k.x + f;
 }
 // kinds: 0 seated fan, 1 standing fan, 2 cheer squad, 3 bench player, 4 coach
+// (one return at the end: with a return in every branch the D3D compiler warned that the result might be unset)
 float pickRow() {
   float kind = aMix.x, ph = aMix.y, team = aMix.z;
   float t = uTime * (0.88 + 0.24 * fract(ph * 5.31)) + ph * 7.0; // each fan their own tempo: no row in lockstep
@@ -127,34 +128,33 @@ float pickRow() {
   // a make ripples out from the basket: the nearest fans are up first
   float e = uCheerT - (abs(instanceMatrix[3].x - uBasketX) * 0.012 + ph * 0.3);
   float L = 2.4 + ph * 1.6;
+  int c = 9; float ct = t;
   if (kind < 0.5 || (kind > 2.5 && kind < 3.5)) {
-    if (e >= 0.0 && e < L + 0.5 && mine && (kind > 2.5 || ph < 0.85)) {
-      if (e < 0.5) return clipRow(2, e);
-      if (e < L) return clipRow(3, e - 0.5 + ph);
-      return clipRow(4, e - L);
-    }
-    if (e >= 0.0 && e < 2.6 && !mine && ph > 0.55) return clipRow(5, e + ph);
-    // (a bench mostly sits and watches: a third of it claps, so six team-mates never move as one)
-    if (uExcite > 0.45 && fract(ph * 3.7) < (kind > 2.5 ? 0.33 : 0.5)) return clipRow(1, t);
-    // seated idle: hands on the knees, leaning in, sitting back, or turned to a neighbour
     float w = fract(ph * 7.13);
-    if (w < 0.3) return clipRow(10, t);
-    if (w < 0.55) return clipRow(11, t);
-    if (w < 0.72) return clipRow(12, t);
-    return clipRow(0, t);
-  }
-  if (kind < 1.5) {
-    if (e >= 0.0 && e < L && mine) return clipRow(3, e + ph);
-    if (uExcite > 0.45 && ph < 0.5) return clipRow(7, t);
-    // standing idle: weight shifts, arms folded, or a slow clap
+    if (e >= 0.0 && e < L + 0.5 && mine && (kind > 2.5 || ph < 0.85)) {
+      if (e < 0.5) { c = 2; ct = e; }
+      else if (e < L) { c = 3; ct = e - 0.5 + ph; }
+      else { c = 4; ct = e - L; }
+    }
+    else if (e >= 0.0 && e < 2.6 && !mine && ph > 0.55) { c = 5; ct = e + ph; }
+    // (a bench mostly sits and watches: a third of it claps, so six team-mates never move as one)
+    else if (uExcite > 0.45 && fract(ph * 3.7) < (kind > 2.5 ? 0.33 : 0.5)) c = 1;
+    // seated idle: hands on the knees, leaning in, sitting back, or turned to a neighbour
+    else if (w < 0.3) c = 10;
+    else if (w < 0.55) c = 11;
+    else if (w < 0.72) c = 12;
+    else c = 0;
+  } else if (kind < 1.5) {
     float v = fract(ph * 9.17);
-    if (v < 0.3) return clipRow(9, t);
-    if (v < 0.45) return clipRow(7, t * 0.6);
-    return clipRow(6, t);
-  }
-  if (kind < 2.5) return clipRow(8, t * (e >= 0.0 && e < L ? 1.4 : 1.0));
-  if (e >= 0.0 && e < 2.2 && mine) return clipRow(7, e);
-  return clipRow(9, t);
+    if (e >= 0.0 && e < L && mine) { c = 3; ct = e + ph; }
+    else if (uExcite > 0.45 && ph < 0.5) c = 7;
+    // standing idle: weight shifts, arms folded, or a slow clap
+    else if (v < 0.3) c = 9;
+    else if (v < 0.45) { c = 7; ct = t * 0.6; }
+    else c = 6;
+  } else if (kind < 2.5) { c = 8; ct = t * (e >= 0.0 && e < L ? 1.4 : 1.0); }
+  else if (e >= 0.0 && e < 2.2 && mine) { c = 7; ct = e; }
+  return clipRow(c, ct);
 }
 `;
 const VERT_SKIN = `
@@ -174,31 +174,36 @@ vec3 fanColor(vec3 p) {
   if (leg && h > 0.97) leg = false; // the hips belong to the shirt's hem line, cut level all the way round
   // a round collar: higher at the back and sides, a scoop at the front
   float collar = uHeadC.y - 0.2 - 0.075 * smoothstep(0.0, 0.09, p.z) * (1.0 - smoothstep(0.045, 0.085, ax));
+  vec3 c = vShirt; // one return at the end, as pickRow: a return in every branch drew an HLSL "might be unset" warning
   if (head || (!arm && !leg && h > collar)) {
-    if (h < collar) return vStyle.x < 0.5 ? vSkin : vShirt;           // the shirt's collar on the neck
-    vec3 d = p - uHeadC;
-    float back = clamp((0.04 - d.z) / 0.12, 0.0, 1.0);
-    float line = 0.048 - 0.11 * back - 0.012 * smoothstep(0.05, 0.08, abs(d.x)) * (1.0 - back);
-    float st = vStyle.z;
-    if (st > 2.5) { if (d.y > 0.035 - 0.03 * back) return vShirt * 0.8; }
-    else if (st < 1.5 && length(d) < 0.2) {
-      bool ear = abs(d.x) > 0.07 && d.y < 0.02 && back < 0.75;
-      if (d.y > line && !ear) return vHair;
-      if (st > 0.5 && back > 0.45 && d.y > -0.16) return vHair; // long hair down the back
+    if (h < collar) c = vStyle.x < 0.5 ? vSkin : vShirt;              // the shirt's collar on the neck
+    else {
+      vec3 d = p - uHeadC;
+      float back = clamp((0.04 - d.z) / 0.12, 0.0, 1.0);
+      float line = 0.048 - 0.11 * back - 0.012 * smoothstep(0.05, 0.08, abs(d.x)) * (1.0 - back);
+      float st = vStyle.z;
+      bool hit = false;
+      if (st > 2.5) { if (d.y > 0.035 - 0.03 * back) { c = vShirt * 0.8; hit = true; } }
+      else if (st < 1.5 && length(d) < 0.2) {
+        bool ear = abs(d.x) > 0.07 && d.y < 0.02 && back < 0.75;
+        if (d.y > line && !ear) { c = vHair; hit = true; }
+        else if (st > 0.5 && back > 0.45 && d.y > -0.16) { c = vHair; hit = true; } // long hair down the back
+      }
+      if (!hit) {
+        vec2 e = vec2(ax - uEye.x, h - uEye.y);
+        c = (p.z > uEye.z - 0.02 && dot(e, e) < 0.00011) ? vec3(0.03) : vSkin;
+      }
     }
-    vec2 e = vec2(ax - uEye.x, h - uEye.y);
-    if (p.z > uEye.z - 0.02 && dot(e, e) < 0.00011) return vec3(0.03);
-    return vSkin;
   }
-  if (arm) return (vStyle.x > 1.5 && h > 1.06) || (vStyle.x > 0.5 && vStyle.x < 1.5 && h > 1.33) ? vShirt : vSkin;
-  if (leg) {
-    if (h < 0.11) return vStyle.w > 0.5 ? vec3(0.82) : vec3(0.06);  // shoes
-    if (vStyle.y > 0.5 || h > 0.6) return vPants;                    // trousers, or shorts to the knee
-    return h < 0.26 ? vec3(0.85) : vSkin;                             // socks, bare shins
+  else if (arm) c = (vStyle.x > 1.5 && h > 1.06) || (vStyle.x > 0.5 && vStyle.x < 1.5 && h > 1.33) ? vShirt : vSkin;
+  else if (leg) {
+    if (h < 0.11) c = vStyle.w > 0.5 ? vec3(0.82) : vec3(0.06);  // shoes
+    else if (vStyle.y > 0.5 || h > 0.6) c = vPants;                // trousers, or shorts to the knee
+    else c = h < 0.26 ? vec3(0.85) : vSkin;                         // socks, bare shins
   }
-  if (h < 0.97) return vPants;
-  if (vStyle.x < 0.5 && ax > 0.15 && h > 1.36) return vSkin;          // a vest: bare shoulders
-  return vShirt;
+  else if (h < 0.97) c = vPants;
+  else if (vStyle.x < 0.5 && ax > 0.15 && h > 1.36) c = vSkin;      // a vest: bare shoulders
+  return c;
 }
 `;
 function fanMaterial(body, lod, U) {

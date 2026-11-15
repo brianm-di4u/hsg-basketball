@@ -1120,7 +1120,12 @@ function updateScoreboard(force) {
     const goal = challengeGoal(m);
     html = `${side(0)}<div class="sb-mid"><span class="sb-q">${q}</span><span class="sb-clock">${fmtClock(m.clock.t)}</span>${m.rules.shotClock ? `<span class="sb-shot" title="Shot clock">${shotTxt}</span>` : '<span class="sb-shot off">CLASSIC</span>'}${crowd}</div>${side(1)}${goal ? `<div class="sb-goal${goal.bad ? ' bad' : ''}">${UI.esc(goal.text)}</div>` : ''}`;
   }
-  if (html !== sbCache || force) { sbCache = html; sb.innerHTML = html; sb.classList.toggle('so', !!(state.so && SO_SCENES.has(sc))); }
+  if (html !== sbCache || force) { sbCache = html; sb.innerHTML = html; sb.classList.toggle('so', !!(state.so && SO_SCENES.has(sc))); syncCoachTop(); }
+}
+// The first-run tip sits just under the scoreboard on a wide screen, and the scoreboard is taller with a crowd bar or a challenge goal line (S2-03, S4-14).
+function syncCoachTop() {
+  const sb = $('#sb');
+  if (!sb.hidden) document.body.style.setProperty('--coach-top', `${sb.offsetTop + sb.offsetHeight + 8}px`);
 }
 const crestSrc = (T) => crestURL(T, 56);
 
@@ -1139,7 +1144,7 @@ function layout() {
   const stage = $('#stage');
   const r = stage.getBoundingClientRect();
   const w = Math.max(200, Math.floor(r.width)), h = Math.max(160, Math.floor(r.height));
-  if (!R.v || R.v.W !== w || R.v.H !== h) resize(w, h);
+  if (!R.v || R.v.W !== w || R.v.H !== h) { resize(w, h); syncCoachTop(); }
 }
 
 // ---------------------------------------------------------------- actions

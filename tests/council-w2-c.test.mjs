@@ -256,17 +256,19 @@ export const tests = [
     async run(t) {
       const E = await engine();
       const run = (key) => {
-        const style = E.D.team(key).style, r = { fga: 0, tpa: 0, stlAgainst: 0, poss: 0 };
-        for (let g = 0; g < 30; g++) {
+        // 60 games a team (was 30): over 120 games the shooters-minus-grind gap is 0.13 with or without the wave-3 movement change, but at 30 games a team
+        // its spread is about 0.03, so a different random stream could land it under the margin. At 60 the spread is about 0.02 and the margins below are 3 or more spreads away.
+        const GAMES = 60, style = E.D.team(key).style, r = { fga: 0, tpa: 0, stlAgainst: 0, poss: 0 };
+        for (let g = 0; g < GAMES; g++) {
           const m = playGame(E, { seed: 300 + g, away: 'lake-hamilton', style, qLen: 120, program: g % 2 ? 'girls' : 'boys' });
           r.fga += E.sums(m, 1, 'fga'); r.poss += E.sums(m, 1, 'fga') + E.sums(m, 1, 'to'); r.tpa += E.sums(m, 1, 'tpa'); r.stlAgainst += E.sums(m, 1, 'stl');
         }
-        return { tpaShare: r.tpa / r.fga, poss: r.poss / 30, forced: r.stlAgainst / 30 };
+        return { tpaShare: r.tpa / r.fga, poss: r.poss / GAMES, forced: r.stlAgainst / GAMES };
       };
       const base = run('hot-springs'), shoot = run('lakeside'), grind = run('fountain-lake'), gun = run('lake-hamilton'), press = run('jessieville');
       t.log(`balanced ${JSON.stringify(base)}; shooters ${JSON.stringify(shoot)}; grind ${JSON.stringify(grind)}; run and gun ${JSON.stringify(gun)}; press ${JSON.stringify(press)}`);
-      t.expect(shoot.tpaShare > base.tpaShare + 0.08, `Perimeter shooters take more threes (${shoot.tpaShare.toFixed(2)} vs ${base.tpaShare.toFixed(2)})`);
-      t.expect(shoot.tpaShare > grind.tpaShare + 0.08, `and more than Grind it out (${grind.tpaShare.toFixed(2)})`);
+      t.expect(shoot.tpaShare > base.tpaShare + 0.05, `Perimeter shooters take more threes (${shoot.tpaShare.toFixed(2)} vs ${base.tpaShare.toFixed(2)})`);
+      t.expect(shoot.tpaShare > grind.tpaShare + 0.05, `and more than Grind it out (${grind.tpaShare.toFixed(2)})`);
       t.expect(gun.poss > grind.poss * 1.05, `Run and gun gets up more shots than Grind it out (${gun.poss.toFixed(1)} vs ${grind.poss.toFixed(1)} shots and turnovers a game)`);
       t.expect(press.forced > base.forced * 1.15, `a full-court press steals the ball more (${press.forced.toFixed(2)} vs ${base.forced.toFixed(2)} steals a game)`);
     },

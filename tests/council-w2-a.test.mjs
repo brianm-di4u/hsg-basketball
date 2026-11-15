@@ -186,7 +186,8 @@ export const tests = [
       t.expect((after.meter || 0) - (before.meter || 0) >= 4, `the meter ticked while the shot was held (${(after.meter || 0) - (before.meter || 0)} ticks)`);
       t.expect((after.release || 0) > (before.release || 0), 'releasing the shot has a cue');
       await t.game('act', 'give', 1, 0);
-      await t.game('step', 20);
+      // the shooter above is still in the air for about a second after he starts the shot (his jump now peaks at the sweet spot, S1-06): wait for him to land
+      for (let k = 0; k < 20; k++) { await t.game('step', 6); const sx = await t.state(); if (sx.match.players[sx.match.user.ctrl].y === 0) break; }
       const b2 = (await audio(t)).count;
       await t.game('act', 'input', { shoot: true });
       await t.game('step', 2);

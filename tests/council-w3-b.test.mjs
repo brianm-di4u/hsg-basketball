@@ -389,3 +389,23 @@ tests.push({
     await t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/S3-07-hot-streak-setup-${t.viewport}.png` });
   },
 });
+
+tests.push({
+  name: 'S4-14 and S2-03: the first-run tip is placed under the scoreboard however tall it is (a crowd bar, a challenge goal line)',
+  viewports: ['desktop'],
+  async run(t) {
+    const gap = () => t.page.evaluate(() => {
+      const sb = document.querySelector('#sb'), bottom = sb.getBoundingClientRect().bottom;
+      return { bottom, top: parseFloat(getComputedStyle(document.querySelector('#coach')).top), h: sb.getBoundingClientRect().height };
+    });
+    await t.game('newGame', { mode: 'exhibition', home: 'hot-springs', away: 'lakeside', program: 'boys', user: 'home', seed: 3, paused: true });
+    await t.game('step', 2);
+    let g = await gap();
+    t.expect(g.top >= g.bottom, 'with a crowd bar the tip top (' + g.top + ') is at or below the scoreboard bottom (' + Math.round(g.bottom) + '; the board is ' + Math.round(g.h) + ' high)');
+    await t.game('newGame', { mode: 'challenge', challenge: '6a-trial', seed: 4, paused: true });
+    await t.game('step', 2);
+    const g2 = await gap();
+    t.expect(g2.top >= g2.bottom, 'with a challenge goal line too (' + g2.top + ' against ' + Math.round(g2.bottom) + '; the board is ' + Math.round(g2.h) + ' high)');
+    t.expect(g2.h > g.h - 1 || g2.h > 90, 'the board really is the taller one in a challenge');
+  },
+});

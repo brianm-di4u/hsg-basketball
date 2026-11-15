@@ -352,7 +352,7 @@ body.reduced #toast.in { animation: none; }
 /* ---------- first-game tips (S2-01): one line at a time, clear of the scoreboard and the pad; only the line and Skip take a tap ---------- */
 #coach { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); z-index: 4; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 8px; width: max-content; max-width: min(600px, calc(100% - 140px)); pointer-events: none; }
 #coach[hidden] { display: none; }
-@media (min-width: 760px) { body.gl #coach { top: 100px; } }
+@media (min-width: 760px) { body.gl #coach { top: var(--coach-top, 100px); } }
 #coach-tip { pointer-events: auto; display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 14px; border-radius: var(--radius-md); background: rgba(20, 18, 31, .92); border: 2px solid #D4AF37; color: #FFF6E0; font: 700 1.15rem/1.2 var(--font-text); letter-spacing: .02em; cursor: pointer; text-align: left; }
 .coach-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: #FFD84D; animation: coach-pulse 1.2s ease-in-out infinite; }
 @keyframes coach-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(1.5); } }

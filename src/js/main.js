@@ -529,12 +529,12 @@ function screenHTML() {
     case 'title': return UI.titleScreen({ ...st, saving: saveNotice ? '' : saveStatus() }); // a notice already up says the same thing
     case 'select': return UI.selectScreen(st);
     case 'seasonSetup': return UI.seasonSetupScreen({ ...st, season: setupSeason });
-    case 'hub': return state.season ? UI.hubScreen(st, UI.pickFact(state.season.w * 3 + state.season.l * 7 + state.season.seed)) : UI.titleScreen(st);
+    case 'hub': return state.season ? UI.hubScreen(st, UI.pickFact(state.season.w * 3 + state.season.l * 7 + state.season.seed, [state.season.school, (nextGame(state.season) || {}).opp])) : UI.titleScreen(st);
     case 'roster': { const rv = state.rosterView; return UI.rosterScreen(st, rv.key, rv.program, makeRoster(rv.key, rv.program, rv.cls, rv.seed)); }
     case 'bracket': return state.season && state.season.bracket ? UI.bracketScreen(st) : '';
     case 'pause': return m ? UI.pauseScreen(st, m, state.showBox) : '';
     case 'soPause': return state.so ? UI.soPauseScreen(st, state.so) : '';
-    case 'break': return m ? UI.breakScreen(m, UI.pickFact(state.factSeed + m.clock.q)) : '';
+    case 'break': return m ? UI.breakScreen(m, UI.pickFact(state.factSeed + m.clock.q, [m.teams[0].key, m.teams[1].key])) : '';
     case 'final': return m ? finalHTML(st) : '';
     case 'champion': return UI.championScreen(st);
     case 'shootoutSetup': return UI.shootoutSetupScreen(st);

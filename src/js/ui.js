@@ -535,5 +535,11 @@ export function settingsScreen(st, saving) {
   </div>`;
 }
 
-export function pickFact(seed) { return FACTS_LIST.length ? FACTS_LIST[Math.abs(seed | 0) % FACTS_LIST.length] : null; }
+// A fact card for the moment (S4-04): cards about a school come up only in a game that involves that school; the general ones (the shot clock, the finals)
+// come up in any. With no schools given, every card is a candidate. The seed still picks which, so a game shows the same cards each time.
+export function pickFact(seed, keys = null) {
+  const pool = keys ? FACTS_LIST.filter((f) => !f.schools || f.schools.some((k) => keys.includes(k))) : FACTS_LIST;
+  const from = pool.length ? pool : FACTS_LIST;
+  return from.length ? from[Math.abs(seed | 0) % from.length] : null;
+}
 export { banners, rivalry };

@@ -293,7 +293,7 @@ function paTick(m) {
     const gym = m.venueInfo && m.venueInfo.kind === 'arena' ? FINALS.name : m.teams[0].gym;
     const away = `${m.teams[1].short}: ${fiveOf(m.teams[1])}`, home = `${m.teams[0].short}: ${fiveOf(m.teams[0])}`;
     paSay([away, home].join('\n'), gym ? `Welcome to ${gym}` : 'Starting fives', PA_INTRO_SECS);
-    announce(`${gym ? `Welcome to ${gym}. ` : ''}Starting fives. ${away}. ${home}.`);
+    if (!(state.coach && state.coach.cur)) announce(`${gym ? `Welcome to ${gym}. ` : ''}Starting fives. ${away}. ${home}.`); // a first-run tip is the one the live region reads
   }
   if (pa.left > 0) {
     pa.left -= DT; if (pa.left <= 0) { paHide(); return; }

@@ -118,6 +118,10 @@ body.replay #sb, body.replay #pad { display: none; } /* the replay gets the phon
 .pb.small { width: 72px; height: 44px; border-radius: 14px; font-size: var(--fs-xs); }
 #b-sprint { background: #8FD6C8; }
 .pb.on { transform: translateY(3px); box-shadow: 0 1px 0 #8A8590; filter: brightness(.9); }
+/* Touch layout: left-handed (S2-16) puts the stick on the right and the buttons on the left, SHOOT outermost: a mirror of the default. */
+body.lefty #pad { flex-direction: row-reverse; }
+body.lefty .pbtns > .pb.big { grid-column: 1; }
+body.lefty .pbtns > .pb:not(.big) { grid-column: 2; }
 #pad.so #b-pass, #pad.so #b-switch, #pad.so #b-sprint, #pad.so #stick { visibility: hidden; }
 @media (orientation: landscape) and (max-height: 520px) {
   #pad { position: absolute; left: 0; right: 0; bottom: 0; height: auto; background: transparent; border: 0; pointer-events: none; }

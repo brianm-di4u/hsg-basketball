@@ -526,6 +526,7 @@ export function settingsScreen(st, saving) {
     ${seg('setClock', [[35, '35-second clock'], [0, 'Classic (off)']], s.shotClock, 'Shot clock')}
     ${seg('setAssist', [[1, 'On (wider window)'], [0, 'Off']], s.assist ? 1 : 0, 'Meter assist')}
     ${seg('setTouch', [['auto', 'Auto'], ['on', 'Always'], ['off', 'Never']], s.touch, 'Touch controls')}
+    ${seg('setHand', [['right', 'Stick left'], ['left', 'Stick right']], s.hand === 'left' ? 'left' : 'right', 'Touch layout')}
     ${seg('setGraphics', [['auto', 'Auto'], ['3d', '3D gym'], ['2d', 'Classic 2D']], s.graphics || 'auto', 'Graphics')}
     ${seg('setReplays', [[1, 'On'], [0, 'Off']], s.replays === false ? 0 : 1, 'Highlight replays')}
     ${typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function' ? seg('setHaptics', [[1, 'On'], [0, 'Off']], s.haptics === false ? 0 : 1, 'Vibration') : ''}

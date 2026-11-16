@@ -21,7 +21,7 @@ import { dailyDeal, localDate } from './daily.js';
 import * as UI from './ui.js';
 
 const $ = (s) => document.querySelector(s);
-const DEFAULTS = { sound: true, vol: 0.5, motion: 'auto', text: 100, theme: 'auto', difficulty: 1, qLen: 120, shotClock: 35, assist: false, touch: 'auto', graphics: 'auto', replays: true, haptics: true, ambience: true, music: true, ball: 'classic', floor: 'natural', tipsSeen: false };
+const DEFAULTS = { sound: true, vol: 0.5, motion: 'auto', text: 100, theme: 'auto', difficulty: 1, qLen: 120, shotClock: 35, assist: false, touch: 'auto', hand: 'right', graphics: 'auto', replays: true, haptics: true, ambience: true, music: true, ball: 'classic', floor: 'natural', tipsSeen: false };
 const state = {
   scene: 'title', stack: [], settings: { ...DEFAULTS }, season: null,
   save: { trophies: [], unlocks: { throwback: false }, best: { shootout: 0 }, challenges: {}, stars: {}, career: emptyCareer(), daily: cleanDaily(null), achievements: {} },
@@ -123,7 +123,7 @@ const SETTING_OK = {
   sound: (v) => typeof v === 'boolean', vol: (v) => [0.25, 0.5, 0.8].includes(v), motion: (v) => ['auto', 'on', 'off'].includes(v),
   text: (v) => [100, 115, 130].includes(v), theme: (v) => ['auto', 'light', 'dark'].includes(v), difficulty: (v) => [0, 1, 2].includes(v),
   qLen: (v) => [120, 240, 480].includes(v), shotClock: (v) => [0, 35].includes(v), assist: (v) => typeof v === 'boolean',
-  touch: (v) => ['auto', 'on', 'off'].includes(v), graphics: (v) => ['auto', '3d', '2d'].includes(v), replays: (v) => typeof v === 'boolean', haptics: (v) => typeof v === 'boolean', ambience: (v) => typeof v === 'boolean', music: (v) => typeof v === 'boolean',
+  touch: (v) => ['auto', 'on', 'off'].includes(v), hand: (v) => v === 'right' || v === 'left', graphics: (v) => ['auto', '3d', '2d'].includes(v), replays: (v) => typeof v === 'boolean', haptics: (v) => typeof v === 'boolean', ambience: (v) => typeof v === 'boolean', music: (v) => typeof v === 'boolean',
   ball: (v) => BALLS.some((b) => b.id === v), floor: (v) => FLOORS.some((f) => f.id === v), tipsSeen: (v) => typeof v === 'boolean',
 };
 function cleanSettings(raw) {
@@ -177,6 +177,7 @@ function applySettings() {
   const dark = s.theme !== 'light'; // the broadcast night look is the default; Day is a choice in Settings
   document.body.classList.toggle('theme-dark', dark);
   document.body.classList.toggle('theme-light', !dark);
+  document.body.classList.toggle('lefty', s.hand === 'left'); // the touch pad mirrored for a left hand (S2-16)
   document.body.classList.toggle('reduced', reducedMotion());
   R.reduced = reducedMotion();
   R.use3d = s.graphics !== '2d' && !NO_GL;
@@ -1355,6 +1356,7 @@ const ACT = {
   setTheme: (a) => setSetting('theme', a),
   setAssist: (a) => setSetting('assist', a === '1'),
   setTouch: (a) => setSetting('touch', a),
+  setHand: (a) => setSetting('hand', a === 'left' ? 'left' : 'right'),
   setReplays: (a) => setSetting('replays', a === '1'),
   setHaptics: (a) => { setSetting('haptics', a === '1'); if (a === '1') haptic('make'); }, // switching it on gives one pulse, so the player can feel that it works
   setGraphics: (a) => { setSetting('graphics', a); if (a !== '2d') start3d(); R.snap = true; drawFrame(0); },

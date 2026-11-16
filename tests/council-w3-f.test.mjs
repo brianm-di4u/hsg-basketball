@@ -346,3 +346,45 @@ tests.push({
     await t.page.keyboard.up('Space');
   },
 });
+
+// ---------------------------------------------------------------- S2-16 left-handed touch layout
+const KEY = 'hsg-hoops-v1';
+tests.push({
+  name: 'S2-16: Settings can mirror the touch layout for a left hand, it is kept, and an old or damaged save gets the usual layout',
+  viewports: ['desktop', 'mobile'],
+  async run(t) {
+    await t.game('scene', 'settings');
+    const row = await t.page.evaluate(() => { const b = [...document.querySelectorAll('[data-act="setHand"]')].map((x) => { const r = x.getBoundingClientRect(); return { arg: x.dataset.arg, pressed: x.getAttribute('aria-pressed'), h: r.height, text: x.textContent.trim() }; }); return b; });
+    t.equal(row.map((b) => b.arg).join(), 'right,left', 'the row has both layouts');
+    t.expect(row.every((b) => b.h >= 44), 'each choice is at least 44 px tall');
+    t.equal(row.find((b) => b.arg === 'right').pressed, 'true', 'the usual layout is the default');
+    await t.page.evaluate(() => document.querySelector('[data-act="setHand"]').scrollIntoView({ block: 'center' }));
+    await shot(t, 'S2-16-settings-row');
+    // the touch controls show on a desktop only when asked for
+    await t.page.click('[data-act="setTouch"][data-arg="on"]');
+    const geo = async () => t.page.evaluate(() => { const r = (s) => { const b = document.querySelector(s).getBoundingClientRect(); return { l: b.left, r: b.right, t: b.top, b: b.bottom }; }; return { stick: r('#stick'), shoot: r('#b-shoot'), pass: r('#b-pass'), sprint: r('#b-sprint'), W: innerWidth, lefty: document.body.classList.contains('lefty') }; });
+    await exhibition(t, { seed: 29 });
+    let g = await geo();
+    t.expect(!g.lefty && g.stick.r < g.pass.l && g.pass.r < g.shoot.l, 'by default the stick is on the left and SHOOT is outermost on the right');
+    await shot(t, 'S2-16-layout-right');
+    await t.game('scene', 'settings');
+    await t.page.click('[data-act="setHand"][data-arg="left"]');
+    t.expect(await t.page.evaluate(() => document.querySelector('[data-act="setHand"][data-arg="left"]').getAttribute('aria-pressed')) === 'true', 'the choice shows as pressed');
+    await exhibition(t, { seed: 29 });
+    g = await geo();
+    t.expect(g.lefty && g.shoot.r < g.pass.l && g.pass.r < g.stick.l, 'left-handed: SHOOT is outermost on the left and the stick is on the right');
+    t.expect([g.stick, g.shoot, g.pass, g.sprint].every((b) => b.l >= 0 && b.r <= g.W), 'everything is on the screen');
+    t.expect(g.sprint.r <= g.stick.l && g.pass.r <= g.stick.l, 'and nothing overlaps the stick');
+    await shot(t, 'S2-16-layout-left');
+    // kept across a reload; an old save has no field and a damaged one is not believed
+    await t.reload();
+    t.equal(await t.page.evaluate(() => document.body.classList.contains('lefty')), true, 'it is kept after a reload');
+    const put = (v) => t.page.evaluate(([k, s]) => { const o = JSON.parse(localStorage.getItem(k) || '{}'); o.settings = s; localStorage.setItem(k, JSON.stringify(o)); }, [KEY, v]);
+    await put({ sound: true });
+    await t.reload();
+    t.equal(await t.page.evaluate(() => document.body.classList.contains('lefty')), false, 'a save from before this setting has the usual layout');
+    await put({ hand: 'sideways' });
+    await t.reload();
+    t.equal(await t.page.evaluate(() => document.body.classList.contains('lefty')), false, 'a damaged value falls back to it');
+  },
+});

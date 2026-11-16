@@ -17,6 +17,7 @@ export const STYLE_NEUTRAL = { name: 'Balanced', blurb: 'A bit of everything.', 
 export const TEAM_AI = { sd: 0.09, steal: 0.9, react: 0.2, win: 1, noise: 0.22 }; // the user's AI teammates
 
 export const SWEET = 0.9; // meter value at the top of the jump
+export const HUMAN_WINDOW = 1.2; // the player's own PERFECT and GOOD window in a match, on top of the difficulty's scale (S1-02; was 1: PERFECT +-36 ms at Varsity, now +-43). 1.4 was tried and made All-State a coin flip for a casual player. The AI's windows and the Hot Streak's are untouched
 export const meterTime = (type) => (type === 'jumper' ? 0.72 : 0.5);
 
 // Quality from where the meter stopped. Returns {q, label}.

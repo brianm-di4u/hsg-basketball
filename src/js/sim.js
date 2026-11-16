@@ -3,7 +3,7 @@
 import { rnd, gauss, clamp } from './util.js';
 import { COURT, G, rimFor, distToRim, isThree, inBounds } from './court.js';
 import { decide, nearestDef, bestPassTarget, spots } from './ai.js';
-import { DIFF, TEAM_AI, STYLE_NEUTRAL, meterTime, meterQuality, contestFactor, shotChance, ftChance, SWEET } from './rules.js';
+import { DIFF, TEAM_AI, STYLE_NEUTRAL, meterTime, meterQuality, contestFactor, shotChance, ftChance, SWEET, HUMAN_WINDOW } from './rules.js';
 
 export const DT = 1 / 60;
 const SHOOT_BUFFER = 0.15; // s a shoot press before the catch stays valid
@@ -238,7 +238,7 @@ function release(m, i) {
   const mt = meterTime(type === 'jumper' ? 'jumper' : 'layup');
   const v = p.actT / mt;
   const userShot = m.user.team === t && m.user.ctrl === i && !m.user.auto;
-  let scale = userShot ? (DIFF[m.difficulty] || DIFF[1]).win * (m.assist ? 1.5 : 1) : 1;
+  let scale = userShot ? (DIFF[m.difficulty] || DIFF[1]).win * (m.assist ? 1.5 : 1) * HUMAN_WINDOW : 1;
   if (userShot && m.crowdTeam === t && m.crowd > 0.6) scale *= 1.3;
   const mq = meterQuality(v, scale, type === 'jumper' ? 'jumper' : 'layup');
   if (userShot) { m.user.meterLabel = mq.label; m.user.meterLabelT = 1.2; }

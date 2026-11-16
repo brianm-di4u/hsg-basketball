@@ -309,3 +309,40 @@ tests.push({
     t.equal((await t.state()).hud.shotTag, null, 'the tag goes with the grade');
   },
 });
+
+// ---------------------------------------------------------------- S1-02 a meter to hit
+tests.push({
+  name: 'S1-02: your PERFECT window is wider (a release a little early is PERFECT), the bar is bigger, and the band lights when the fill is in it',
+  viewports: ['desktop', 'mobile'],
+  async run(t) {
+    await exhibition(t, { seed: 23, difficulty: 2 }); // All-State: the table's window scale is 0.8, so the player's PERFECT is +-0.04 of the fill without the change and +-0.048 with it
+    // A jumper with nobody near. The fill is v = ticks / 43.2 (0.72 s) and the sweet spot is 0.9. A release is judged on the tick after Space goes up:
+    // holding 36 ticks releases at 37, v 0.8565, which is 0.0435 early: GOOD before this change, PERFECT now. Holding 33 releases at 34, v 0.787, 0.113 early: GOOD under either window.
+    const hold = async (ticks) => {
+      await stepUntil(t, (s) => !['shot', 'net'].includes(s.match.ball.state), 400, 10, 'the last shot to be over');
+      await t.game('act', 'give', 0, 2);
+      await t.game('act', 'place', 0, 2, 88.75 - 15, 25);
+      for (let k = 0; k < 5; k++) { await t.game('act', 'place', 1, k, 47 + (k - 2) * 6, k % 2 ? 4 : 46); if (k !== 2) await t.game('act', 'place', 0, k, 20, 4 + k * 10); }
+      await t.game('step', 1);
+      await t.page.keyboard.down('Space');
+      await t.game('step', ticks);
+      return t.state();
+    };
+    const releaseNow = async () => { await t.page.keyboard.up('Space'); await t.game('step', 3); return (await t.state()).match.user.meterLabel; };
+    let s = await hold(33);
+    t.expect(s.match.players[2].meter > 0.74 && s.match.players[2].meter < 0.78, `33 ticks held is a fill of ${s.match.players[2].meter}`);
+    t.equal(await releaseNow(), 'GOOD', 'a release at about 0.79 is only GOOD');
+    s = await hold(36);
+    const v36 = s.match.players[2].meter;
+    t.expect(v36 > 0.82 && v36 < 0.85, `36 ticks held is a fill of ${v36}`);
+    t.equal(await releaseNow(), 'PERFECT', 'a release at about 0.857, 0.0435 early, is PERFECT on All-State (it was GOOD)');
+    // the bar, with the fill inside the band
+    await stepUntil(t, (x) => !['shot', 'net'].includes(x.match.ball.state), 400, 10, 'the last shot to be over');
+    s = await hold(39);
+    const b = s.hud.meterBox;
+    t.expect(b && b.w >= 34 && b.h >= 150, `the bar is at least 34 by 150 px (${b && b.w} by ${b && b.h})`);
+    t.expect(b && b.x >= 0 && b.x + b.w <= (await t.page.evaluate(() => innerWidth)) && b.y >= 0, 'and it is on the screen');
+    await shot(t, 'S1-02-meter-in-band');
+    await t.page.keyboard.up('Space');
+  },
+});

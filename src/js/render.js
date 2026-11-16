@@ -194,6 +194,7 @@ function drawHud(c, v, P, scene) {
     c.fillStyle = p.color; c.fillText(p.text, X, Y + 1);
     c.globalAlpha = 1;
   }
+  R.meterBox = null;
   if (scene.meter) drawMeter(c, v, P, scene.meter);
   if (scene.ftMeter) drawFTMeter(c, v, P, scene.ftMeter);
   if (scene.offscreen) offscreenArrow(c, v, P, scene.offscreen);
@@ -385,14 +386,17 @@ function drawBall(c, v, b) {
 // Shot meter: a vertical bar beside the shooter. Marker shape + text label, not color alone.
 function drawMeter(c, v, P, mt) {
   const q = P(mt.x, mt.z, mt.y + mt.h + 0.4);
-  const h = clamp(q.s * 4.6, 110, 170), w = clamp(q.s * 1.0, 22, 32);
+  const h = clamp(q.s * 6.2, 150, 210), w = clamp(q.s * 1.5, 34, 46); // a bar to hit, not a sliver (S1-02; was 110 to 170 by 22 to 32)
   const X = clamp(q.X + Math.max(q.s * 1.4, 26), 8, v.W - w - 120), top = clamp(q.Y - h * 0.25, 12, v.H - h - 12);
   if (!mt.v && mt.label) { label(c, X, top + h * 0.35, mt.label, v, 'left'); if (mt.tag) tagLabel(c, X, top + h * 0.35, mt.tag, v); return; } // after release: the grade, and whether the shot was open
+  R.meterBox = { x: Math.round(X), y: Math.round(top), w: Math.round(w), h: Math.round(h) }; // for the tests
   c.fillStyle = 'rgba(20,18,31,0.88)'; c.beginPath(); c.roundRect(X - 3, top - 3, w + 6, h + 6, 5); c.fill();
   c.strokeStyle = '#FFF6E0'; c.lineWidth = 1.5; c.stroke();
   const sweetY = top + h * (1 - SWEET / 1.18), bandH = h * (mt.win * 2 / 1.18);
   c.fillStyle = '#2E6A3C'; c.fillRect(X, sweetY - bandH * 1.5, w, bandH * 3);
-  c.fillStyle = '#5FD38A'; c.fillRect(X, sweetY - bandH / 2, w, bandH);
+  const inBand = Math.abs(mt.v - SWEET) <= mt.win; // the fill is in the PERFECT band: the band lights white-green and gets an outline, so there is something to see to let go on
+  c.fillStyle = inBand ? '#C8FFDC' : '#5FD38A'; c.fillRect(X, sweetY - bandH / 2, w, bandH);
+  if (inBand) { c.strokeStyle = '#FFFFFF'; c.lineWidth = 2; c.strokeRect(X - 1, sweetY - bandH / 2 - 1, w + 2, bandH + 2); }
   const f = clamp(mt.v / 1.18, 0, 1);
   c.fillStyle = 'rgba(255,216,77,0.92)'; c.fillRect(X + w * 0.2, top + h * (1 - f), w * 0.6, h * f);
   c.fillStyle = '#FFFFFF'; c.beginPath(); c.moveTo(X - 8, top + h * (1 - f)); c.lineTo(X - 1, top + h * (1 - f) - 6); c.lineTo(X - 1, top + h * (1 - f) + 6); c.closePath(); c.fill();

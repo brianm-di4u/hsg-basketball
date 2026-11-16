@@ -37,7 +37,7 @@ const TARGETS = {
 };
 const sideOf = (key, program, cls, side) => { const t = teamFor(key, program, cls, 1); return { ...t, kit: kitFor(t, side) }; };
 function playerGame(g, diff, sd, o) {
-  rules.TEAM_AI.sd = sd / rules.DIFF[diff].win; // the auto side shoots with the spread a human of that skill has through this tier's window
+  rules.TEAM_AI.sd = sd / (rules.DIFF[diff].win * (rules.HUMAN_WINDOW || 1)); // the auto side shoots with the spread a human of that skill has through this tier's window (and the player's own window factor, S1-02)
   const m = createMatch({ mode: 'demo', home: sideOf(o.home, o.program, o.cls, 'home'), away: sideOf(o.away, o.program, o.cls, 'away'), program: o.program, rules: { qLen, shotClock: o.shotClock ?? 35 }, seed: 5000 + g, user: 0, difficulty: diff, autoBreak: true });
   m.user.auto = true;
   if (o.start) startAt(m, { ...o.start, poss: o.start.poss === 'user' ? 0 : o.start.poss === 'opp' ? 1 : o.start.poss });

@@ -13,7 +13,7 @@ import { startHQ, hqInfo } from './gl/hq.js';
 import { CREST_KEYS, crestURL } from './art.js';
 import { I, pollGamepad, initInput, initTouch, setEnabled, drain, cancelHeld } from './input.js';
 import { AU, unlock, play, setVolume, setOn, setAmbience, setMusic, setMusicTrack, setScene, setPaused, setCrowd, setTension, duck, suspendAudio, audioList, audioRender } from './audio.js';
-import { DIFF, meterQuality, SWEET } from './rules.js';
+import { DIFF, meterQuality, SWEET, HUMAN_WINDOW } from './rules.js';
 import { writeSave, readSaveSnapshot, resetSave, store, fmtClock, hash, frameDue } from './util.js';
 import { mergeSave, seasonText } from './save-policy.js';
 import { pushRecent, tierKey, cleanTiers, applyTier, starMask, cleanStars, applyStar, goalsMet, ACHIEVEMENTS, BALLS, FLOORS, ballSkin, floorFinish, unlockKey, kitKey, hasAlt, cleanCareer, cleanDaily, cleanAchievements, applyGame, applyDaily, emptyCareer, newBests, earnedAchievements, earnedCosmetics, liveStreak, addDays } from './career.js';
@@ -935,7 +935,7 @@ function musicFor(sc, m) {
   return 'pepBand';
 }
 // The meter's PERFECT window and the scale it is drawn and judged with for the shooter's own meter (difficulty, Meter assist, and a roaring home crowd), as the sim reads them.
-const meterScale = (m) => (DIFF[m.difficulty] || DIFF[1]).win * (m.assist ? 1.5 : 1) * (m.crowdTeam === m.user.team && m.crowd > 0.6 ? 1.3 : 1);
+const meterScale = (m) => (DIFF[m.difficulty] || DIFF[1]).win * (m.assist ? 1.5 : 1) * HUMAN_WINDOW * (m.crowdTeam === m.user.team && m.crowd > 0.6 ? 1.3 : 1);
 // The meter ticks while the user holds a shot, faster and higher toward the top of the jump, and brighter while the fill is in the PERFECT window (S5-14).
 function meterTick(m) {
   const u = m.user, p = u.team >= 0 && u.ctrl >= 0 ? m.p[u.ctrl] : null;
@@ -1514,7 +1514,7 @@ function hudState() {
   const m = state.match, sl = state.slam;
   const age = sl && m && sl.m === m ? m.time - sl.at : -1;
   const live = age >= 0 && age < SLAM_S && !(sl.liveAt != null && m.time - sl.liveAt >= 0.3) && state.scene !== 'title' && m.ball.state !== 'shot';
-  return { shotTag: m && m.user.meterLabelT > 0 ? state.shotTag || null : null, passTo: state.passTo ?? null, vertical: state.match ? verticalDir(state.match) : 0, slam: live ? { text: sl.text, age: +age.toFixed(2) } : null, slamBox: live && R.slamBox ? { ...R.slamBox } : null, pops: R.fx.pops.map((p) => ({ text: p.text, age: +p.t.toFixed(2) })) };
+  return { shotTag: m && m.user.meterLabelT > 0 ? state.shotTag || null : null, passTo: state.passTo ?? null, vertical: state.match ? verticalDir(state.match) : 0, slam: live ? { text: sl.text, age: +age.toFixed(2) } : null, slamBox: live && R.slamBox ? { ...R.slamBox } : null, meterBox: R.meterBox ? { ...R.meterBox } : null, pops: R.fx.pops.map((p) => ({ text: p.text, age: +p.t.toFixed(2) })) };
 }
 
 function stepN(n) {

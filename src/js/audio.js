@@ -103,6 +103,7 @@ AU.noiseFor = (ctx) => { let b = noiseCache.get(ctx); if (!b) { b = noiseBuffer(
 // Per-cue level trims, measured so each gameplay cue peaks between 0.2 and 0.45 at Medium volume
 // even at the quietest jitter draw (the jitter takes up to 1.5 dB off). The noise buffer has a fixed seed, so the worst draw over 150 seeds is a repeatable number: 0.205 to 0.45.
 const TRIM = { fake: 1.95, sprint: 2.55, cross: 0.88, reb: 0.9, tick: 0.9, streak: 1.3, swish: 1.2, floor: 1.15, rim: 1.15, whistle: 1.1, cheer: 1.2, groan: 5.4, ooh: 5.3, sigh: 4.0, block: 0.7, release: 1.82, pass: 1.32, catch: 1.15, jump: 2.5, sub: 1.63, challenge: 0.85, trophy: 0.7 };
+const RIVAL_GAIN = 1.26; // +2 dB on the cheer and the roar for your basket in a rivalry game
 const JIT = { default: [20, 1.5], click: [8, 0.6], whistle: [18, 1.2], buzzer: [6, 0.6], meter: [4, 0.4], win: [6, 0.8] };
 
 export function makeCues(ctx, master, kit) {
@@ -191,6 +192,7 @@ export function makeCues(ctx, master, kit) {
       J = kit ? kit.jit(cents, db) : { f: 1, g: 1, o: 0 };
       J.g *= TRIM[name] || 1;
       if (o.far) J.g *= o.far === true ? 0.4 : o.far; // not the player you steer: quieter
+      if (o.rival) J.g *= RIVAL_GAIN; // the home crowd in a rivalry game (S4-05): your basket is cheered a little louder
       let pn = null;
       if (o.pan && ctx.createStereoPanner) { pn = ctx.createStereoPanner(); pn.pan.value = Math.max(-0.7, Math.min(0.7, o.pan)); pn.connect(master); D = pn; } else D = master;
       try { C[name](t, o); } finally { D = master; }

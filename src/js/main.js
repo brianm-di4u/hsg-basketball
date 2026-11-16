@@ -1,5 +1,5 @@
 // Boot, fixed-step loop, scenes, season and challenge flow, saves, and the window.__game test hooks.
-import { COUNTY, team, kitFor, banners, FACTS_LIST, FINALS, gymCrowd } from './data.js';
+import { COUNTY, team, kitFor, banners, FACTS_LIST, FINALS, gymCrowd, rivalry } from './data.js';
 import { makeRoster, fullName } from './roster.js';
 import { COURT, rimFor, sx, sy } from './court.js';
 import { bestPassTarget } from './ai.js';
@@ -277,7 +277,7 @@ function coachShootout(so) {
 // A short caption under the scoreboard that says what a stadium announcer would: who is starting, who has taken the lead, a run, the half.
 // It is text only (the sound is the crowd's), never takes input, and is read out through the live region with the score.
 const PA_SECS = 4, PA_INTRO_SECS = 6, PA_RUNS = [8, 12]; // seconds a line stays, seconds the starting fives stay, and the scoring runs worth a mention (called at 8 to 11 points, again at 12 or more)
-const newPA = (m) => ({ left: 0, text: '', kicker: '', intro: false, lead: Math.sign(m.teams[0].score - m.teams[1].score), run: { t: -1, pts: 0, said: 0 } });
+const newPA = (m) => ({ left: 0, text: '', kicker: '', intro: false, rival: '', rivalSaid: false, lead: Math.sign(m.teams[0].score - m.teams[1].score), run: { t: -1, pts: 0, said: 0 } });
 function paSay(text, kicker, secs = PA_SECS) {
   const pa = state.pa, el = $('#pa'); if (!pa || !el) return;
   pa.text = text; pa.kicker = kicker || ''; pa.left = secs;
@@ -292,11 +292,13 @@ function paTick(m) {
     pa.intro = true;
     const gym = m.venueInfo && m.venueInfo.kind === 'arena' ? FINALS.name : m.teams[0].gym;
     const away = `${m.teams[1].short}: ${fiveOf(m.teams[1])}`, home = `${m.teams[0].short}: ${fiveOf(m.teams[0])}`;
+    pa.rival = (m.venueInfo && m.venueInfo.rival) || '';
     paSay([away, home].join('\n'), gym ? `Welcome to ${gym}` : 'Starting fives', PA_INTRO_SECS);
     if (!(state.coach && state.coach.cur)) announce(`${gym ? `Welcome to ${gym}. ` : ''}Starting fives. ${away}. ${home}.`); // a first-run tip is the one the live region reads
   }
   if (pa.left > 0) {
-    pa.left -= DT; if (pa.left <= 0) { paHide(); return; }
+    pa.left -= DT;
+    if (pa.left <= 0) { paHide(); if (pa.rival && !pa.rivalSaid) { pa.rivalSaid = true; paSay(`${pa.rival}.`, 'Rivalry game'); if (!(state.coach && state.coach.cur)) announce(`Rivalry game. ${pa.rival}.`); } return; } // a rivalry is named once, after the starting fives
     const cc = $('#coach'); $('#pa').style.marginTop = cc && !cc.hidden ? `${cc.offsetHeight + 8}px` : ''; // a first-run tip sits above it
   }
 }
@@ -432,7 +434,8 @@ function startMatch(o) {
   });
   m.teams[0].gym = home.gym; m.teams[1].gym = away.gym; // the confirmed home-gym names (S4-01); the sim does not carry them
   if (o.start) startAt(m, { ...o.start, poss: o.start.poss === 'user' ? Math.max(0, user) : o.start.poss === 'opp' ? 1 - Math.max(0, user) : o.start.poss });
-  m.venueInfo = { kind: venue, homeKey: o.home, awayKey: o.away, pennants: venue === 'home' ? gymBanners(o.home, program) : [] };
+  const rv = state.mode === 'exhibition' || state.mode === 'season' ? rivalry(o.home, o.away) : null; // a rivalry the data names (S4-05): the PA says so and the home crowd cheers louder
+  m.venueInfo = { kind: venue, homeKey: o.home, awayKey: o.away, rival: rv ? rv.label : '', pennants: venue === 'home' ? gymBanners(o.home, program) : [] };
   m.maxAllowed = o.maxAllowed ?? null;
   R.snap = true;
   return m;
@@ -970,10 +973,11 @@ function matchEvents(m) {
         if (e.pts === 3) { burst('steam', COURT.rimX[side], 10, 25, 10, ['#fff']); G3.refSignal = 1.4; }
         { // your basket gets the full roar, theirs a polite murmur and a groan from your crowd; taking the lead brings the house down
           const mine = mineSide(m, e.t), pan = panAt(m, COURT.rimX[side]), diff = m.teams[0].score - m.teams[1].score, before = diff - (e.t === 0 ? e.pts : -e.pts);
-          play('cheer', { big: e.pts === 3 || m.teams[e.t].isUser, mine, pan });
+          const rival = !!(m.venueInfo && m.venueInfo.rival) && mine;
+          play('cheer', { big: e.pts === 3 || m.teams[e.t].isUser, mine, pan, rival });
           if (m.user.team === e.t) haptic('make');
           if (!mine) play('groan', { pan: -pan * 0.5 });
-          if (mine && before * diff < 0) play('roar', { pan: 0 });
+          if (mine && before * diff < 0) play('roar', { pan: 0, rival });
           bump(mine ? (e.pts === 3 ? 0.8 : 0.55) : 0.3);
         }
         state.cheer = e.pts === 3 ? 1 : 0.75; state.cheerTeam = e.t; state.cheerAt = { m, t: m.time, x: rimFor(m.dir[e.t]) };

@@ -43,3 +43,30 @@ tests.push({
     t.expect(alone < 0.95, `no cue by itself reaches 0.95 at maximum volume (worst ${alone}, ${aloneName})`);
   },
 });
+
+// ---------------------------------------------------------------- S4-05 rivalries
+tests.push({
+  name: 'S4-05: a rivalry game is named by the PA after the starting fives, and the home crowd cheers a little louder; other games are not',
+  viewports: ['desktop', 'mobile'],
+  async run(t) {
+    await exhibition(t);
+    await t.game('step', 2);
+    let s = await t.state();
+    t.expect(s.pa && /^Welcome/.test(s.pa.kicker), `the welcome comes first (${s.pa && s.pa.kicker})`);
+    s = await stepUntil(t, (x) => !!x.pa && x.pa.kicker === 'Rivalry game', 900, 30, 'the rivalry line');
+    t.equal(s.pa.text, '5A South rivals.', 'it says what the data says the rivalry is');
+    await shot(t, 'S4-05-rivalry-line');
+    // a game between schools that are not rivals never says it
+    await exhibition(t, { away: 'lake-hamilton' });
+    let said = false;
+    for (let k = 0; k < 20; k++) { await t.game('step', 30); const x = await t.state(); if (x.pa && x.pa.kicker === 'Rivalry game') said = true; }
+    t.expect(!said, 'Hot Springs against Lake Hamilton is not called a rivalry');
+    // the louder cheer: the same seeded render with and without the rivalry flag; +2 dB is a factor of 1.26 on the cheer's own level
+    for (const cue of ['cheer', 'roar']) {
+      const plain = await render(t, 'cue:' + cue, 3, { seed: 5, cue: { big: true, mine: true } });
+      const riv = await render(t, 'cue:' + cue, 3, { seed: 5, cue: { big: true, mine: true, rival: true } });
+      const ratio = riv.rms / plain.rms;
+      t.expect(ratio > 1.15 && ratio < 1.36, `${cue} in a rivalry game is about 2 dB louder (rms ratio ${ratio.toFixed(2)})`);
+    }
+  },
+});

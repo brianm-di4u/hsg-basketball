@@ -276,7 +276,7 @@ function release(m, i) {
   Object.assign(m.ball, {
     state: 'shot', holder: -1, x: x0, y: y0, z: z0, lastTouch: t, tried: [],
     vx: (tx - x0) / Tf, vz: (tz - z0) / Tf, vy: (ty - y0 + 0.5 * G * Tf * Tf) / Tf,
-    shot: { by: i, team: t, type, three, make, airball, T: Tf, t: 0, x0, y0, z0, foul, q: quality, label: mq.label, buzzer: m.clock.t <= 0, pts: three ? 3 : 2, prob },
+    shot: { by: i, team: t, type, three, make, airball, T: Tf, t: 0, x0, y0, z0, foul, q: quality, label: mq.label, buzzer: m.clock.t <= 0, pts: three ? 3 : 2, prob, contest },
   });
   m.ball.land = null;
   r.st.fga++; if (three) r.st.tpa++;

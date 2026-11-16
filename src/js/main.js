@@ -1001,6 +1001,8 @@ function haptic(kind) {
   if (state.settings.haptics === false || !touchOn() || reducedMotion() || typeof navigator.vibrate !== 'function') return;
   try { navigator.vibrate(HAPTIC[kind]); } catch (e) { /* the browser said no */ }
 }
+// Whether the shooter's own release was open or contested (S2-08), from the sim's contest factor (1 is nobody near; 0.8 a defender within about 3 feet; 0.62 in his face).
+const OPEN_AT = 0.9;
 const WHY = { shotclock: 'SHOT CLOCK', oob: 'OUT OF BOUNDS', reach: 'FOUL', shoot: 'SHOOTING FOUL', '5sec': '5 SECONDS' };
 function matchEvents(m) {
   for (const e of m.ev) {
@@ -1039,7 +1041,7 @@ function matchEvents(m) {
       case 'airball': pop('AIRBALL', m.ball.x, 6, m.ball.z, '#FFB4A8'); play('sigh', { pan: panAt(m, m.ball.x) }); state.lastShot = 0; break;
       case 'gather': if (isUserBall(m, e.i)) { play('meter', { p: 0 }); meterAcc = 0; } break;
       case 'shot': state.mineGrade = isUserBall(m, e.i) && !m.user.auto ? m.user.meterLabel : ''; // the grade of your own shot, for the basket it may make (S1-04)
-        if (isUserBall(m, e.i)) { state.mineShotAt = m.time; haptic('release'); }
+        if (isUserBall(m, e.i)) { state.mineShotAt = m.time; haptic('release'); state.shotTag = m.ball.shot && !m.user.auto ? (m.ball.shot.contest >= OPEN_AT ? 'OPEN' : 'CONTESTED') : null; }
         state.lastShot = e.three ? m.time : 0; play('release', { three: e.three, pan: panAt(m, m.p[e.i].x), far: !isUserBall(m, e.i) }); if (e.three) bump(0.25);
         if (isUserBall(m, e.i) && !m.user.auto) { const g = m.user.meterLabel; if (g === 'PERFECT') play('perfect'); else if (g === 'EARLY' || g === 'LATE') play('late'); } // the grade by ear (S5-14); GOOD is the plain release
         break;
@@ -1179,7 +1181,7 @@ function drawMatch(m, dt) {
       const r = m.teams[c.t].roster[c.r];
       const shooting = (c.act === 'shoot' || c.act === 'layup') && m.ball.holder === c.idx;
       const scale = meterScale(m);
-      if (shooting || m.user.meterLabelT > 0) meter = { x: c.x, z: c.z, y: c.y, h: r.height / 12, v: shooting ? c.meter : 0, win: 0.05 * scale * (c.stype === 'jumper' ? 1 : 1.6), label: m.user.meterLabelT > 0 ? m.user.meterLabel : null };
+      if (shooting || m.user.meterLabelT > 0) meter = { x: c.x, z: c.z, y: c.y, h: r.height / 12, v: shooting ? c.meter : 0, win: 0.05 * scale * (c.stype === 'jumper' ? 1 : 1.6), label: m.user.meterLabelT > 0 ? m.user.meterLabel : null, tag: m.user.meterLabelT > 0 && m.user.meterLabel ? state.shotTag || null : null };
       offscreen = { x: c.x, z: c.z };
     }
     if (m.phase === 'ft' && m.ft && m.ft.state === 'aim') {
@@ -1512,7 +1514,7 @@ function hudState() {
   const m = state.match, sl = state.slam;
   const age = sl && m && sl.m === m ? m.time - sl.at : -1;
   const live = age >= 0 && age < SLAM_S && !(sl.liveAt != null && m.time - sl.liveAt >= 0.3) && state.scene !== 'title' && m.ball.state !== 'shot';
-  return { passTo: state.passTo ?? null, vertical: state.match ? verticalDir(state.match) : 0, slam: live ? { text: sl.text, age: +age.toFixed(2) } : null, slamBox: live && R.slamBox ? { ...R.slamBox } : null, pops: R.fx.pops.map((p) => ({ text: p.text, age: +p.t.toFixed(2) })) };
+  return { shotTag: m && m.user.meterLabelT > 0 ? state.shotTag || null : null, passTo: state.passTo ?? null, vertical: state.match ? verticalDir(state.match) : 0, slam: live ? { text: sl.text, age: +age.toFixed(2) } : null, slamBox: live && R.slamBox ? { ...R.slamBox } : null, pops: R.fx.pops.map((p) => ({ text: p.text, age: +p.t.toFixed(2) })) };
 }
 
 function stepN(n) {

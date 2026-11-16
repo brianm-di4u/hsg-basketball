@@ -387,7 +387,7 @@ function drawMeter(c, v, P, mt) {
   const q = P(mt.x, mt.z, mt.y + mt.h + 0.4);
   const h = clamp(q.s * 4.6, 110, 170), w = clamp(q.s * 1.0, 22, 32);
   const X = clamp(q.X + Math.max(q.s * 1.4, 26), 8, v.W - w - 120), top = clamp(q.Y - h * 0.25, 12, v.H - h - 12);
-  if (!mt.v && mt.label) { label(c, X, top + h * 0.35, mt.label, v, 'left'); return; } // after release: just the grade
+  if (!mt.v && mt.label) { label(c, X, top + h * 0.35, mt.label, v, 'left'); if (mt.tag) tagLabel(c, X, top + h * 0.35, mt.tag, v); return; } // after release: the grade, and whether the shot was open
   c.fillStyle = 'rgba(20,18,31,0.88)'; c.beginPath(); c.roundRect(X - 3, top - 3, w + 6, h + 6, 5); c.fill();
   c.strokeStyle = '#FFF6E0'; c.lineWidth = 1.5; c.stroke();
   const sweetY = top + h * (1 - SWEET / 1.18), bandH = h * (mt.win * 2 / 1.18);
@@ -423,6 +423,16 @@ function label(c, x, y, txt, v, align = 'center') {
   c.fillStyle = 'rgba(14,12,22,0.86)'; c.beginPath(); c.roundRect(x0, y - size * 0.62, w + 12, size * 1.2, 5); c.fill();
   c.lineWidth = 4; c.strokeStyle = '#14121F'; c.strokeText(txt, x, y);
   c.fillStyle = txt === 'PERFECT' ? '#5FD38A' : txt === 'GOOD' ? '#FFF6E0' : '#FFB4A8'; c.fillText(txt, x, y);
+}
+
+// OPEN or CONTESTED under the grade after a release (S2-08): words, in a second colour, not colour alone.
+function tagLabel(c, x, y, txt, v) {
+  const g = Math.round(clamp(v.s * 1.15, 24, 38)), size = Math.round(g * 0.62), y1 = y + g * 0.62 + size * 0.75;
+  c.font = `400 ${size}px "Bebas Neue", "Arial Black", Impact, sans-serif`; c.textAlign = 'left'; c.textBaseline = 'middle';
+  const w = c.measureText(txt).width;
+  c.fillStyle = 'rgba(14,12,22,0.86)'; c.beginPath(); c.roundRect(x - 6, y1 - size * 0.62, w + 12, size * 1.2, 4); c.fill();
+  c.lineWidth = 3; c.strokeStyle = '#14121F'; c.strokeText(txt, x, y1);
+  c.fillStyle = txt === 'OPEN' ? '#8FD6C8' : '#FFB4A8'; c.fillText(txt, x, y1);
 }
 
 function offscreenArrow(c, v, P, o) {

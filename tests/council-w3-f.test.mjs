@@ -281,3 +281,31 @@ tests.push({
     t.equal(await count(t, 'swipe'), w0 + 1, 'pressing the steal button swipes once');
   },
 });
+
+// ---------------------------------------------------------------- S2-08 open or contested
+tests.push({
+  name: 'S2-08: after your release the grade is joined by OPEN or CONTESTED, from how close the nearest defender was',
+  viewports: ['desktop', 'mobile'],
+  async run(t) {
+    await exhibition(t, { seed: 19 });
+    const release = async (defender) => {
+      await stepUntil(t, (s) => !['shot', 'net'].includes(s.match.ball.state), 400, 10, 'the last shot to be over');
+      const x = 88.75 - 15;
+      await t.game('act', 'give', 0, 2);
+      await t.game('act', 'place', 0, 2, x, 25);
+      for (let k = 0; k < 5; k++) { await t.game('act', 'place', 1, k, k === 0 && defender != null ? x + defender : 47 + (k - 2) * 6, k === 0 && defender != null ? 25 : k % 2 ? 4 : 46); if (k !== 2) await t.game('act', 'place', 0, k, 20, 4 + k * 10); }
+      await t.game('step', 1);
+      await t.game('act', 'shootAt', 0.75);
+      await stepUntil(t, (s) => s.match.ball.state === 'shot', 200, 2, 'the release');
+      return (await t.state()).hud.shotTag;
+    };
+    t.equal(await release(null), 'OPEN', 'nobody near: OPEN');
+    await shot(t, 'S2-08-open-tag');
+    t.equal(await release(5), 'OPEN', 'a defender five feet away still leaves it open');
+    t.equal(await release(2.5), 'CONTESTED', 'a defender two and a half feet away: CONTESTED');
+    await shot(t, 'S2-08-contested-tag');
+    t.equal(await release(1), 'CONTESTED', 'a defender in his face: CONTESTED');
+    await t.game('step', 90);
+    t.equal((await t.state()).hud.shotTag, null, 'the tag goes with the grade');
+  },
+});

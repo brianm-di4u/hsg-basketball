@@ -57,6 +57,30 @@ tests.push({
   },
 });
 
+tests.push({
+  name: 'S6-08: two quick clicks that each report a click count of 1 (a double tap on some phones) still sim one game',
+  viewports: ['desktop', 'mobile'],
+  async run(t) {
+    await t.seed(5);
+    await click(t, 'seasonSetup');
+    await click(t, 'startSeason');
+    await waitFor(t, (x) => x.scene === 'hub', 4000, 'the season hub');
+    await t.page.waitForFunction(() => window.__game.isIdle(), null, { timeout: 8000 });
+    await t.page.evaluate(() => { // two separate clicks, 60 ms apart, each with a click count of 1
+      const b = () => document.querySelector('[data-act="simSeason"]');
+      const fire = () => b().dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+      fire();
+      return new Promise((r) => setTimeout(() => { fire(); r(); }, 60));
+    });
+    let s = await t.state();
+    t.equal(s.season.w + s.season.l, 1, 'two quick count-1 clicks on Sim game recorded one game (they recorded two)');
+    await t.page.waitForTimeout(450);
+    await click(t, 'simSeason');
+    s = await t.state();
+    t.equal(s.season.w + s.season.l, 2, 'a separate click a moment later still sims the next game');
+  },
+});
+
 // A phone with a notch reports its insets through env(safe-area-inset-*), which no desktop browser can set. The stylesheet reads them through
 // four custom properties on :root (--sa-t, --sa-r, --sa-b, --sa-l), so the test sets those to a notch's size and measures what moves.
 const rects = (t) => t.page.evaluate(() => {

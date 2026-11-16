@@ -231,7 +231,7 @@ tests.push({
     t.expect(/^[123] of 3: /.test(label), `the bars have a text name (${label})`);
     await t.checkLayout({ allowScrollY: true });
     await shot(t, 'S3-12-hub-threat');
-    for (let k = 0; k < 3; k++) { await t.page.waitForFunction(() => window.__game.isIdle(), null, { timeout: 8000 }); await click(t, 'simSeason'); }
+    for (let k = 0; k < 3; k++) { await t.page.waitForFunction(() => window.__game.isIdle(), null, { timeout: 8000 }); await t.page.waitForTimeout(400); await click(t, 'simSeason'); } // 400 ms: a second click of the same act inside 350 ms is a double click (S6-08)
     const s = await waitFor(t, (x) => x.season && x.season.phase === 'bracket', 6000, 'the bracket phase');
     await t.page.waitForFunction(() => window.__game.isIdle(), null, { timeout: 8000 });
     await click(t, 'bracket');

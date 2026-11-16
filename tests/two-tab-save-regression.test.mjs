@@ -27,7 +27,7 @@ test('whole-season conflict and explicit new-season replacement',async t=>{
  await ui(b,'back');await ui(b,'continueSeason');await ui(b,'simSeason');eq(t,(await read(b)).season,first.season,'stale season advance rejected without mixing snapshots');t.expect(/changed in another tab/i.test(await b.locator('#screen').innerText()),'clear conflict warning');
  await ui(b,'title');await ui(b,'seasonSetup');await ui(t.page,'simSeason');const second=await read(t.page);await ui(b,'startSeason');
  t.equal(await b.evaluate(()=>window.__game.getState().scene),'seasonSetup','changed setup stays for renewed acknowledgement');eq(t,(await read(b)).season,second.season,'first changed-season Start does not replace newer data');
- await ui(b,'startSeason');const fresh=await read(b);t.equal(fresh.season.idx,0,'acknowledged new season starts at zero');t.expect(fresh.season.games.every(g=>g.result===null),'new schedule has no old results');t.equal(fresh.best.shootout,33,'new season preserves best');eq(t,fresh.trophies,seeded.trophies,'legacy banners preserved');await b.close();
+ await b.waitForTimeout(400);await ui(b,'startSeason');const fresh=await read(b);t.equal(fresh.season.idx,0,'acknowledged new season starts at zero');t.expect(fresh.season.games.every(g=>g.result===null),'new schedule has no old results');t.equal(fresh.best.shootout,33,'new season preserves best');eq(t,fresh.trophies,seeded.trophies,'legacy banners preserved');await b.close();
 }),
 test('read failures and failed writes retain explicit intents until success',async t=>{
  await load(t,observed);const latest=structuredClone(observed);latest.best.shootout=64;await put(t.page,latest);await ui(t.page,'settings');

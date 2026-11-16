@@ -49,3 +49,43 @@ tests.push({
     t.expect(!/newer version|unreadable|not being saved/i.test(await t.page.textContent('#screen')), 'a good save shows no notice');
   },
 });
+
+// ---------------------------------------------------------------- C4-06
+// The title loop is driven here with a clock of the test's own: the page's requestAnimationFrame is swapped for a queue and the
+// frame callback is called by hand at a stated screen rate, so the count is exact and does not depend on how busy the machine is.
+// With frame() no longer calling its gate, every frame draws (240 at 120 Hz in 2 s) and the bound fails.
+async function titleFramesDrawn(t, hz, seconds) {
+  return t.page.evaluate(([rate, secs]) => {
+    const g = window.__game, q = [];
+    const real = window.requestAnimationFrame;
+    window.requestAnimationFrame = (cb) => { q.push(cb); return q.length; };
+    return new Promise((resolve) => {
+      const wait = () => {
+        if (!q.length) { setTimeout(wait, 5); return; } // the loop's next request is picked up as soon as it is made
+        const f0 = g.getState().title.frames, t0 = Math.max(performance.now(), window.__fakeNow || 0), step = 1000 / rate, n = Math.round(rate * secs);
+        let calls = 0;
+        for (let i = 1; i <= n; i++) { const cb = q.shift(); if (!cb) break; calls++; cb(t0 + i * step); }
+        window.__fakeNow = t0 + n * step;
+        const drawn = g.getState().title.frames - f0;
+        window.requestAnimationFrame = real;
+        const next = q.shift(); if (next) real.call(window, next); // hand the loop back to the real clock
+        resolve({ drawn, calls });
+      };
+      wait();
+    });
+  }, [hz, seconds]);
+}
+tests.push({
+  name: 'C4-06: the title draws about 30 frames a second on a 60 and a 120 Hz screen, counted with a clock of the test\'s own',
+  async run(t) {
+    await t.page.waitForFunction(() => { const s = window.__game.getState(); return s.scene === 'title' && s.title && s.title.running; }, null, { timeout: 15000 });
+    await t.game('act', 'titleIdleAfter', 600000);
+    for (const hz of [60, 120]) {
+      const r = await titleFramesDrawn(t, hz, 2);
+      t.expect(r.calls === hz * 2, `${hz} Hz: the loop took every frame the test offered (${r.calls})`);
+      t.expect(r.drawn >= 56 && r.drawn <= 64, `${hz} Hz: ${r.drawn} frames drawn in 2 s (about 60, which is 30 a second)`);
+      await t.page.evaluate(() => { window.__game.act('titleIdleAfter', 600000); });
+      await t.page.waitForFunction(() => window.__game.getState().title.running, null, { timeout: 5000 }).catch(() => {});
+    }
+  },
+});

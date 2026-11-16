@@ -14,6 +14,14 @@ const seg = (act, opts, cur, label) => `<div class="seg" role="group" aria-label
 // What each difficulty changes, in a line under the control (S2-19). The numbers behind it are DIFF in rules.js (window, steals, reaction, the opponent's edge).
 export const DIFF_HINT = ['A wider shot window and slower defenders, and the other team plays a little weaker.', 'The standard game: a fair shot window and defenders who play it straight.', 'A narrower shot window, sharp shooters and aggressive steals, and the other team plays a little stronger.'];
 const diffSeg = (cur) => `<div class="diffw">${seg('setDiff', DIFF.map((d, i) => [i, d.name]), cur, 'Difficulty')}<p class="fine diff-hint">${esc(DIFF_HINT[cur] || DIFF_HINT[1])}</p></div>`;
+// The Vibration row is for a device that can buzz and has a coarse pointer, or where touch controls are set to Always (C4-10): desktop Chrome has
+// navigator.vibrate and never buzzes, and a laptop with a touch screen still has a fine primary pointer.
+const canBuzz = (s) => {
+  if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function' || s.touch === 'off') return false;
+  let coarse = false;
+  try { coarse = window.matchMedia('(pointer: coarse)').matches; } catch (e) { /* no matchMedia */ }
+  return s.touch === 'on' || coarse;
+};
 const progLabel = (p) => (p === 'girls' ? 'Girls' : 'Boys');
 const qLabel = (s) => `${s / 60} min`;
 
@@ -54,12 +62,12 @@ export function selectScreen(st) {
   const alt = hasAlt(st.save.unlocks, x.home) || hasAlt(st.save.unlocks, x.away);
   return `<div class="panel wide setup">
     <h2>Exhibition</h2>
-    ${seg('pickProgram', [['boys', 'Boys'], ['girls', 'Girls']], x.program, 'Program')}
+    ${seg('pickProgram', [['boys', 'Boys'], ['girls', 'Girls']], x.program, 'Boys / Girls team')}
     <div class="pickers"><div><h3 id="h-home">Home team</h3>${grid('pickHome', x.home, 'Home team')}</div>
     <div><h3 id="h-away">Away team</h3>${grid('pickAway', x.away, 'Away team')}</div></div>
     ${x.home === x.away ? '<p class="warn" role="alert">Pick two different schools.</p>' : ''}
     <div class="opts">${seg('pickSide', [['home', 'Home'], ['away', 'Away']], x.side, 'You play')}
-    ${seg('setQ', [[120, '2 min'], [240, '4 min'], [480, '8 min (full)']], st.settings.qLen, 'Quarters')}
+    ${seg('setQ', [[120, '2 min'], [240, '4 min'], [480, '8 min (full)']], st.settings.qLen, 'Quarter length')}
     ${seg('setClock', [[35, '35 seconds'], [0, 'Off (classic)']], st.settings.shotClock, 'Shot clock')}
     ${diffSeg(st.settings.difficulty)}</div>
     ${alt ? seg('setThrow', [[1, 'Alternate kit'], [0, 'Regular']], x.throwback ? 1 : 0, 'Kits') + '<p class="fine">An alternate kit is worn by a team that has earned one: the 1912-style throwback for Hot Springs, a Heritage strip for the other schools.</p>' : ''}
@@ -73,11 +81,11 @@ export function seasonSetupScreen(st) {
   const t = team(x.school);
   return `<div class="panel wide">
     <h2>New season</h2>
-    <p>Pick your school and program. Play a county schedule, then the Class ${esc(t.cls)} state bracket. The state final is at ${esc(FINALS.name)}, ${esc(FINALS.city)}.</p>
-    ${seg('pickProgram', [['boys', 'Boys'], ['girls', 'Girls']], x.program, 'Program')}
+    <p>Pick your school and a boys or girls team. Play a county schedule, then the state bracket for Class ${esc(t.cls)}, the size group your school plays in. The state final is at ${esc(FINALS.name)}, ${esc(FINALS.city)}.</p>
+    ${seg('pickProgram', [['boys', 'Boys'], ['girls', 'Girls']], x.program, 'Boys / Girls team')}
     ${grid('pickSchool', x.school, 'School')}
     ${seg('pickLength', [['short', 'Short: 3 games'], ['full', 'Full: 8 games']], x.length, 'Regular season')}
-    ${seg('setQ', [[120, '2 min'], [240, '4 min'], [480, '8 min (full)']], st.settings.qLen, 'Quarters')}
+    ${seg('setQ', [[120, '2 min'], [240, '4 min'], [480, '8 min (full)']], st.settings.qLen, 'Quarter length')}
     ${diffSeg(st.settings.difficulty)}
     ${st.season && !st.season.done ? '<p class="warn">Starting a new season replaces the season in progress.</p>' : ''}
     <div class="row end">${btn('title', 'Back')}${btn('startSeason', 'Start season', { cls: 'primary' })}</div>
@@ -279,7 +287,7 @@ export function shootoutSetupScreen(st) {
   return `<div class="panel wide">
     <h2>Hot Streak</h2>
     <p>60 seconds, seven spots around the arc and the elbows. Inside spots are worth 2, beyond the arc 3. Three makes in a row fill the steam gauge for double points; six in a row for triple. Your shooter is the best jump shooter on the roster (fictional).</p>
-    ${seg('pickProgram', [['boys', 'Boys'], ['girls', 'Girls']], x.program, 'Program')}
+    ${seg('pickProgram', [['boys', 'Boys'], ['girls', 'Girls']], x.program, 'Boys / Girls team')}
     ${grid('pickSchool', x.school, 'School')}
     <p>Best score: <b>${st.save.best.shootout || 0}</b>${hotAverage(st.save.best)}</p>
     <p class="fine">${tierText(st.save.best, st.settings.difficulty)}</p>
@@ -463,16 +471,37 @@ export function helpScreen(st, tab = 'controls') {
     <tr><td>Mute</td><td><kbd>M</kbd></td><td>Speaker button</td></tr></tbody></table>
     <p>Menus: <kbd>Tab</kbd> to move, <kbd>Enter</kbd> to choose, <kbd>Esc</kbd> to go back.</p>
     <h3>Game pad</h3><p>Plug in or wake a pad and press a button. Left stick or D-pad: move. <b>A</b>: shoot (hold, then let go in the green) and jump to block. <b>X</b>: pass or steal. <b>Y</b> or <b>B</b>: switch defender. Bumpers or triggers: sprint. <b>Start</b>: pause. In menus the D-pad moves, <b>A</b> chooses and <b>B</b> goes back.</p>`;
-  if (tab === 'play') body = `<h3>The shot meter</h3><p>Hold Shoot to rise into your jump. A bar fills beside your player. Let go when the marker reaches the bright green band at the top of the jump. You'll see <b>PERFECT</b>, <b>GOOD</b>, <b>EARLY</b> or <b>LATE</b>. Perfect releases go in far more often; open looks beat contested ones; close shots beat long ones. Near the rim the same button lays it in, and it is more forgiving.</p>
-    <h3>Free throws</h3><p>A marker swings across a bar. Press Shoot when it is in the green middle.</p>
-    <h3>Tip-off</h3><p>Press Shoot as the tossed ball reaches its peak to jump for it. Good timing wins more tips.</p>
-    <h3>Offense</h3><p>You control whoever has the ball. Pass to find open teammates, especially cutters heading to the rim. The 35-second shot clock is on the scoreboard.</p>
-    <h3>Sprint, fakes and crossovers</h3><p>Hold Sprint to run about a quarter faster; it wears your legs down, so use it in bursts. Tap Shoot quickly for a pump fake: a defender may jump at it and leave you open. Flip the stick the other way while you dribble to cross him over. Every team uses all three.</p>
-    <h3>Difficulty</h3><p><b>Rookie:</b> a wider shot window and slower defenders, and the other team plays a little weaker. <b>Varsity:</b> the standard game. <b>All-State:</b> a narrower window, sharp shooters and aggressive steals, and the other team plays a little stronger. Struggling? Try Rookie, or turn on the meter assist in Settings. Change it any time in Settings.</p>
-    <h3>Defense</h3><p>You control the defender nearest the ball (marked <b>YOU</b> with a yellow chevron). Stay between your player and the rim. Time steals and blocks: reaching in can draw a foul. Switch defenders any time.</p>
-    <h3>Telling teams apart</h3><p>Home players stand on a solid ring, away players on a dashed ring. Home wears light jerseys, away wears dark ones.</p>`;
+  if (tab === 'play') body = `<h3>The shot meter</h3><ul class="plain bullets">
+    <li>Hold Shoot to rise into your jump. A bar fills beside your player.</li>
+    <li>Let go when the marker reaches the bright green band at the top of the jump.</li>
+    <li>You'll see <b>PERFECT</b>, <b>GOOD</b>, <b>EARLY</b> or <b>LATE</b>. Perfect releases go in far more often.</li>
+    <li>Open looks beat contested ones, and close shots beat long ones.</li>
+    <li>Near the rim the same button lays it in, and it is more forgiving.</li>
+    <li><b>Meter assist</b> (Settings) widens the green band.</li></ul>
+    <h3>Free throws</h3><ul class="plain bullets"><li>A marker swings across a bar. Press Shoot when it is in the green middle.</li></ul>
+    <h3>Tip-off</h3><ul class="plain bullets"><li>Press Shoot as the tossed ball reaches its peak to jump for it. Good timing wins more tips.</li></ul>
+    <h3>Offense</h3><ul class="plain bullets">
+    <li>You control whoever has the ball.</li>
+    <li>Pass to find open teammates, especially cutters heading to the rim.</li>
+    <li>The 35-second shot clock is on the scoreboard.</li></ul>
+    <h3>Sprint, fakes and crossovers</h3><ul class="plain bullets">
+    <li>Hold Sprint to run about a quarter faster. It wears your legs down, so use it in bursts.</li>
+    <li>Tap Shoot quickly for a pump fake: a defender may jump at it and leave you open.</li>
+    <li>Flip the stick the other way while you dribble to cross him over.</li>
+    <li>Every team uses all three.</li></ul>
+    <h3>Difficulty</h3><ul class="plain bullets">
+    <li><b>Rookie:</b> a wider shot window and slower defenders, and the other team plays a little weaker.</li>
+    <li><b>Varsity:</b> the standard game.</li>
+    <li><b>All-State:</b> a narrower window, sharp shooters and aggressive steals, and the other team plays a little stronger.</li>
+    <li>Struggling? Try Rookie, or turn on the meter assist in Settings. Change either any time in Settings.</li></ul>
+    <h3>Defense</h3><ul class="plain bullets">
+    <li>You control the defender nearest the ball (marked <b>YOU</b> with a yellow chevron). Switch defenders any time.</li>
+    <li>Stay between your player and the rim.</li>
+    <li><b>Careful:</b> reaching in for a steal can be a foul. From a team's 5th foul in a quarter the other side shoots 2 free throws.</li>
+    <li>Time your steals and blocks.</li></ul>
+    <h3>Telling teams apart</h3><ul class="plain bullets"><li>Home players stand on a solid ring, away players on a dashed ring. Home wears light jerseys, away wears dark ones.</li></ul>`;
   if (tab === 'rules') body = `<p>These are the game's rules. Only the 35-second shot clock is a sourced Arkansas rule; everything else is how this game plays.</p><ul class="plain bullets">
-    <li><b>Quarters:</b> four, 2, 4 or 8 minutes each (8 is the full-length setting). Teams swap ends at halftime.</li>
+    <li><b>Quarter length:</b> four quarters, 2, 4 or 8 minutes each (8 is the full-length setting). Teams swap ends at halftime.</li>
     <li><b>Shot clock:</b> 35 seconds, Arkansas's clock since 2022-23 (adopted 183-69 in 2020). It resets on a change of possession or when a shot hits the rim, and switches off when less game time remains. "Classic" turns it off.</li>
     <li><b>Scoring:</b> 2 inside the arc, 3 beyond it, 1 per free throw.</li>
     <li><b>Fouls:</b> a shooting foul gives 2 free throws (3 on a three, 1 after a made basket). Reach-in fouls give the ball back out of bounds; from a team's 5th foul in a quarter they give 2 shots (the bonus). Five fouls and a player is out.</li>
@@ -529,7 +558,7 @@ export function settingsScreen(st, saving) {
     ${seg('setHand', [['right', 'Stick left'], ['left', 'Stick right']], s.hand === 'left' ? 'left' : 'right', 'Touch layout')}
     ${seg('setGraphics', [['auto', 'Auto'], ['3d', '3D gym'], ['2d', 'Classic 2D']], s.graphics || 'auto', 'Graphics')}
     ${seg('setReplays', [[1, 'On'], [0, 'Off']], s.replays === false ? 0 : 1, 'Highlight replays')}
-    ${typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function' ? seg('setHaptics', [[1, 'On'], [0, 'Off']], s.haptics === false ? 0 : 1, 'Vibration') : ''}
+    ${canBuzz(s) ? seg('setHaptics', [[1, 'On'], [0, 'Off']], s.haptics === false ? 0 : 1, 'Vibration') : ''}
     ${seg('setTips', [[1, 'Show'], [0, 'Hide']], s.tipsSeen ? 0 : 1, 'First-game tips')}
     ${saveNote(saving)}
     <div class="row end">${btn('back', 'Done', { cls: 'primary' })}</div>

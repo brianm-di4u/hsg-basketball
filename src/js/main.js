@@ -816,7 +816,7 @@ function endShootout() {
   const saved = persist({ score: so.score, tiers: [{ k: tier, s: so.score }] });
   so.newBest = so.score > (saved.previousBest ?? memoryBest);
   state.awards = award({ shootout: so.score });
-  play(so.newBest ? 'win' : 'buzzer'); duck(6, 1200);
+  play(so.newBest ? 'record' : 'buzzer'); duck(6, 1200);
   announce(`Time. ${so.score} points.`);
   go('shootoutEnd', false);
 }

@@ -70,3 +70,32 @@ tests.push({
     }
   },
 });
+
+// ---------------------------------------------------------------- S5-09 a Hot Streak best has its own sting
+const gesture = async (t) => { await t.page.mouse.click(4, 4); await t.page.waitForTimeout(150); };
+const count = async (t, name) => ((await t.state()).audio.count[name] || 0);
+const median = (a) => [...a].sort((x, y) => x - y)[a.length >> 1];
+tests.push({
+  name: 'S5-09: a new Hot Streak best plays its own sting, not the win cue, and the dead jingle cue is gone',
+  viewports: ['desktop'],
+  async run(t) {
+    const list = await t.page.evaluate(() => window.__game.audioList());
+    t.expect(list.cues.includes('record') && !list.cues.includes('jingle'), 'the record sting is a cue and the unused jingle is not');
+    // by measurement: it peaks inside the gameplay range at the typical repeat and is not the same sound as the win cue or the other stings
+    const peaks = [], rms = {};
+    for (const seed of [1, 2, 3, 4, 5]) peaks.push((await render(t, 'cue:record', 2.5, { seed })).peak);
+    const med = median(peaks);
+    t.expect(med >= 0.2 && med <= 0.45, `the typical repeat peaks ${med} (want 0.2 to 0.45)`);
+    for (const c of ['record', 'win', 'challenge', 'trophy']) rms[c] = (await render(t, 'cue:' + c, 3, { seed: 3 })).rms;
+    t.expect(new Set(Object.values(rms)).size === 4, `the four stings measure differently (${JSON.stringify(rms)})`);
+    // in the game: finishing a Hot Streak with a score on a fresh profile is a best
+    await t.game('scene', 'title');
+    await gesture(t);
+    await t.game('newGame', { mode: 'shootout', seed: 5, paused: true });
+    const [r0, w0] = [await count(t, 'record'), await count(t, 'win')];
+    await t.game('setState', { shootout: { phase: 'live', score: 9, t: 0.02 } });
+    await stepUntil(t, (x) => x.scene === 'shootoutEnd', 600, 20, 'the Hot Streak result');
+    t.equal(await count(t, 'record'), r0 + 1, 'a new best plays the record sting');
+    t.equal(await count(t, 'win'), w0, 'and not the game-win cue');
+  },
+});

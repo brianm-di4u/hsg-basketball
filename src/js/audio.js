@@ -102,7 +102,7 @@ AU.noiseFor = (ctx) => { let b = noiseCache.get(ctx); if (!b) { b = noiseBuffer(
 // the noise buffer, so no two repeats are sample-identical. o = { pan, v (variant), p (0..1 state), big, mine, hard, far }.
 // Per-cue level trims, measured so each gameplay cue peaks between 0.2 and 0.45 at Medium volume
 // even at the quietest jitter draw (the jitter takes up to 1.5 dB off). The noise buffer has a fixed seed, so the worst draw over 150 seeds is a repeatable number: 0.205 to 0.45.
-const TRIM = { fake: 1.95, sprint: 2.55, cross: 0.88, reb: 0.9, tick: 0.9, streak: 1.3, swish: 1.2, floor: 1.15, rim: 1.15, whistle: 1.1, cheer: 1.2, groan: 5.4, ooh: 5.3, sigh: 4.0, block: 0.7, release: 1.82, pass: 1.32, catch: 1.15, jump: 2.5, sub: 1.63, challenge: 0.85, trophy: 0.7 };
+const TRIM = { fake: 1.95, sprint: 2.55, cross: 0.88, reb: 0.9, tick: 0.9, streak: 1.3, swish: 1.2, floor: 1.15, rim: 1.15, whistle: 1.1, cheer: 1.2, groan: 5.4, ooh: 5.3, sigh: 4.0, block: 0.7, release: 1.82, pass: 1.32, catch: 1.15, jump: 2.5, sub: 1.63, challenge: 0.85, trophy: 0.7, record: 0.62 };
 const RIVAL_GAIN = 1.26; // +2 dB on the cheer and the roar for your basket in a rivalry game
 const JIT = { default: [20, 1.5], click: [8, 0.6], whistle: [18, 1.2], buzzer: [6, 0.6], meter: [4, 0.4], win: [6, 0.8] };
 
@@ -174,7 +174,8 @@ export function makeCues(ctx, master, kit) {
     cross(t) { osc('sine', 2100, t, 0.06, 0.1, 3000); osc('sine', 140, t + 0.03, 0.09, 0.5, 60); nz(t + 0.03, 0.03, 0.2, 'highpass', 2600); },
     sprint(t) { nz(t, 0.16, 0.34, 'bandpass', 1800, 1.1, 900); osc('sine', 2500, t + 0.02, 0.05, 0.08, 2900); },
     meter(t, o) { const p = o.p || 0; osc('sine', 880 + 880 * p, t, 0.05, 0.14); },
-    jingle(t) { [523, 659, 784, 1047].forEach((f, k) => osc('triangle', f, t + k * 0.11, 0.22, 0.3)); },
+    // A new Hot Streak best (S5-09): a three-note climb that lands on a held chord with a bell over it, apart from the win cue's five-note run, the challenge sting and the trophy.
+    record(t) { [659, 784, 988].forEach((f, k) => osc('triangle', f, t + 0.1 * k, 0.3, 0.3)); [1319, 1976].forEach((f) => osc('triangle', f, t + 0.38, 0.8, 0.2)); osc('sine', 659, t + 0.38, 0.8, 0.16); osc('sine', 2637, t + 0.38, 0.9, 0.08); osc('sine', 3951, t + 0.4, 0.6, 0.04); },
     // An achievement or an unlock toast: a short two-note chime that rises, kept clear of the game's own cues.
     achieve(t) { [880, 1319].forEach((f, k) => osc('triangle', f, t + 0.1 * k, 0.45, 0.3)); osc('sine', 2637, t + 0.1, 0.35, 0.06); },
     // Stings for what a win earns (S5-17): a Banner Challenge completed is the win jingle's climb ending on a held chord with a fifth on top; a state title is
@@ -279,7 +280,7 @@ export function play(name, o = {}) {
 }
 
 // ---------------------------------------------------------------- offline renders (test hooks and the owner's WAV previews)
-export function audioList() { return { music: Object.keys(SCORES), ambience: Object.keys(SCENES), cues: ['bounce', 'floor', 'swish', 'rim', 'whistle', 'buzzer', 'cheer', 'groan', 'ooh', 'sigh', 'roar', 'steal', 'block', 'release', 'pass', 'catch', 'jump', 'reb', 'sub', 'meter', 'squeak', 'click', 'win', 'tick', 'streak', 'fake', 'cross', 'sprint', 'achieve', 'challenge', 'trophy'] }; }
+export function audioList() { return { music: Object.keys(SCORES), ambience: Object.keys(SCENES), cues: ['bounce', 'floor', 'swish', 'rim', 'whistle', 'buzzer', 'cheer', 'groan', 'ooh', 'sigh', 'roar', 'steal', 'block', 'release', 'pass', 'catch', 'jump', 'reb', 'sub', 'meter', 'squeak', 'click', 'win', 'tick', 'streak', 'fake', 'cross', 'sprint', 'achieve', 'challenge', 'trophy', 'record'] }; }
 // Renders a piece by itself at the level the game ships (Medium volume), without touching the live audio or settings.
 // `name` is a music piece, an ambience scene, or 'cue:<name>' for one cue. `opt`: { crowd (0..1), tension (0..1, a scene's low hum; the heartbeat comes on from 0.5), cue (options for the cue), vol, seed (changes the jitter and the melody), mixCue (a cue to fire at 1 s on top), music (a piece to play under a scene or cue) }.
 // For a piece, `built` is the kit's variation count plus its tempo and the seconds before it repeats.

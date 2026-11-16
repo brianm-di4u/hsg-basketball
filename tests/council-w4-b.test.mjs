@@ -72,3 +72,40 @@ tests.push({
     await t.checkLayout({ allowScrollY: true });
   },
 });
+
+const gesture = async (t) => {
+  for (let k = 0; k < 20; k++) {
+    await t.page.mouse.click(4, 4);
+    try { await t.page.waitForFunction(() => window.__game.getState().audio.state === 'running', null, { timeout: 1500 }); return; } catch { /* click again */ }
+  }
+  t.fail('the audio context never reached running after a click');
+};
+const audio = (t) => t.page.evaluate(() => { const a = window.__game.getState().audio; return { gain: a.gain, goal: a.goal, state: a.state }; });
+const settle = (t, goal) => t.page.waitForFunction((g) => { const a = window.__game.getState().audio; return Math.abs(a.gain - g) < 0.002; }, goal, { timeout: 8000 });
+
+tests.push({
+  name: 'S5-13: a volume change glides and Sound off takes the master to silence, then back',
+  viewports: ['desktop'],
+  async run(t) {
+    await gesture(t);
+    await t.game('scene', 'settings');
+    await settle(t, (await audio(t)).goal);
+    const start = await audio(t);
+    // A suspended context does not advance, so a value that was assigned would already have jumped and one that is scheduled has not.
+    await t.page.evaluate(() => window.dispatchEvent(new Event('blur')));
+    await t.page.waitForFunction(() => window.__game.getState().audio.state === 'suspended', null, { timeout: 8000 });
+    await t.game('setState', { settings: { vol: 0.8 } });
+    const after = await audio(t);
+    t.expect(after.goal > start.goal, `the volume goal moved (${start.goal} to ${after.goal})`);
+    t.equal(after.gain, start.gain, 'the gain has not jumped: the change is scheduled, not assigned');
+    await gesture(t);
+    await settle(t, after.goal);
+    await t.page.keyboard.press('KeyM');
+    t.equal((await audio(t)).goal, 0, 'Sound off sets the master goal to 0');
+    await settle(t, 0);
+    t.expect((await audio(t)).gain < 0.002, 'the master is silent, so a cue already sounding is cut');
+    await t.page.keyboard.press('KeyM');
+    await settle(t, after.goal);
+    t.expect((await audio(t)).gain > 0.1, 'Sound on brings it back to the chosen volume');
+  },
+});

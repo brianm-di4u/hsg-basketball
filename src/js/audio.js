@@ -3,7 +3,7 @@
 import { makeAudioKit, measureAudio } from './audiokit.js';
 import { SCORES } from './music.js';
 
-export const AU = { ctx: null, master: null, kit: null, cues: null, on: true, vol: 0.5, ambOn: true, musOn: true, music: '', tension: 0, scene: '', paused: false, last: {}, count: {}, noise: null };
+export const AU = { ctx: null, master: null, kit: null, cues: null, on: true, vol: 0.5, ambOn: true, musOn: true, music: '', tension: 0, scene: '', paused: false, last: {}, count: {}, noise: null, goal: 0 };
 
 // Master gain is vol * MASTER_GAIN. It was 0.6, which left the loudest cue at a peak of 0.1 at the speakers; 1.4 puts
 // the main cues at 0.25 to 0.45 at Medium and the limiter keeps cues, crowd and reactions under 0.95 on High.
@@ -223,7 +223,7 @@ export function unlock() {
     const C = window.AudioContext || window.webkitAudioContext;
     if (!C) return;
     const ctx = new C();
-    AU.master = ctx.createGain(); AU.master.gain.value = AU.vol * MASTER_GAIN; AU.master.connect(limiter(ctx, ctx.destination));
+    AU.master = ctx.createGain(); AU.goal = masterTarget(); AU.master.gain.value = AU.goal; AU.master.connect(limiter(ctx, ctx.destination));
     AU.kit = makeAudioKit(ctx, AU.master, { music: MUSIC_LEVEL, ambience: AMB_LEVEL });
     AU.kit.amb.set('tension', 0, 0.01); AU.kit.amb.set('beat', 0, 0.01);
     AU.cues = makeCues(ctx, AU.master, AU.kit);
@@ -236,8 +236,18 @@ export function unlock() {
 }
 // Called when the page is hidden or loses focus; unlock() resumes it on the next gesture.
 export function suspendAudio() { try { if (AU.ctx && AU.ctx.state === 'running') AU.ctx.suspend().catch(() => {}); } catch (e) { /* no audio */ } }
-export function setVolume(v) { AU.vol = v; if (AU.master) AU.master.gain.value = v * MASTER_GAIN; }
-export function setOn(on) { AU.on = on; applyBeds(); }
+// The master gain follows the volume and the Sound switch (S5-13): a change glides over about a tenth of a second instead of stepping,
+// and Sound off takes the master to 0, so a cue already sounding (a 1.6 s cheer) is cut at once rather than left to ring out.
+const VOLUME_GLIDE = 0.03; // time constant in seconds; the new level is reached in about 0.1 s
+const masterTarget = () => (AU.on ? AU.vol * MASTER_GAIN : 0);
+function applyMaster() {
+  AU.goal = masterTarget();
+  if (!AU.master) return;
+  const g = AU.master.gain, t = AU.ctx.currentTime;
+  try { g.cancelScheduledValues(t); g.setTargetAtTime(masterTarget(), t, VOLUME_GLIDE); } catch (e) { g.value = masterTarget(); }
+}
+export function setVolume(v) { AU.vol = v; applyMaster(); }
+export function setOn(on) { AU.on = on; applyMaster(); applyBeds(); }
 export function setAmbience(on) { AU.ambOn = on; applyBeds(); }
 export function setMusic(on) { AU.musOn = on; applyBeds(); }
 

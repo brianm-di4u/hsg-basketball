@@ -570,6 +570,11 @@ export function settingsScreen(st, saving) {
 export function pickFact(seed, keys = null) {
   const pool = keys ? FACTS_LIST.filter((f) => !f.schools || f.schools.some((k) => keys.includes(k))) : FACTS_LIST;
   const from = pool.length ? pool : FACTS_LIST;
-  return from.length ? from[Math.abs(seed | 0) % from.length] : null;
+  if (!from.length) return null;
+  const n = Math.abs(seed | 0), mine = from.filter((f) => f.schools), rest = from.filter((f) => !f.schools);
+  // With the town cards added there are far more general cards than school ones, so a plain draw would show a school's own cards about one time in four
+  // (it was three in four with 14 cards). Where a game has both kinds, the seed's parity chooses the kind: about half the cards are about its schools (C4-04).
+  if (keys && mine.length && rest.length) { const kind = n % 2 === 0 ? mine : rest; return kind[(n >> 1) % kind.length]; }
+  return from[n % from.length];
 }
 export { banners, rivalry };

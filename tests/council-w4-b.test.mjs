@@ -1,8 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const game = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const load = async (f) => {
+  if (!globalThis.SCHOOLS) globalThis.SCHOOLS = JSON.parse(fs.readFileSync(path.join(game, 'shared/data/schools.json'), 'utf8'));
+  if (!globalThis.FACTS) globalThis.FACTS = JSON.parse(fs.readFileSync(path.join(game, 'data/facts.json'), 'utf8'));
+  return import(pathToFileURL(path.join(game, 'src/js', f)).href);
+};
 
 // Wave 4, batch B: polish across the game.
 
@@ -191,6 +196,75 @@ tests.push({
     await t.page.click('[data-act="helpTab"][data-arg="about"]');
     const src = await t.page.$$eval('.src', (els) => els.map((e) => parseFloat(getComputedStyle(e).fontSize)));
     t.expect(src.length > 0 && src.every((x) => x >= 14), `and every fact-card source (${src.length}) is at least 14 px`);
+    await t.checkLayout({ allowScrollY: true });
+  },
+});
+
+const OLD_FACTS = ['hs-0185', 'hs-0225', 'hs-0226', 'hs-0238', 'hs-0258', 'hs-0259', 'hs-0260', 'hs-0272', 'hs-0273', 'hs-0274', 'hs-0275', 'hs-0278'];
+
+tests.push({
+  name: 'C4-04: the 25 approved town cards are in after the old ones, and a school still gets its own cards about half the time',
+  node: true,
+  async run(t) {
+    const facts = JSON.parse(fs.readFileSync(path.join(game, 'data/facts.json'), 'utf8')).facts;
+    const approved = JSON.parse(fs.readFileSync(path.join(game, '../_council/owner-review/approved-local-facts.json'), 'utf8')).games['hsg-basketball'].cards;
+    t.equal(facts.length, 39, '14 + 25 cards');
+    t.equal(facts.slice(14).length, approved.length, 'the 25 new cards come after the 14');
+    approved.forEach((c, i) => {
+      const f = facts[14 + i];
+      t.expect(f.id === c.id && f.tag === c.tag && f.text === c.text && f.source === c.source && JSON.stringify(f.schools || null) === JSON.stringify(c.schools || null), `card ${c.id} is as approved, in order`);
+    });
+    const { FACTS_LIST } = await load('data.js');
+    const { pickFact } = await load('ui.js');
+    t.equal(FACTS_LIST.length, 39, 'the game holds all 39');
+    t.expect(FACTS_LIST.slice(0, 14).every((f, i) => f.id === facts[i].id), 'the first 14 keep their order');
+    const share = (keys, n = 4000) => {
+      const seen = new Set(); let mine = 0;
+      for (let seed = 1; seed <= n; seed++) { const f = pickFact(seed, keys); seen.add(f.id); if (f.schools) mine++; }
+      return { mine: mine / n, seen };
+    };
+    for (const keys of [['hot-springs', 'lakeside'], ['hot-springs', 'cutter-morning-star'], ['lake-hamilton', 'mountain-pine']]) {
+      const r = share(keys);
+      t.expect(r.mine > 0.45 && r.mine < 0.55, `${keys.join(' v ')}: about half the cards are about its schools (${(r.mine * 100).toFixed(0)}%)`);
+      const eligible = FACTS_LIST.filter((f) => !f.schools || f.schools.some((k) => keys.includes(k)));
+      t.equal(r.seen.size, eligible.length, `${keys.join(' v ')}: every eligible card comes up (${eligible.length})`);
+    }
+    const none = share(['cutter-morning-star', 'mountain-pine']);
+    t.equal(none.mine, 0, 'a game with no school cards shows only the general ones');
+    for (let seed = 1; seed <= 500; seed++) { const f = pickFact(seed, ['cutter-morning-star']); t.expect(!f.schools, 'a school card never shows in a game that does not involve its school'); if (f.schools) break; }
+    t.equal(pickFact(7, ['hot-springs', 'lakeside']).id, pickFact(7, ['hot-springs', 'lakeside']).id, 'the same seed gives the same card');
+  },
+});
+
+tests.push({
+  name: 'C4-04: the longest card fits its place on the half-time card and the season hub',
+  async run(t) {
+    const facts = JSON.parse(fs.readFileSync(path.join(game, 'data/facts.json'), 'utf8')).facts;
+    const longest = facts.reduce((a, b) => (b.text.length + b.source.length > a.text.length + a.source.length ? b : a));
+    await t.game('newGame', { mode: 'exhibition', home: 'hot-springs', away: 'lakeside', program: 'boys', user: 'home', seed: 3, paused: true });
+    await t.game('step', 60);
+    await t.game('setState', { match: { t: 0.3 } });
+    await t.stepUntil((s) => s.scene === 'break', { max: 900, chunk: 10, label: 'the quarter break' });
+    const fit = async (where) => {
+      const r = await t.page.evaluate((f) => {
+        const el = document.querySelector('.card.fact');
+        if (!el) return null;
+        el.querySelector('.kicker').textContent = `Did you know? · ${f.tag}`;
+        el.querySelectorAll('p')[1].textContent = f.text;
+        el.querySelector('.src').textContent = `Source: ${f.source}`;
+        const b = el.getBoundingClientRect(), W = document.documentElement.clientWidth, H = document.documentElement.clientHeight;
+        return { l: b.left, r: b.right, t: b.top, b: b.bottom, W, H, over: el.scrollWidth > el.clientWidth + 1, docOver: document.documentElement.scrollWidth > W };
+      }, longest);
+      t.expect(!!r, `${where}: the fact card is shown`);
+      if (!r) return;
+      t.expect(r.l >= 0 && r.r <= r.W && !r.over && !r.docOver, `${where}: the longest card (${longest.id}, ${longest.text.length} characters) is inside the screen sideways (${Math.round(r.l)} to ${Math.round(r.r)} of ${r.W})`);
+    };
+    await fit('half-time');
+    await t.shot('C4-04-longest-card-break');
+    await t.checkLayout({ allowScrollY: true });
+    await t.game('newGame', { mode: 'season', seed: 3 });
+    await t.game('scene', 'hub');
+    await fit('season hub');
     await t.checkLayout({ allowScrollY: true });
   },
 });

@@ -558,13 +558,18 @@ function startShootout(o = {}) {
 }
 
 // ---------------------------------------------------------------- scenes
+// A soft whoosh when one menu screen gives way to another (S5-19). Play, the pause cards, the quarter break and the final screens have sounds of their own.
+const SILENT_SCENES = new Set(['game', 'shootout', 'pause', 'soPause', 'break', 'final', 'champion', 'shootoutEnd']);
+function whoosh(from, to) { if (from !== to && !SILENT_SCENES.has(to) && !SILENT_SCENES.has(from)) play('whoosh'); }
 function go(name, push = true) {
   if (push && state.scene !== name) state.stack.push(state.scene);
+  whoosh(state.scene, name);
   state.scene = name;
   render();
 }
 function back() {
   const prev = state.stack.pop() || 'title';
+  whoosh(state.scene, prev);
   state.scene = prev;
   render();
 }
@@ -773,7 +778,7 @@ function stepOnce() {
   meterTick(m);
   tickClock(m);
   crowdBed(CROWD_REST + CROWD_HOME * (m.crowdTeam >= 0 ? m.crowd : 0.3) + CROWD_CLOSE * matchTension(m));
-  if (m.phase === 'qend' && m.breakReady && !m.autoBreak) { state.paused = true; go('break', false); }
+  if (m.phase === 'qend' && m.breakReady && !m.autoBreak) { state.paused = true; play('chime'); duck(4, 800); go('break', false); } // the PA's chime opens the break, over the fact card
   else if (m.phase === 'final' && m.phaseT > 1.4 && !state.finalShown) onFinal();
 }
 

@@ -185,3 +185,33 @@ tests.push({
     t.equal(await count(t, 'thud'), k0 + 1, 'a reach foul thuds');
   },
 });
+
+// ---------------------------------------------------------------- S5-19 transitions and the quarter break
+tests.push({
+  name: 'S5-19: a menu screen change whooshes, the quarter break opens with the PA chime, and play and the pause card stay without a whoosh',
+  viewports: ['desktop'],
+  async run(t) {
+    const wh = [];
+    for (const seed of [1, 2, 3, 4, 5]) wh.push((await render(t, 'cue:whoosh', 0.5, { seed })).peak);
+    t.expect(median(wh) > 0.02 && median(wh) < 0.2, `the whoosh is a quiet interface sound (${median(wh)})`);
+    const ch = [];
+    for (const seed of [1, 2, 3, 4, 5]) ch.push((await render(t, 'cue:chime', 2, { seed })).peak);
+    t.expect(median(ch) >= 0.2 && median(ch) <= 0.45, `the chime peaks ${median(ch)} at the typical repeat (want 0.2 to 0.45)`);
+    await t.game('scene', 'title');
+    await gesture(t);
+    const w0 = await count(t, 'whoosh');
+    await t.game('scene', 'settings');
+    t.equal(await count(t, 'whoosh'), w0 + 1, 'the title gives way to Settings with a whoosh');
+    await t.game('scene', 'settings');
+    t.equal(await count(t, 'whoosh'), w0 + 1, 'the same screen again does not');
+    await exhibition(t, { seed: 9 });
+    const w1 = await count(t, 'whoosh');
+    await t.game('scene', 'pause');
+    await t.game('scene', 'game');
+    t.equal(await count(t, 'whoosh'), w1, 'the pause card and resuming play have no whoosh');
+    const c0 = await count(t, 'chime');
+    await stepUntil(t, (x) => x.scene === 'break', 60 * 60 * 3, 120, 'the quarter break');
+    t.equal(await count(t, 'chime'), c0 + 1, 'the end of the quarter plays the chime once');
+    t.equal(await count(t, 'whoosh'), w1, 'and the break card comes up with it, not with a whoosh');
+  },
+});

@@ -9,7 +9,7 @@ const render = (t, name, seconds, opt = {}) => t.page.evaluate(([n, s, o]) => wi
 const put = (t, v) => t.page.evaluate(([k, s]) => localStorage.setItem(k, typeof s === 'string' ? s : JSON.stringify(s)), [KEY, v]);
 const audio = async (t) => (await t.state()).audio;
 const gesture = async (t) => { await t.page.mouse.click(4, 4); await t.page.waitForTimeout(150); };
-const QUIET = new Set(['meter', 'sweet', 'squeak', 'click']); // interface ticks, not gameplay cues
+const QUIET = new Set(['meter', 'sweet', 'squeak', 'click', 'whoosh']); // interface ticks, not gameplay cues
 
 export const tests = [
   {

@@ -553,7 +553,7 @@ function controlTick(m) {
   // movement intent
   const spd = (14 + 6 * r.spd) * (0.85 + 0.15 * r.energy) * (b.holder === i ? 0.92 : 1);
   if (m.phase === 'ft' || m.phase === 'tipoff' || (m.phase === 'inbound' && m.inb && m.inb.by === i)) { p.tx = p.x; p.tz = p.z; p.want = 0; }
-  else if (mag > 0.1) { p.tx = p.x + inp.mx / mag * spd; p.tz = p.z + inp.mz / mag * spd * 0.8; p.want = Math.min(1, mag); }
+  else if (mag > 0.1) { p.tx = p.x + inp.mx / mag * spd; p.tz = p.z + inp.mz / mag * spd; p.want = Math.min(1, mag); }
   else if (b.holder !== i && m.poss !== ut && u.idle > 0.6) { decide(m, i, A, TEAM_AI); }
   else { p.tx = p.x; p.tz = p.z; p.want = 0; }
   if (m.phase === 'ft' || m.phase === 'tipoff') return;

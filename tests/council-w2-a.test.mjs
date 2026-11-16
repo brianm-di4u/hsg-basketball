@@ -8,7 +8,15 @@ const KEY = 'hsg-hoops-v1';
 const render = (t, name, seconds, opt = {}) => t.page.evaluate(([n, s, o]) => window.__game.audioRender(n, s, false, o), [name, seconds, opt]);
 const put = (t, v) => t.page.evaluate(([k, s]) => localStorage.setItem(k, typeof s === 'string' ? s : JSON.stringify(s)), [KEY, v]);
 const audio = async (t) => (await t.state()).audio;
-const gesture = async (t) => { await t.page.mouse.click(4, 4); await t.page.waitForTimeout(150); };
+// A click that starts or resumes the audio context, then a wait until the context reports running (a slow machine takes longer; a fixed wait either
+// misses it or passes without it). The click is repeated, as a player would, if the context has not come up. (C4-08)
+const gesture = async (t) => {
+  for (let k = 0; k < 20; k++) {
+    await t.page.mouse.click(4, 4);
+    try { await t.page.waitForFunction(() => window.__game.getState().audio.state === 'running', null, { timeout: 1500 }); return; } catch { /* click again */ }
+  }
+  t.fail('the audio context never reached running after a click');
+};
 const QUIET = new Set(['meter', 'sweet', 'squeak', 'click', 'whoosh']); // interface ticks, not gameplay cues
 
 export const tests = [
@@ -151,13 +159,12 @@ export const tests = [
         await t.game('act', 'shootAt', 1); await t.game('step', 90); s = await t.state();
       }
       t.expect(s.match.score[0] > 0, 'a forced basket went in');
-      await t.page.waitForTimeout(150);
+      await t.page.waitForFunction((q) => window.__game.getState().audio.crowd > q + 0.2, quiet, { timeout: 5000 }).catch(() => {}); // the level answering the basket; the check below judges it
       await t.game('step', 1);
       const hot = (await audio(t)).crowd;
       t.expect(hot > quiet + 0.2, `the crowd level rose after the basket (${quiet} to ${hot})`);
-      await t.page.waitForTimeout(150);
       await t.game('step', 60 * 8);
-      await t.page.waitForTimeout(150);
+      await t.page.waitForFunction((h) => window.__game.getState().audio.crowd < h - 0.15, hot, { timeout: 5000 }).catch(() => {}); // settling; the check below judges it
       await t.game('step', 1);
       const later = (await audio(t)).crowd;
       t.expect(later < hot - 0.15, `and settled back (${hot} to ${later})`);
@@ -219,13 +226,12 @@ export const tests = [
       await exhibition(t, { seed: 9 });
       t.equal((await audio(t)).state, 'running', 'running during play');
       await t.page.evaluate(() => window.dispatchEvent(new Event('blur')));
-      await t.page.waitForTimeout(200);
+      await t.page.waitForFunction(() => window.__game.getState().audio.state === 'suspended', null, { timeout: 5000 }).catch(() => {});
       const a = await audio(t);
       t.expect(a.state === 'suspended', `the context is suspended when focus is lost (${a.state})`);
       t.equal((await t.state()).scene, 'pause', 'and the game is on the pause card');
       t.equal(a.held, true, 'with the bed held');
       await gesture(t);
-      for (let k = 0; k < 20 && (await audio(t)).state !== 'running'; k++) { await t.page.mouse.click(4, 4); await t.page.waitForTimeout(150); } // resume() takes a moment on a busy machine
       t.equal((await audio(t)).state, 'running', 'a gesture resumes it');
     },
   },

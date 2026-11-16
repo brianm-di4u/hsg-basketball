@@ -72,7 +72,15 @@ tests.push({
 });
 
 // ---------------------------------------------------------------- S5-09 a Hot Streak best has its own sting
-const gesture = async (t) => { await t.page.mouse.click(4, 4); await t.page.waitForTimeout(150); };
+// A click that starts or resumes the audio context, then a wait until the context reports running (a slow machine takes longer; a fixed wait either
+// misses it or passes without it). The click is repeated, as a player would, if the context has not come up. (C4-08)
+const gesture = async (t) => {
+  for (let k = 0; k < 20; k++) {
+    await t.page.mouse.click(4, 4);
+    try { await t.page.waitForFunction(() => window.__game.getState().audio.state === 'running', null, { timeout: 1500 }); return; } catch { /* click again */ }
+  }
+  t.fail('the audio context never reached running after a click');
+};
 const count = async (t, name) => ((await t.state()).audio.count[name] || 0);
 const median = (a) => [...a].sort((x, y) => x - y)[a.length >> 1];
 tests.push({

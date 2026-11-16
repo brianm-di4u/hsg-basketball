@@ -73,6 +73,12 @@ tests.push({
 });
 
 // ---------------------------------------------------------------- S4-07 Hot Streak: steam
+// The Hot Streak clock moves and a few frames are drawn after it: only then does "no steam" mean something.
+async function alive(t) {
+  const t0 = (await t.state()).shootout.t;
+  await waitFor(t, (x) => x.shootout.t !== t0, 6000, 'the Hot Streak loop to run');
+  await t.waitFrames(10);
+}
 tests.push({
   name: 'S4-07: the Hot Streak scoreboard calls the gauge STEAM, as the setup page does, and steam rises and the stands lift as it fills',
   viewports: ['desktop', 'mobile'],
@@ -87,7 +93,7 @@ tests.push({
     t.expect(/STEAM/.test(h.text) && !/STREAK/.test(h.text), `the scoreboard says STEAM, not STREAK (${h.text.replace(/\s+/g, ' ')})`);
     t.equal(h.gauge, 'Steam gauge, 0 of 6 makes in a row', 'and the gauge is named for a screen reader');
     await t.game('setState', { shootout: { phase: 'live', streak: 0, mult: 1 } });
-    await t.page.waitForTimeout(300);
+    await alive(t); // a positive sign the Hot Streak loop is running before something is said to be absent (C4-08)
     let s0 = await t.state();
     t.expect(s0.steam === 0 && s0.ventBoost === 0, 'with an empty gauge there is no extra steam');
     await t.game('setState', { shootout: { phase: 'live', streak: 3, mult: 2 } });
@@ -110,7 +116,7 @@ tests.push({
     await t.seed(3);
     await t.game('scene', 'shootout');
     await t.game('setState', { shootout: { phase: 'live', streak: 5, mult: 2 } });
-    await t.page.waitForTimeout(600);
+    await alive(t);
     const s = await t.state();
     t.expect(s.steam === 0 && s.ventBoost === 0, 'no steam particles and no swelling vents under reduced motion');
     t.expect(/STEAM/.test(await t.page.innerText('#sb')), 'the label is still STEAM');

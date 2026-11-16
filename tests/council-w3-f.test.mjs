@@ -146,3 +146,42 @@ tests.push({
     t.expect((await count(t, 'sweet')) > s0, 'and inside the window it is the bright one');
   },
 });
+
+// ---------------------------------------------------------------- S5-15 squeaks and contact
+tests.push({
+  name: 'S5-15: a hard cut squeaks once, steady running and a gentle bend do not, and a reach or shooting foul has a body thud',
+  viewports: ['desktop'],
+  async run(t) {
+    const th = [];
+    for (const seed of [1, 2, 3, 4, 5]) th.push((await render(t, 'cue:thud', 1, { seed })).peak);
+    t.expect(median(th) >= 0.2 && median(th) <= 0.45, `the thud peaks ${median(th)} at the typical repeat (want 0.2 to 0.45)`);
+    const wav = (p) => t.page.evaluate((q) => window.__game.audioRender('cue:squeak', 0.5, true, { seed: 2, cue: { p: q } }).then((r) => ({ peak: r.peak, wav: r.wav })), p);
+    const lo = await wav(0), hi = await wav(1);
+    t.expect(lo.peak < 0.2 && hi.peak < 0.2 && lo.wav !== hi.wav, `the squeak stays a quiet tick (${lo.peak}, ${hi.peak}) and a harder cut is a different pitch`);
+    await t.game('scene', 'title');
+    await gesture(t);
+    await exhibition(t, { seed: 13 });
+    // the other team has the ball far away, so the player you steer is off the ball (a ball handler's reversal is a crossover, which has its own squeak)
+    await t.game('act', 'give', 1, 0);
+    await t.game('act', 'place', 1, 0, 80, 25);
+    for (let k = 1; k < 5; k++) await t.game('act', 'place', 1, k, 84, 4 + k * 10);
+    await t.game('act', 'place', 0, 2, 30, 25);
+    for (let k = 0; k < 5; k++) if (k !== 2) await t.game('act', 'place', 0, k, 20, 4 + k * 10);
+    await t.game('act', 'input', { mx: 1, mz: 0 });
+    await t.game('step', 40); // about 0.7 s: past the 0.33 s it takes to reach top speed
+    const s0 = await count(t, 'squeak');
+    await t.game('step', 15);
+    t.equal(await count(t, 'squeak'), s0, 'running straight is silent');
+    await t.game('act', 'input', { mx: 1, mz: 0.45 });
+    await t.game('step', 10);
+    t.equal(await count(t, 'squeak'), s0, 'a gentle bend is silent');
+    await t.game('act', 'input', { mx: -1, mz: 0 });
+    await t.game('step', 40);
+    t.equal(await count(t, 'squeak'), s0 + 1, 'reversing at speed squeaks, once');
+    // contact: a reach foul and a shooting foul thud; an out-of-bounds whistle does not
+    const k0 = await count(t, 'thud');
+    await t.game('act', 'foul', 1, 'reach');
+    await t.game('step', 3);
+    t.equal(await count(t, 'thud'), k0 + 1, 'a reach foul thuds');
+  },
+});

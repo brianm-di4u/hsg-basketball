@@ -102,7 +102,7 @@ AU.noiseFor = (ctx) => { let b = noiseCache.get(ctx); if (!b) { b = noiseBuffer(
 // the noise buffer, so no two repeats are sample-identical. o = { pan, v (variant), p (0..1 state), big, mine, hard, far }.
 // Per-cue level trims, measured so each gameplay cue peaks between 0.2 and 0.45 at Medium volume
 // even at the quietest jitter draw (the jitter takes up to 1.5 dB off). The noise buffer has a fixed seed, so the worst draw over 150 seeds is a repeatable number: 0.205 to 0.45.
-const TRIM = { fake: 1.95, sprint: 2.55, cross: 0.88, reb: 0.9, tick: 0.9, streak: 1.3, swish: 1.2, floor: 1.15, rim: 1.15, whistle: 1.1, cheer: 1.2, groan: 5.4, ooh: 5.3, sigh: 4.0, block: 0.7, release: 1.82, pass: 1.32, catch: 1.15, jump: 2.5, sub: 1.63, challenge: 0.85, trophy: 0.7, record: 0.62, perfect: 1, late: 1 };
+const TRIM = { fake: 1.95, sprint: 2.55, cross: 0.88, reb: 0.9, tick: 0.9, streak: 1.3, swish: 1.2, floor: 1.15, rim: 1.15, whistle: 1.1, cheer: 1.2, groan: 5.4, ooh: 5.3, sigh: 4.0, block: 0.7, release: 1.82, pass: 1.32, catch: 1.15, jump: 2.5, sub: 1.63, challenge: 0.85, trophy: 0.7, record: 0.62, perfect: 1, late: 1, thud: 1 };
 const RIVAL_GAIN = 1.26; // +2 dB on the cheer and the roar for your basket in a rivalry game
 const JIT = { default: [20, 1.5], click: [8, 0.6], whistle: [18, 1.2], buzzer: [6, 0.6], meter: [4, 0.4], sweet: [4, 0.4], win: [6, 0.8] };
 
@@ -155,7 +155,8 @@ export function makeCues(ctx, master, kit) {
     ooh(t) { vowel(t, 0.9, 0.08, 190, 250, 330, 880, 0.25); nz(t, 0.7, 0.12, 'lowpass', 700, 0.7, undefined, 0.2); },   // a near miss
     sigh(t) { vowel(t, 0.8, 0.07, 240, 150, 700, 1100, 0.08); nz(t, 0.8, 0.14, 'lowpass', 900, 0.6, 450, 0.08); },       // it rimmed out
     roar(t) { nz(t, 1.8, 0.5, 'lowpass', 1300, 0.5, undefined, 0.4); nz(t + 0.2, 1.3, 0.14, 'bandpass', 2300, 1.5, undefined, 0.3); vowel(t, 1.6, 0.09, 200, 240, 800, 1250, 0.4); },
-    squeak(t) { osc('sine', 2300, t, 0.07, 0.12, 3100); },
+    squeak(t, o) { const k = 1 + 0.3 * (o.p || 0); osc('sine', 2300 * k, t, 0.07, 0.12, 3100 * k); },   // a shoe on the floor: p (0..1) is how hard the turn was, so a harder cut squeaks higher
+    thud(t) { osc('sine', 120, t, 0.18, 0.6, 45); nz(t, 0.06, 0.3, 'lowpass', 500, 0.8); nz(t, 0.02, 0.12, 'bandpass', 1400, 1); },   // two bodies meeting: the contact of a reach or a shooting foul
     click(t) { osc('square', 900, t, 0.03, 0.09); },
     steal(t) { osc('triangle', 520, t, 0.09, 0.38, 1040); nz(t, 0.05, 0.3, 'bandpass', 3000, 1.2); osc('sine', 130, t, 0.1, 0.3, 70); },
     block(t) { osc('sine', 90, t, 0.2, 0.7, 40); nz(t, 0.1, 0.45, 'lowpass', 800); nz(t, 0.04, 0.2, 'highpass', 2500); },
@@ -284,7 +285,7 @@ export function play(name, o = {}) {
 }
 
 // ---------------------------------------------------------------- offline renders (test hooks and the owner's WAV previews)
-export function audioList() { return { music: Object.keys(SCORES), ambience: Object.keys(SCENES), cues: ['bounce', 'floor', 'swish', 'rim', 'whistle', 'buzzer', 'cheer', 'groan', 'ooh', 'sigh', 'roar', 'steal', 'block', 'release', 'pass', 'catch', 'jump', 'reb', 'sub', 'meter', 'squeak', 'click', 'win', 'tick', 'streak', 'fake', 'cross', 'sprint', 'achieve', 'challenge', 'trophy', 'record', 'perfect', 'late', 'sweet'] }; }
+export function audioList() { return { music: Object.keys(SCORES), ambience: Object.keys(SCENES), cues: ['bounce', 'floor', 'swish', 'rim', 'whistle', 'buzzer', 'cheer', 'groan', 'ooh', 'sigh', 'roar', 'steal', 'block', 'release', 'pass', 'catch', 'jump', 'reb', 'sub', 'meter', 'squeak', 'click', 'win', 'tick', 'streak', 'fake', 'cross', 'sprint', 'achieve', 'challenge', 'trophy', 'record', 'perfect', 'late', 'sweet', 'thud'] }; }
 // Renders a piece by itself at the level the game ships (Medium volume), without touching the live audio or settings.
 // `name` is a music piece, an ambience scene, or 'cue:<name>' for one cue. `opt`: { crowd (0..1), tension (0..1, a scene's low hum; the heartbeat comes on from 0.5), cue (options for the cue), vol, seed (changes the jitter and the melody), mixCue (a cue to fire at 1 s on top), music (a piece to play under a scene or cue) }.
 // For a piece, `built` is the kit's variation count plus its tempo and the seconds before it repeats.

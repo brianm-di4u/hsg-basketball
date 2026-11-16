@@ -762,8 +762,10 @@ function stepOnce() {
   drain(m.input);
   const vd = verticalDir(m);
   if (vd) { const { mx, mz } = m.input; m.input.mx = -mz * vd; m.input.mz = mx * vd; } // screen up = toward the attacked basket
+  const cut = cutOf(m);
   tick(m);
   record(m);
+  footwork(m, cut);
   matchEvents(m);
   trackScore(m);
   coachTick(m);
@@ -935,6 +937,23 @@ function meterTick(m) {
     if (meterAcc >= 0.17 - 0.11 * v) { meterAcc = 0; play(meterQuality(p.meter, meterScale(m), p.stype === 'jumper' ? 'jumper' : 'layup').label === 'PERFECT' ? 'sweet' : 'meter', { p: v }); }
   } else meterAcc = 0.1;
 }
+// A shoe squeak when the player you steer cuts hard (S5-15): he is running and the stick turns him by more than about 100 degrees. One squeak a cut,
+// higher the faster he was going; steady running and gentle bends are silent.
+const CUT_SPEED = 8, CUT_DOT = -0.2, CUT_GAP = 0.4; // feet a second, the cosine of the turn (below it is a cut), and seconds of play before the next squeak
+let cutAt = -1e9, cutCtrl = -1;
+function cutOf(m) { // read before the tick: a crossover kills the speed in the tick that turns it
+  const u = m.user, p = u.team >= 0 && u.ctrl >= 0 && !u.auto ? m.p[u.ctrl] : null;
+  const sp = p ? Math.hypot(p.vx, p.vz) : 0, mag = p ? Math.hypot(m.input.mx, m.input.mz) : 0;
+  const fresh = !!p && p.idx !== cutCtrl; // a player just handed to you is already running: his own pace is not your cut
+  if (fresh) cutAt = m.time; // and he gets the same quiet gap as a squeak
+  cutCtrl = p ? p.idx : -1;
+  return !fresh && !!p && m.phase === 'live' && p.y === 0 && sp > CUT_SPEED && mag > 0.5 && (p.vx * m.input.mx + p.vz * m.input.mz) / (sp * mag) < CUT_DOT ? { sp, i: p.idx, x: p.x } : null;
+}
+function footwork(m, cut) { // after it: a crossover has its own squeak, so the cut stays quiet when one was thrown
+  if (!cut || m.time - cutAt < CUT_GAP) return;
+  cutAt = m.time;
+  if (!m.ev.some((e) => e.k === 'cross' && e.i === cut.i)) play('squeak', { p: Math.min(1, (cut.sp - CUT_SPEED) / 12), pan: panAt(m, cut.x) });
+}
 // Tension. The shot clock ticks in its last five seconds (once a second, higher as it runs down); in the last minute of the
 // fourth quarter or overtime a low hum rises as the clock runs down, more so the closer the score, and from 0.5 up a heartbeat
 // starts. The crowd bed also lifts a little in a close late game. The Hot Streak does the same with its multiplier and its last seconds.
@@ -992,7 +1011,7 @@ function matchEvents(m) {
       case 'rim': if (state.mineShotAt != null && m.time - state.mineShotAt < 3) haptic('rim'); rimHit(rimSide(m.ball.x)); play('rim', { hard: e.hard, v: m.ball.z < COURT.rimZ - 0.2 ? 0 : m.ball.z > COURT.rimZ + 0.2 ? 1 : 2, pan: panAt(m, m.ball.x) }); if (state.lastShot && m.time - state.lastShot < 2.5) { play('ooh', { pan: panAt(m, m.ball.x) }); bump(0.2); } break;
       case 'bounce': play('bounce', { pan: panAt(m, m.ball.x), far: e.i == null || !isUserBall(m, e.i) }); break;
       case 'floor': play('floor', { pan: panAt(m, m.ball.x) }); break;
-      case 'whistle': play('whistle'); duck(5, 700); if (WHY[e.why]) pop(WHY[e.why], m.ball.x, 8, m.ball.z, '#FFB4A8'); if (e.why === 'shotclock') announce('Shot-clock violation.'); break;
+      case 'whistle': if (e.why === 'reach' || e.why === 'shoot') play('thud', { pan: panAt(m, m.ball.x) }); play('whistle'); duck(5, 700); if (WHY[e.why]) pop(WHY[e.why], m.ball.x, 8, m.ball.z, '#FFB4A8'); if (e.why === 'shotclock') announce('Shot-clock violation.'); break;
       case 'buzzer': play('buzzer'); haptic('buzzer'); duck(6, 1000); break;
       case 'steal': pop('STEAL!', m.p[e.i].x, 7, m.p[e.i].z, '#FFD84D'); play('steal', { pan: panAt(m, m.p[e.i].x) }); bump(0.15); break;
       case 'block': pop('BLOCKED!', m.p[e.i].x, 9, m.p[e.i].z, '#FFD84D'); play('block', { pan: panAt(m, m.p[e.i].x) }); bump(0.3); shake(0.4); state.cheer = 0.6; state.cheerTeam = m.p[e.i].t; break;

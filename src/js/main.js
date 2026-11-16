@@ -45,7 +45,8 @@ function persist(intent = {}) {
   if (intent.season) pendingSave.season = { ...intent.season, value: copy(intent.season.value) };
   const read = readSaveSnapshot();
   if (!currentSnapshot(read)) {
-    saveNotice = read.kind === 'invalid' ? 'The saved data could not be read safely and was left unchanged. Progress is in this tab only.' + (read.newer ? '' : ' You can reset it in Settings.') : 'Saving is unavailable. Progress is in this tab only.';
+    // A newer save is told once on the title and in Settings, not repeated on every screen (C4-01).
+    saveNotice = read.kind === 'invalid' ? (read.newer ? '' : 'The saved data could not be read safely and was left unchanged. Progress is in this tab only. You can reset it in Settings.') : 'Saving is unavailable. Progress is in this tab only.';
     return { saved: false, seasonConflict: false, previousBest: null };
   }
   const previousBest = read.value?.best?.shootout || 0;

@@ -43,7 +43,7 @@ export function titleScreen(st) {
       ${btn('trophies', 'Trophy Room')}
       <div class="menu-row">${btn('help', 'How to play')}${btn('settings', 'Settings')}</div>
     </nav>
-    ${st.saving === 'unavailable' ? saveNote('unavailable') : ''}
+    ${st.saving === 'unavailable' || st.saving === 'newer' ? saveNote(st.saving) : ''}
     <p class="fine">${FICTION_NOTE}</p>
   </div>`;
 }
@@ -507,7 +507,7 @@ export function helpScreen(st, tab = 'controls') {
 
 const saveNote = (saving) => (saving === 'unavailable' ? '<p class="warn" role="status">Saving is unavailable in this browser, so progress lasts only until you close the page.</p>'
   : saving === 'unreadable' ? `<p class="warn" role="status">The saved data on this device is unreadable, so new progress is not being saved. Resetting keeps a copy of the old data and starts a fresh save.</p><div class="row">${btn('resetSave', 'Reset saved data')}</div>`
-  : saving === 'newer' ? '<p class="warn" role="status">The saved data was written by a newer version of the game, so it is left alone and new progress is not being saved here.</p>' : '');
+  : saving === 'newer' ? '<p class="warn" role="status">The saved data was written by a newer version of the game, so it is left alone and this visit is not being saved.</p>' : '');
 export function settingsScreen(st, saving) {
   const s = st.settings;
   return `<div class="panel wide">

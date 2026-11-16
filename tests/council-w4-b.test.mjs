@@ -109,3 +109,41 @@ tests.push({
     t.expect((await audio(t)).gain > 0.1, 'Sound on brings it back to the chosen volume');
   },
 });
+
+tests.push({
+  name: 'C4-09: the starting fives are read to a screen reader once the first-run tip clears',
+  viewports: ['desktop'],
+  async run(t) {
+    const heard = () => t.page.evaluate(() => window.__heard.slice());
+    const listen = () => t.page.evaluate(() => {
+      window.__heard = [];
+      new MutationObserver(() => { const x = document.querySelector('#live').textContent.trim(); if (x && window.__heard[window.__heard.length - 1] !== x) window.__heard.push(x); }).observe(document.querySelector('#live'), { childList: true, characterData: true, subtree: true });
+    });
+    const play = (seed) => t.game('newGame', { mode: 'exhibition', home: 'hot-springs', away: 'lakeside', program: 'boys', user: 'home', seed, paused: true });
+    // A first game: the tip is up, so the fives wait.
+    await t.page.evaluate((k) => localStorage.setItem(k, JSON.stringify({ v: 1, settings: { tipsSeen: false } })), KEY);
+    await t.reload();
+    await listen();
+    await play(3);
+    await t.game('step', 3);
+    t.expect((await t.state()).coach.cur === 'tipoff', 'the tip-off tip is showing');
+    let said = await heard();
+    t.expect(said.some((x) => /jump for it|Press Space|ball reaches its peak/i.test(x)), 'the tip is read first');
+    t.expect(!said.some((x) => /Starting fives/.test(x)), 'the fives are not read over the tip');
+    await t.stepUntil((s) => !s.coach.cur, { max: 2000, chunk: 5, label: 'the tip to clear' });
+    said = await heard();
+    const i = said.findIndex((x) => /Starting fives/.test(x));
+    t.expect(i > 0, `the fives are read after the tip clears (${said.length} announcements)`);
+    t.expect(i > 0 && /Hot Springs/.test(said[i]) && /Lakeside/.test(said[i]), 'and name both fives');
+    t.equal(said.filter((x) => /Starting fives/.test(x)).length, 1, 'once');
+    // Tips off or seen: read at once, as before.
+    await t.game('scene', 'title');
+    await t.page.evaluate((k) => localStorage.setItem(k, JSON.stringify({ v: 1, settings: { tipsSeen: true } })), KEY);
+    await t.reload();
+    await listen();
+    await play(4);
+    await t.game('step', 3);
+    said = await heard();
+    t.expect(said.some((x) => /Starting fives/.test(x)), 'with no tip showing the fives are read straight away');
+  },
+});

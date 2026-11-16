@@ -6,6 +6,8 @@ import { SWEET } from './rules.js';
 import { G3, draw3d, resize3d } from './gl/scene3d.js';
 
 const TAU = Math.PI * 2;
+// Canvas lettering follows the Text size setting (S2-14): main.js sets R.tx to 1, 1.15 or 1.3. T() scales a size in pixels.
+const T = (n) => Math.round(n * (R.tx || 1));
 export const R = {
   cv: null, c: null, dpr: 1, v: null, floor: null, back: null, key: '', fx: { pops: [], parts: [], shake: 0, net: [0, 0], rim: [0, 0] },
   cosmo: { rs: 7 }, frozen: false, reduced: false, snap: true, use3d: true,
@@ -184,11 +186,12 @@ function drawHud(c, v, P, scene) {
     if (v.portrait && /^\+\d/.test(p.text)) continue; // phones: the score bug and the card say it; a +3 would sit on the board
     const q = P(p.x, p.z, p.y);
     if (q.X < 0 || q.X > v.W || q.Y < 0 || q.Y > v.H || q.vis === false) continue; // its rim or player is off screen
-    const X = clamp(q.X, 70, v.W - 70), Y = clamp(q.Y - p.t * q.s * 2.2, 40, v.H - 30);
-    const size = Math.round(clamp(q.s * (p.big ? 1.6 : 1.05), p.big ? 26 : 17, p.big ? 54 : 34));
+    const Y = clamp(q.Y - p.t * q.s * 2.2, 40, v.H - 30);
+    const size = T(clamp(q.s * (p.big ? 1.6 : 1.05), p.big ? 26 : 17, p.big ? 54 : 34));
     c.font = `400 ${Math.round(size * 1.25)}px "Bebas Neue", "Arial Black", Impact, sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
     c.globalAlpha = Math.min(1, 2.2 - p.t * 1.7);
-    const w = c.measureText(p.text).width;
+    const w = c.measureText(p.text).width, half = w / 2 + size * 0.4 + 4;
+    const X = clamp(q.X, Math.max(70, half), Math.max(70, v.W - Math.max(70, half))); // the plate stays on the screen at the larger sizes too
     // a solid plate behind every callout so it reads on any floor
     c.fillStyle = 'rgba(14,12,22,0.82)';
     c.beginPath(); c.roundRect(X - w / 2 - size * 0.4, Y - size * 0.66, w + size * 0.8, size * 1.3, size * 0.3); c.fill();
@@ -270,7 +273,7 @@ function slamCallout(c, v, P, scene) {
   c.fillStyle = '#FFF6E0'; c.fillText(s.text, 0, 3);
   // the team under the card, on its own plate, never under 15 px
   if (s.sub && y > v.H * 0.4) {
-    const fs = Math.max(15, Math.round(size * 0.34));
+    const fs = Math.max(T(15), Math.round(size * 0.34));
     c.font = `700 ${fs}px "Barlow Condensed", system-ui, sans-serif`;
     const tw = c.measureText(s.sub).width + 14, ty = h / 2 + fs * 0.95;
     c.fillStyle = 'rgba(10,9,16,0.9)'; c.fillRect(-tw / 2, ty - fs * 0.62, tw, fs * 1.24);
@@ -281,7 +284,7 @@ function slamCallout(c, v, P, scene) {
 
 // "REPLAY" bug: a broadcast-style plate in the top-left corner
 function banner(c, v, b) {
-  const big = clamp(v.W * 0.03, 16, 26);
+  const big = T(clamp(v.W * 0.03, 16, 26));
   c.font = `400 ${Math.round(big * 1.3)}px "Bebas Neue", "Arial Black", Impact, sans-serif`;
   const w = c.measureText(b.text).width + big * 1.6;
   const x = 12, y = 12, h = big * 1.7;
@@ -290,7 +293,7 @@ function banner(c, v, b) {
   c.fillStyle = '#FF4A3A'; c.beginPath(); c.arc(x + big * 0.75, y + h / 2, big * 0.22, 0, TAU); c.fill();
   c.fillStyle = '#FFF6E0'; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText(b.text, x + big * 1.15, y + h / 2 + 1);
   if (b.sub) {
-    c.font = `700 ${Math.max(14, Math.round(big * 0.68))}px "Barlow Condensed", system-ui, sans-serif`;
+    c.font = `700 ${Math.max(T(14), Math.round(big * 0.68))}px "Barlow Condensed", system-ui, sans-serif`;
     const sw = c.measureText(b.sub).width + 16;
     c.fillStyle = 'rgba(14,12,22,0.75)'; c.beginPath(); c.roundRect(x, y + h + 6, sw, big * 1.1, 5); c.fill();
     c.fillStyle = '#E9E2D2'; c.fillText(b.sub, x + 8, y + h + 6 + big * 0.56);
@@ -316,7 +319,7 @@ function chevron(c, v, P, it) {
   const s = clamp(q.s, 14, 24), X = q.X, top = is3d() && v.W >= 760 ? Math.max(q.Y, 96 + s) : q.Y; // clear of the floating score bug
   c.fillStyle = '#FFD84D'; c.strokeStyle = '#14121F'; c.lineWidth = 2;
   c.beginPath(); c.moveTo(X - s * 0.5, top - s * 0.55); c.lineTo(X + s * 0.5, top - s * 0.55); c.lineTo(X, top); c.closePath(); c.fill(); c.stroke();
-  const fs = Math.round(clamp(s * 0.6, 11, 18));
+  const fs = T(clamp(s * 0.6, 11, 18));
   c.font = `700 ${Math.round(fs * 1.12)}px "Barlow Condensed", system-ui, sans-serif`; c.textAlign = 'center'; c.textBaseline = 'bottom';
   const ww = Math.max(s, c.measureText('YOU').width), tight = { x: X - ww / 2, y: top - s * 0.6 - fs * 1.12, w: ww, h: s * 0.6 + fs * 1.12 }, box = { x: tight.x - 4, y: tight.y - 4, w: ww + 8, h: tight.h + 4 };
   // Over the scorer's table the gold word would mix with the gold town name on it ("HOT SPRYOUGS"): the marker then sits on a dark plate, a layer above the sign (S4-11).
@@ -430,14 +433,14 @@ function drawFTMeter(c, v, P, ft) {
   const mx = X + w * ft.mv;
   c.fillStyle = '#FFFFFF'; c.beginPath(); c.moveTo(mx, Y - 1); c.lineTo(mx - 6, Y - 9); c.lineTo(mx + 6, Y - 9); c.closePath(); c.fill();
   c.fillRect(mx - 1.5, Y, 3, h);
-  const size = Math.round(clamp(q.s * 0.6, 13, 18));
+  const size = T(clamp(q.s * 0.6, 13, 18));
   c.font = `700 ${Math.round(size * 1.12)}px "Barlow Condensed", system-ui, sans-serif`; c.textAlign = 'center'; c.textBaseline = 'bottom';
   const txt = ft.label || `FREE THROW ${ft.n} OF ${ft.total}`;
   c.lineWidth = 4; c.strokeStyle = '#14121F'; c.strokeText(txt, X + w / 2, Y - 11); c.fillStyle = '#FFF6E0'; c.fillText(txt, X + w / 2, Y - 11);
 }
 
 function label(c, x, y, txt, v, align = 'center') {
-  const size = Math.round(clamp(v.s * 1.15, 24, 38));
+  const size = T(clamp(v.s * 1.15, 24, 38));
   c.font = `400 ${size}px "Bebas Neue", "Arial Black", Impact, sans-serif`; c.textAlign = align; c.textBaseline = 'middle';
   const w = c.measureText(txt).width, x0 = align === 'left' ? x - 6 : x - w / 2 - 6;
   c.fillStyle = 'rgba(14,12,22,0.86)'; c.beginPath(); c.roundRect(x0, y - size * 0.62, w + 12, size * 1.2, 5); c.fill();
@@ -447,7 +450,7 @@ function label(c, x, y, txt, v, align = 'center') {
 
 // OPEN or CONTESTED under the grade after a release (S2-08): words, in a second colour, not colour alone.
 function tagLabel(c, x, y, txt, v) {
-  const g = Math.round(clamp(v.s * 1.15, 24, 38)), size = Math.round(g * 0.62), y1 = y + g * 0.62 + size * 0.75;
+  const g = T(clamp(v.s * 1.15, 24, 38)), size = Math.round(g * 0.62), y1 = y + g * 0.62 + size * 0.75;
   c.font = `400 ${size}px "Bebas Neue", "Arial Black", Impact, sans-serif`; c.textAlign = 'left'; c.textBaseline = 'middle';
   const w = c.measureText(txt).width;
   c.fillStyle = 'rgba(14,12,22,0.86)'; c.beginPath(); c.roundRect(x - 6, y1 - size * 0.62, w + 12, size * 1.2, 4); c.fill();

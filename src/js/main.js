@@ -181,6 +181,7 @@ function applySettings() {
   document.body.classList.toggle('lefty', s.hand === 'left'); // the touch pad mirrored for a left hand (S2-16)
   document.body.classList.toggle('reduced', reducedMotion());
   R.reduced = reducedMotion();
+  R.tx = s.text / 100;
   R.use3d = s.graphics !== '2d' && !NO_GL;
   setOn(s.sound); setVolume(s.vol); setAmbience(s.ambience !== false); setMusic(s.music !== false);
   setLook(lookOf());

@@ -147,3 +147,50 @@ tests.push({
     t.expect(said.some((x) => /Starting fives/.test(x)), 'with no tip showing the fives are read straight away');
   },
 });
+
+const SAVE_2D = () => {
+  try { localStorage.setItem('hsg-hoops-v1', JSON.stringify({ v: 1, settings: { tipsSeen: true, graphics: '2d' } })); } catch (e) { /* storage blocked */ }
+  window.__fonts = [];
+  const d = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'font');
+  Object.defineProperty(CanvasRenderingContext2D.prototype, 'font', { get() { return d.get.call(this); }, set(v) { window.__fonts.push(v); d.set.call(this, v); }, configurable: true });
+};
+
+tests.push({
+  name: 'S2-14: the canvas lettering follows the Text size setting, and the small print is 14 px',
+  initScript: SAVE_2D,
+  async run(t) {
+    const sizes = async (text) => {
+      await t.game('setState', { settings: { text } });
+      await t.game('newGame', { mode: 'exhibition', home: 'hot-springs', away: 'lakeside', program: 'boys', user: 'home', seed: 5, paused: true });
+      await t.page.evaluate(() => { window.__fonts.length = 0; });
+      await t.game('step', 3);
+      await t.game('act', 'foul', 0, 'reach'); // a FOUL call-out
+      await t.game('step', 2);
+      await t.waitIdle();
+      return t.page.evaluate(() => {
+        const px = (re) => Math.max(0, ...window.__fonts.filter((f) => re.test(f)).map((f) => +/(\d+)px/.exec(f)[1]));
+        return { popup: px(/Bebas/), you: px(/Barlow/) };
+      });
+    };
+    const a = await sizes(100), b = await sizes(130), c = await sizes(115);
+    t.expect(a.popup > 0 && a.you > 0, `the call-out and the YOU marker are drawn (${JSON.stringify(a)})`);
+    t.expect(b.popup >= a.popup * 1.1, `the call-out is larger at 130% (${a.popup} to ${b.popup} px)`);
+    t.expect(b.you >= a.you * 1.1, `the YOU label is larger at 130% (${a.you} to ${b.you} px)`);
+    t.expect(c.popup >= a.popup && c.popup <= b.popup, `and 115% is between (${c.popup} px)`);
+    await t.shot('S2-14-callout-130');
+    await t.game('setState', { settings: { text: 100 } });
+    await t.game('scene', 'title');
+    const fine = await t.page.$$eval('.fine', (els) => els.filter((e) => e.offsetParent).map((e) => parseFloat(getComputedStyle(e).fontSize)));
+    t.expect(fine.length > 0 && fine.every((x) => x >= 14), `every small-print line on the title is at least 14 px (${fine.join(', ')})`);
+    await t.game('setState', { settings: { text: 130 } });
+    await t.game('scene', 'title');
+    await t.checkLayout({ allowScrollY: true });
+    await t.shot('S2-14-title-130');
+    await t.game('setState', { settings: { text: 100 } });
+    await t.game('scene', 'help');
+    await t.page.click('[data-act="helpTab"][data-arg="about"]');
+    const src = await t.page.$$eval('.src', (els) => els.map((e) => parseFloat(getComputedStyle(e).fontSize)));
+    t.expect(src.length > 0 && src.every((x) => x >= 14), `and every fact-card source (${src.length}) is at least 14 px`);
+    await t.checkLayout({ allowScrollY: true });
+  },
+});

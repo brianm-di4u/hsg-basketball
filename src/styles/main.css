@@ -164,9 +164,9 @@ h3 { font-size: 1.1rem; }
 p { margin: .4em 0 .7em; }
 .kicker { text-transform: uppercase; letter-spacing: .12em; font-size: var(--fs-xs); color: var(--muted); margin: 0 0 .3em; font-weight: 700; }
 .big { font-size: 1.15rem; font-weight: 700; }
-.fine { font-size: var(--fs-xs); color: var(--muted); }
+.fine { font-size: .875rem; color: var(--muted); }
 .warn { color: var(--accent); font-weight: 700; }
-.src { font-size: var(--fs-xs); color: var(--muted); }
+.src { font-size: .875rem; color: var(--muted); }
 .tag { display: inline-block; font: 700 var(--fs-xs)/1.35 var(--font-text); text-transform: uppercase; letter-spacing: .05em; padding: 1px 7px; border-radius: 999px; background: var(--tag-bg); color: var(--tag-fg); vertical-align: middle; letter-spacing: .02em; }
 .tag.ok { background: var(--ok); color: #10130F; }
 kbd { font: 700 max(var(--fs-xs), .85em) var(--font-text); border: 1px solid var(--line); border-bottom-width: 3px; border-radius: 4px; padding: 0 5px; background: var(--card); }

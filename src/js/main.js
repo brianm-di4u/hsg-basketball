@@ -1518,7 +1518,7 @@ function hudState() {
   const m = state.match, sl = state.slam;
   const age = sl && m && sl.m === m ? m.time - sl.at : -1;
   const live = age >= 0 && age < SLAM_S && !(sl.liveAt != null && m.time - sl.liveAt >= 0.3) && state.scene !== 'title' && m.ball.state !== 'shot';
-  return { shotTag: m && m.user.meterLabelT > 0 ? state.shotTag || null : null, passTo: state.passTo ?? null, vertical: state.match ? verticalDir(state.match) : 0, slam: live ? { text: sl.text, age: +age.toFixed(2) } : null, slamBox: live && R.slamBox ? { ...R.slamBox } : null, meterBox: R.meterBox ? { ...R.meterBox } : null, pops: R.fx.pops.map((p) => ({ text: p.text, age: +p.t.toFixed(2) })) };
+  return { shotTag: m && m.user.meterLabelT > 0 ? state.shotTag || null : null, passTo: state.passTo ?? null, vertical: state.match ? verticalDir(state.match) : 0, slam: live ? { text: sl.text, age: +age.toFixed(2) } : null, slamBox: live && R.slamBox ? { ...R.slamBox } : null, meterBox: R.meterBox ? { ...R.meterBox } : null, youBox: R.youBox ? { ...R.youBox } : null, pops: R.fx.pops.map((p) => ({ text: p.text, age: +p.t.toFixed(2) })) };
 }
 
 function stepN(n) {

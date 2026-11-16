@@ -168,6 +168,7 @@ function P2(x, z, y = 0) { const v = R.v; _p2.X = sx(v, x); _p2.Y = sy(v, z, y);
 // The HUD layer, shared by both renderers: YOU marker, particles, callouts, meters, off-screen arrow.
 function drawHud(c, v, P, scene) {
   if (is3d() && !v.portrait) ballHalo(c, P, scene.ball); // landscape only: there the crowd is what sits behind the ball's arc
+  R.youBox = null;
   for (const it of scene.players || []) if (it.user) chevron(c, v, P, it);
   if (scene.passTo) passMark(c, v, P, scene.passTo);
   for (const p of R.fx.parts) {
@@ -317,7 +318,22 @@ function chevron(c, v, P, it) {
   c.beginPath(); c.moveTo(X - s * 0.5, top - s * 0.55); c.lineTo(X + s * 0.5, top - s * 0.55); c.lineTo(X, top); c.closePath(); c.fill(); c.stroke();
   const fs = Math.round(clamp(s * 0.6, 11, 18));
   c.font = `700 ${Math.round(fs * 1.12)}px "Barlow Condensed", system-ui, sans-serif`; c.textAlign = 'center'; c.textBaseline = 'bottom';
+  const ww = Math.max(s, c.measureText('YOU').width), tight = { x: X - ww / 2, y: top - s * 0.6 - fs * 1.12, w: ww, h: s * 0.6 + fs * 1.12 }, box = { x: tight.x - 4, y: tight.y - 4, w: ww + 8, h: tight.h + 4 };
+  // Over the scorer's table the gold word would mix with the gold town name on it ("HOT SPRYOUGS"): the marker then sits on a dark plate, a layer above the sign (S4-11).
+  const sg = is3d() ? tableSign(P) : null, over = !!sg && tight.x < sg.x1 && tight.x + tight.w > sg.x0 && tight.y < sg.y1 && tight.y + tight.h > sg.y0;
+  let plated = false;
+  if (over) { plated = true; c.save(); c.fillStyle = 'rgba(14,12,22,0.9)'; c.beginPath(); c.roundRect(box.x, box.y, box.w, box.h, 6); c.fill(); c.restore(); c.beginPath(); c.moveTo(X - s * 0.5, top - s * 0.55); c.lineTo(X + s * 0.5, top - s * 0.55); c.lineTo(X, top); c.closePath(); c.fillStyle = '#FFD84D'; c.fill(); c.stroke(); }
   c.lineWidth = 3; c.strokeText('YOU', X, top - s * 0.6); c.fillStyle = '#FFD84D'; c.fillText('YOU', X, top - s * 0.6);
+  R.youBox = { x: Math.round(box.x), y: Math.round(box.y), w: Math.round(box.w), h: Math.round(box.h), plate: plated, sign: sg ? { x0: Math.round(sg.x0), x1: Math.round(sg.x1), y0: Math.round(sg.y0), y1: Math.round(sg.y1) } : null }; // for the tests
+}
+// Where the lettered front of the scorer's table sits on screen (3D): 22 ft long, 2.5 ft tall, front face at z -3.7 (40 ft long in the finals arena); see scorerTable in venue3d.js.
+function tableSign(P) {
+  const half = String(G3.venueKey).startsWith('arena') ? 20 : 11;
+  const a = P(COURT.L / 2 - half, -3.7, 2.5), ax = a.X, ay = a.Y, vis = a.vis;
+  const b = P(COURT.L / 2 + half, -3.7, 0);
+  if (!vis || !b.vis) return null;
+  const y0 = Math.min(ay, b.Y), y1 = Math.max(ay, b.Y), pad = (y1 - y0) * 0.15; // the lettering fills the middle of the face, between the two colour bands
+  return { x0: Math.min(ax, b.X), x1: Math.max(ax, b.X), y0: y0 + pad, y1: y1 - pad };
 }
 
 // Who a pass would go to right now: a white ring on the floor under the receiver and a white arrow over his head,

@@ -132,3 +132,46 @@ tests.push({
     t.expect(Math.abs(south.speed - east.speed) <= 0.05 * east.speed, `straight across the court is as quick as straight along it (${south.speed.toFixed(2)} against ${east.speed.toFixed(2)} ft/s)`);
   },
 });
+
+// ---------------------------------------------------------------- S4-11
+// The gym's scorer table carries the town name in gold lettering; the gold YOU marker used to be drawn straight over it ("HOT SPRYOUGS").
+// Now the marker sits on a dark plate whenever it would touch the lettering. The test stands the player at a grid of places and reads the
+// marker's box and the lettering's box from the same frame (hud.youBox; the camera moves between frames, so the two are never read apart).
+tests.push({
+  name: 'S4-11: the YOU marker sits on a dark plate where it would touch the town name on the scorer table, and nowhere else',
+  initScript: () => { try { localStorage.setItem('hsg-hoops-v1', JSON.stringify({ v: 1, settings: { graphics: '3d', tipsSeen: true } })); } catch (e) { /* storage blocked */ } },
+  async run(t) {
+    await exhibition(t, { seed: 5 });
+    await t.page.waitForFunction(() => { const s = window.__game.getState(); return ['ready', 'failed', 'unsupported'].includes(s.gfx.state) && window.__game.isIdle() && document.body.classList.contains('gl'); }, null, { timeout: 60000 });
+    t.equal((await t.state()).gfx.mode, '3d', 'the 3D gym is up');
+    const read = async (x, z) => {
+      await t.game('act', 'place', 0, 0, x, z); await t.game('act', 'give', 0, 0); await t.game('step', 2);
+      return (await t.state()).hud.youBox;
+    };
+    let plates = 0, clear = 0;
+    const found = [];
+    for (const x of [34, 40, 46, 52, 58, 64, 70]) for (const z of [0, 3, 6, 9, 12, 14, 16, 18, 20, 22, 25, 30]) {
+      const b = await read(x, z);
+      if (!b || !b.sign) continue;
+      // b is the padded box (4 px each side and above); the marker itself is inside it
+      const touches = b.x + 4 < b.sign.x1 && b.x + b.w - 4 > b.sign.x0 && b.y + 4 < b.sign.y1 && b.y + b.h > b.sign.y0;
+      t.equal(b.plate, touches, `at (${x}, ${z}) a plate is drawn exactly when the marker touches the lettering`);
+      if (b.plate) { plates++; found.push([x, z]); } else clear++;
+    }
+    t.expect(plates >= 1, `at least one place on the court puts the marker over the lettering (${plates})`);
+    t.expect(clear >= 20, `and most places do not (${clear} clear)`);
+    // a picture for the report: the player held in place until the camera has settled on him, at the first place that still touches the lettering
+    let shot = false;
+    for (const [x, z] of found) {
+      let b = null;
+      for (let k = 0; k < 25; k++) b = await read(x, z);
+      if (b && b.plate) { await t.shot('S4-11-you-over-the-sign', { wait: false }); shot = true; break; }
+    }
+    // (a phone's portrait camera looks down the court at the basket, so the table is mostly out of its view: only the wide screen has to show it)
+    if (t.viewport === 'desktop') t.expect(shot, 'the marker still touches the lettering once the camera has settled on the player at one of those places');
+    let mid = null;
+    for (let k = 0; k < 25; k++) mid = await read(47, 25);
+    t.expect(mid && !mid.plate, 'at centre court there is no plate');
+    await t.shot('S4-11-you-centre-court', { wait: false });
+  },
+});

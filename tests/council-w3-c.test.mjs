@@ -286,7 +286,7 @@ const finishChallenge = async (t, id, { score, program } = {}) => {
   await t.game('act', 'finishGame', { winner: s.match.user.team });
   return waitFor(t, (x) => x.scene === 'final', 8000, 'the final screen');
 };
-const shot = (t, name) => t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/${name}-${t.viewport}.png` });
+const shot = (t, name) => t.shot(name, { wait: false, allowBlank: true }); // saved in the repo's own screenshots folder, by viewport (C4-07)
 
 tests.push({
   name: 'S3-06: each Banner Challenge has three star goals; they are earned and saved by how it is won, and an old win holds one star',

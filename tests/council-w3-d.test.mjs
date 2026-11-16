@@ -13,7 +13,7 @@ const load = async (f) => {
   if (!globalThis.FACTS) globalThis.FACTS = JSON.parse(fs.readFileSync(path.join(game, 'data/facts.json'), 'utf8'));
   return import(pathToFileURL(path.join(game, 'src/js', f)).href);
 };
-const shot = (t, name) => t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/${name}-${t.viewport}.png` });
+const shot = (t, name) => t.shot(name, { wait: false, allowBlank: true }); // saved in the repo's own screenshots folder, by viewport (C4-07)
 const exhibition = async (t, o = {}) => {
   await t.seed(o.seed ?? 7);
   await t.game('newGame', { mode: 'exhibition', home: 'hot-springs', away: 'lakeside', program: 'boys', user: 'home', qLen: 120, shotClock: 35, difficulty: 1, paused: true, ...o });

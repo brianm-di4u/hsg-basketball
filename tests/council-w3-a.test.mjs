@@ -72,8 +72,6 @@ tests.push({
   },
 });
 
-const SHOTS = '../_council/hsg-basketball/wave-3/shots';
-
 tests.push({
   name: 'S2-04: Hot Streak has a Paused card with Resume and Quit, and the run is frozen behind it',
   viewports: ['desktop', 'mobile'],
@@ -92,7 +90,6 @@ tests.push({
     await t.waitFrames(8);
     t.equal((await t.state()).shootout.t, t0, 'the clock does not run behind the card');
     await t.shot('s2-04-hot-streak-paused', { allowBlank: false });
-    await t.page.screenshot({ path: `${SHOTS}/S2-04-hot-streak-paused-${t.viewport}.png` });
     await t.checkLayout();
     // Resume (and P / Escape do the same)
     await t.page.click('[data-act="resume"]');
@@ -137,7 +134,6 @@ tests.push({
     t.expect(mute.x >= stage.x && mute.x + mute.w <= stage.x + stage.w && mute.y >= stage.y && mute.y + mute.h <= stage.y + stage.h, 'and sits inside the stage');
     t.equal(await t.page.getAttribute('#b-mute', 'aria-pressed'), 'true', 'Sound is on at the start, and the button says so');
     await t.shot('s2-25-speaker-in-play');
-    await t.page.screenshot({ path: `${SHOTS}/S2-25-speaker-in-play-${t.viewport}.png` });
     if (t.viewport === 'mobile') await t.page.tap('#b-mute'); else await t.page.click('#b-mute');
     let s = await t.state();
     t.equal(s.settings.sound, false, 'one press turns sound off');
@@ -145,7 +141,6 @@ tests.push({
     t.equal(await t.page.getAttribute('#b-mute', 'aria-pressed'), 'false', 'the button shows it is off');
     t.equal(s.scene, 'game', 'and play carries on (no card opens)');
     await t.shot('s2-25-speaker-off');
-    await t.page.screenshot({ path: `${SHOTS}/S2-25-speaker-off-${t.viewport}.png` });
     await t.page.keyboard.press('KeyM');
     t.equal((await t.state()).settings.sound, true, 'the M key still toggles the same setting');
     await t.page.click('#b-mute');
@@ -159,7 +154,6 @@ tests.push({
     t.equal(s.settings.sound, true, 'its Sound button turns sound back on');
     t.expect(/Sound: On/.test(await t.page.innerText('#screen')), 'and the card now says Sound: On');
     await t.shot('s2-25-pause-card');
-    await t.page.screenshot({ path: `${SHOTS}/S2-25-pause-card-${t.viewport}.png` });
     await t.checkLayout();
     // Hot Streak has the same two
     await t.game('newGame', { mode: 'shootout' });
@@ -187,7 +181,6 @@ tests.push({
     t.expect(/Saving is unavailable/.test(w[0] || '') && /close the page/.test(w[0] || ''), `it says saving is unavailable: "${w[0]}"`);
     t.equal(await t.page.getAttribute('#screen .warn', 'role'), 'status', 'it is announced as a status');
     await t.shot('s2-28-title-storage-blocked');
-    await t.page.screenshot({ path: `${SHOTS}/S2-28-title-storage-blocked-${t.viewport}.png` });
     await t.checkLayout();
     // a change that tries to save raises the usual notice: the title must not say it twice
     await t.game('setState', { settings: { sound: false } });
@@ -249,7 +242,7 @@ tests.push({
     await hqSettled(t);
     await t.game('act', 'cam', { p: [0, 22, 70], t: [0, 14, -22], fov: 50 });
     await t.shot('s3-17-end-wall-3d');
-    await t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/S3-17-your-banner-3d-${t.viewport}.png` });
+    await t.shot('S3-17-your-banner-3d', { wait: false, allowBlank: true });
     await t.game('act', 'cam', null);
     await t.game('newGame', { mode: 'exhibition', home: 'hot-springs', away: 'lakeside', program: 'boys', user: 'home', seed: 3, paused: true });
     pens = await t.game('act', 'pennants');
@@ -264,7 +257,7 @@ tests.push({
     await t.game('newGame', { mode: 'exhibition', home: 'hot-springs', away: 'lakeside', program: 'girls', user: 'home', seed: 3, paused: true });
     await t.game('step', 5);
     await t.shot('s3-17-classic-court');
-    await t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/S3-17-your-banner-classic-${t.viewport}.png` });
+    await t.shot('S3-17-your-banner-classic', { wait: false, allowBlank: true });
   },
 });
 
@@ -285,7 +278,7 @@ tests.push({
     t.equal(g.post.cinema, true, 'the replay camera is in cinema mode');
     t.equal(g.tier, t.viewport === 'mobile' ? 'medium' : 'high', 'the tier is the one this screen gets');
     t.equal(g.post.dof, t.viewport === 'desktop', t.viewport === 'mobile' ? 'no depth of field on the phone tier' : 'depth of field stays on the high tier');
-    await t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/S4-08-replay-${t.viewport}.png` });
+    await t.shot('S4-08-replay', { wait: false, allowBlank: true });
     await t.game('act', 'endReplay');
     t.equal((await t.state()).gfx.post.cinema, false, 'and the effects are off again after it');
   },
@@ -362,7 +355,6 @@ tests.push({
     t.expect(/Vibration/.test(await t.page.innerText('#screen')), 'Settings has a Vibration switch');
     await t.page.locator('[aria-label="Vibration"]').scrollIntoViewIfNeeded();
     await t.shot('s5-07-settings-vibration');
-    await t.page.screenshot({ path: `${SHOTS}/S5-07-settings-vibration-${t.viewport}.png` });
     await clearVib(t);
     await t.page.click('[data-act="setHaptics"][data-arg="0"]');
     t.equal((await t.state()).settings.haptics, false, 'Off is chosen');
@@ -482,7 +474,6 @@ tests.push({
     t.expect(/Game pad/.test(txt) && /Start/.test(txt), 'How to play lists the game pad');
     await t.page.locator('#screen h3', { hasText: 'Game pad' }).scrollIntoViewIfNeeded();
     await t.shot('s2-15-help-game-pad');
-    await t.page.screenshot({ path: `${SHOTS}/S2-15-help-game-pad-${t.viewport}.png` });
     await t.checkLayout({ allowScrollY: true });
   },
 });

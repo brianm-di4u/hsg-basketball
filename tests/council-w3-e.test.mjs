@@ -2,7 +2,7 @@ import { stepUntil } from './helpers.mjs';
 
 // Wave 3, batch E: feedback, teaching and help (S2-02 the pass receiver marker, S4-03 the PA line, S4-24 WebGL warnings).
 
-const shot = (t, name) => t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/${name}-${t.viewport}.png` });
+const shot = (t, name) => t.shot(name, { wait: false, allowBlank: true }); // saved in the repo's own screenshots folder, by viewport (C4-07)
 const exhibition = async (t, o = {}) => {
   await t.seed(o.seed ?? 7);
   await t.game('newGame', { mode: 'exhibition', home: 'hot-springs', away: 'lakeside', program: 'boys', user: 'home', qLen: 120, shotClock: 35, difficulty: 1, paused: true, ...o });

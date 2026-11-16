@@ -134,7 +134,7 @@ tests.push({
     const txt = await card.innerText();
     t.expect(/Why it slipped/.test(txt) && /Try:/.test(txt), `it names a reason and a try: ${txt.replace(/\n/g, ' ')}`);
     await t.checkLayout();
-    await t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/S2-09-why-card-${t.viewport}.png` });
+    await t.shot('S2-09-why-card', { wait: false, allowBlank: true });
     await exhibition(t, { seed: 61 });
     await stepUntil(t, (x) => x.match.phase === 'live', 600, 10, 'live');
     await t.game('setState', { match: { q: 4, t: 0.5, score: [44, 30] } });
@@ -183,7 +183,7 @@ tests.push({
     t.expect(Math.abs(s.match.crowd - 0.3) < 0.011, `and still starts at 0.3 (${s.match.crowd})`);
     await t.game('newGame', { mode: 'exhibition', home: 'hot-springs', away: 'lakeside', program: 'boys', user: 'home', seed: 3, paused: true });
     await t.checkLayout();
-    await t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/S4-14-home-crowd-bar-${t.viewport}.png` });
+    await t.shot('S4-14-home-crowd-bar', { wait: false, allowBlank: true });
   },
 });
 
@@ -301,7 +301,7 @@ tests.push({
     await t.game('setState', { match: { score: [30, 32] } });
     g = await goal();
     t.equal(g, '6A Trial Run: allowed 4 of 6', 'and counts the points allowed since the start of the scenario');
-    await t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/S2-03-challenge-goal-${t.viewport}.png` });
+    await t.shot('S2-03-challenge-goal', { wait: false, allowBlank: true });
     await t.checkLayout();
     await t.game('setState', { match: { score: [30, 36] } });
     g = await goal();
@@ -373,13 +373,13 @@ tests.push({
     let txt = await t.page.innerText('#screen');
     t.expect(/Silver medal\. Gold is 60 points\./.test(txt), `47 on Varsity: Silver, Gold at 60 (${txt.replace(/\n+/g, ' | ').slice(0, 200)})`);
     t.expect(!/Average of your last/.test(txt), 'one run is not an average yet');
-    await t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/S3-07-hot-streak-medal-${t.viewport}.png` });
+    await t.shot('S3-07-hot-streak-medal', { wait: false, allowBlank: true });
     await finish(20);
     txt = await t.page.innerText('#screen');
     t.expect(/No medal yet\. Bronze is 30 points\./.test(txt), 'a weak run says what Bronze needs');
     t.expect(/Best: 47/.test(txt) && /Average of your last 2: 34/.test(txt), 'the best stays and the average of the two runs sits beside it');
     await t.checkLayout();
-    await t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/S3-07-hot-streak-average-${t.viewport}.png` });
+    await t.shot('S3-07-hot-streak-average', { wait: false, allowBlank: true });
     await t.page.reload();
     await waitFor(t, (s) => s.scene === 'title', 10000, 'reloaded');
     const s = await t.state();
@@ -387,7 +387,7 @@ tests.push({
     await t.page.click('[data-act="shootoutSetup"]');
     txt = await t.page.innerText('#screen');
     t.expect(/Best score: 47/.test(txt) && /Average of your last 2: 34/.test(txt) && /Varsity medals: Bronze 30, Silver 45, Gold 60/.test(txt), `the setup card shows the best, the average and the ladder (${txt.replace(/\n+/g, ' | ').slice(0, 260)})`);
-    await t.page.screenshot({ path: `../_council/hsg-basketball/wave-3/shots/S3-07-hot-streak-setup-${t.viewport}.png` });
+    await t.shot('S3-07-hot-streak-setup', { wait: false, allowBlank: true });
   },
 });
 

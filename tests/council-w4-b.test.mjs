@@ -268,3 +268,39 @@ tests.push({
     await t.checkLayout({ allowScrollY: true });
   },
 });
+
+tests.push({
+  name: 'S4-10: on a phone in portrait the title card is a two-column block at the top and the attract camera aims up; desktop is as it was',
+  initScript: () => { try { localStorage.setItem('hsg-hoops-v1', JSON.stringify({ v: 1, settings: { tipsSeen: true, graphics: '3d' } })); } catch (e) { /* storage blocked */ } },
+  async run(t) {
+    await t.game('scene', 'title');
+    await t.page.waitForFunction(() => { const s = window.__game.getState(); return ['ready', 'failed', 'unsupported'].includes(s.gfx.state) && window.__game.isIdle() && document.body.classList.contains('gl') === (s.gfx.mode === '3d') && s.title.cam; }, null, { timeout: 30000 });
+    const read = () => t.page.evaluate(() => {
+      const p = document.querySelector('.title-panel').getBoundingClientRect(), H = innerHeight, W = innerWidth;
+      const bs = [...document.querySelectorAll('.title-panel .menu .btn')].map((b) => b.getBoundingClientRect());
+      const cols = new Set(bs.map((b) => Math.round(b.left)));
+      return { top: p.top, bottom: p.bottom, H, W, n: bs.length, cols: cols.size, minH: Math.min(...bs.map((b) => b.height)), inside: bs.every((b) => b.left >= 0 && b.right <= W && b.bottom <= H), cam: window.__game.getState().title.cam, overflowX: document.documentElement.scrollWidth > W };
+    });
+    const r = await read();
+    t.expect(r.n >= 8 && r.minH >= 44 && r.inside && !r.overflowX, `every menu button is on the screen and at least 44 px tall (${r.n} buttons, shortest ${Math.round(r.minH)} px)`);
+    if (t.viewport === 'mobile') {
+      t.expect(r.bottom <= r.H * 0.55, `the card ends in the top half (${Math.round(r.bottom)} of ${r.H} px; it was 719)`);
+      t.equal(r.cols, 2, 'the menu is in two columns');
+      t.expect(r.cam.fov > 42 && r.cam.aim > 5, `the camera looks wider and aims up (fov ${r.cam.fov}, aim height ${r.cam.aim})`);
+      await t.shot('S4-10-title');
+      // a season in progress adds a Continue button: still two columns, still on the screen
+      await t.game('newGame', { mode: 'season', seed: 3 });
+      await t.game('scene', 'title');
+      await t.game('setState', { settings: { text: 130 } });
+      const c = await read();
+      t.expect(c.n === 9 && c.inside && !c.overflowX, `with Continue season and text at 130% every button is still on the screen (${c.n} buttons, card ends at ${Math.round(c.bottom)} of ${c.H} px)`);
+      await t.checkLayout({ allowScrollY: true });
+      await t.shot('S4-10-title-continue-130');
+    } else {
+      t.expect(r.bottom > r.H * 0.7, 'desktop: the card is the single column it was');
+      t.equal(r.cam.fov, 42, 'desktop: the attract camera is unchanged (fov 42)');
+      t.equal(r.cam.aim, 5, 'desktop: and aimed where it was');
+      await t.shot('S4-10-title');
+    }
+  },
+});

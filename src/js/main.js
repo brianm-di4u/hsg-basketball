@@ -687,6 +687,7 @@ let raf = 0, last = 0, acc = 0;
 // The title's gym fly-through (S6-12) costs a phone battery while it sits there: it draws at most 30 frames a second and rests after a minute
 // with no key, touch or pointer movement. Any input wakes it. The settings and help screens are other scenes, so they stop it already.
 const TITLE_FRAME_MS = 33;
+const TITLE_CAM_PORTRAIT = { rad: 46, y: 21, aim: 14, fov: 58 }; // the phone title's attract camera: orbit radius, height, aim height and field of view (was 40, 21, 5 and 42, as on desktop)
 let titleIdleMs = 60000, titleActiveAt = 0, titleIdle = false, titleFrames = 0;
 function wakeTitle() {
   titleActiveAt = performance.now();
@@ -1210,7 +1211,9 @@ function drawMatch(m, dt) {
   // title attract mode: a slow sweep around the gym (the 3D view only; reduced motion keeps the game camera)
   if (state.scene === 'title' && !R.reduced) {
     const tt = performance.now() / 1000, ang = Math.sin(tt * 0.05) * 0.85;
-    G3.camOverride = { attract: true, p: [47 + Math.sin(ang) * 40, 21 + Math.sin(tt * 0.07) * 3, 25 + Math.cos(ang) * 40], t: [m.ball.x * 0.5 + 23.5, 5, 18], fov: 42 };
+    // A portrait phone has the title card across the top, so the camera looks wider (the court and the banners) and aims up, to seat them in the lower part (S4-10).
+    const port = !!(R.v && R.v.portrait), rad = port ? TITLE_CAM_PORTRAIT.rad : 40;
+    G3.camOverride = { attract: true, p: [47 + Math.sin(ang) * rad, (port ? TITLE_CAM_PORTRAIT.y : 21) + Math.sin(tt * 0.07) * 3, 25 + Math.cos(ang) * rad], t: [m.ball.x * 0.5 + 23.5, port ? TITLE_CAM_PORTRAIT.aim : 5, 18], fov: port ? TITLE_CAM_PORTRAIT.fov : 42 };
   } else if (G3.camOverride && G3.camOverride.attract) { G3.camOverride = null; R.snap = true; }
   padMeter(meter);
   draw({ m, venue: venueOf(m), dt, camX, camZ: m.ball.z, players, ball: m.ball, meter, ftMeter, offscreen, passTo, cheer, cheerTeam: state.cheerTeam, cheerAge: state.cheerAt && state.cheerAt.m === m ? m.time - state.cheerAt.t : null, cheerX: state.cheerAt ? state.cheerAt.x : null, perfect, slam, vertical: verticalDir(m) });
@@ -1500,7 +1503,7 @@ function sumState() {
     challenge: state.chal, chalResult: state.chalResult ? { ok: state.chalResult.ok, more: state.chalResult.more, note: state.chalResult.note } : null,
     trophies: state.save.trophies, unlocks: state.save.unlocks, best: state.save.best, challenges: state.save.challenges, stars: state.save.stars,
     career: state.save.career, daily: state.save.daily, achievements: state.save.achievements, awards: state.awards || null, date: today(), look: { ball: R.look.ball.id || ballSkin(state.settings.ball).id, floor: R.look.floor.id },
-    title: { idle: titleIdle, frames: titleFrames, running: raf !== 0, idleMs: titleIdleMs },
+    title: { idle: titleIdle, frames: titleFrames, running: raf !== 0, idleMs: titleIdleMs, cam: G3.camOverride && G3.camOverride.attract ? { fov: G3.camOverride.fov, aim: G3.camOverride.t[1] } : null },
     replayGate: { at: state.lastReplayAt ?? null, pending: !!state.replayPending, frames: REC.buf.length },
     replay: state.replay ? { kind: state.replay.kind, f: Math.floor(state.replay.f), n: state.replay.frames.length, speed: state.replay.speed } : null,
     coach: state.coach ? { cur: state.coach.cur, done: { ...state.coach.done }, text: state.coach.cur ? $('#coach-t').textContent : '', practice: state.coach.practice } : null, pick: { ...state.pick }, audio: { ctx: !!AU.ctx, on: AU.on, ambience: AU.ambOn, music: AU.musOn, track: AU.kit && AU.kit.music.score && AU.music ? AU.music : '', tension: AU.tension, bed: AU.kit && AU.kit.amb.scene && AU.scene ? AU.scene : '', held: !!(AU.kit && AU.kit.held), state: AU.ctx ? AU.ctx.state : null, gain: AU.master ? AU.master.gain.value : null, goal: AU.goal, crowd: AU.crowd ?? null, count: { ...AU.count } }, reduced: R.reduced, touch: touchOn(), fx: R.fx.parts.length, loop: !!raf,

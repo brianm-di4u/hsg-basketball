@@ -327,6 +327,18 @@ b.w { color: var(--ok); } b.l { color: var(--accent); }
 }
 @media (prefers-reduced-motion: reduce) { #screen.enter .panel { animation: none; } }
 
+/* title menu on a portrait phone (S4-10): two columns, a smaller logo and the card at the top, so the attract match and the banners show below it */
+@media (max-width: 600px) and (orientation: portrait) {
+  .title-panel { margin: 0 0 auto; padding-top: 10px; padding-bottom: 12px; }
+  .title-panel .logo .l1 { font-size: 1.3rem; }
+  .title-panel .logo .l2 { font-size: 3.4rem; }
+  .title-panel .sub { margin: 2px 0 6px; font-size: var(--fs-sm); }
+  .title-panel .menu { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
+  .title-panel .menu .menu-row { display: contents; }
+  .title-panel .menu [data-act="continueSeason"] { grid-column: 1 / -1; }
+  .title-panel .menu .btn { padding-left: 6px; padding-right: 6px; }
+}
+
 /* title menu on a landscape phone: two columns and a smaller logo, so every entry stays in view */
 @media (orientation: landscape) and (max-height: 520px) {
   .title-panel { max-width: 640px; padding-top: 10px; padding-bottom: 10px; }

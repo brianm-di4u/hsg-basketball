@@ -394,16 +394,23 @@ tests.push({
 tests.push({
   name: 'S4-14 and S2-03: the first-run tip is placed under the scoreboard however tall it is (a crowd bar, a challenge goal line)',
   viewports: ['desktop'],
+  initScript: () => { try { localStorage.setItem('hsg-hoops-v1', JSON.stringify({ v: 1, settings: { graphics: '3d', tipsSeen: false } })); } catch (e) { /* storage blocked */ } }, // the 3D gym even where the harness's software GL would keep the 2D court
   async run(t) {
     const gap = () => t.page.evaluate(() => {
       const sb = document.querySelector('#sb'), bottom = sb.getBoundingClientRect().bottom;
       return { bottom, top: parseFloat(getComputedStyle(document.querySelector('#coach')).top), h: sb.getBoundingClientRect().height };
     });
+    // The tip is laid out under the scoreboard once the 3D start-up has settled and the page has taken its 3D layout (C4-05):
+    // read before that and it still sits at the top. Wait for the renderer state, never for time.
+    const settled = () => t.page.waitForFunction(() => { const s = window.__game.getState(); return ['ready', 'failed', 'unsupported'].includes(s.gfx.state) && window.__game.isIdle() && document.body.classList.contains('gl') === (s.gfx.mode === '3d'); }, null, { timeout: 60000 });
     await t.game('newGame', { mode: 'exhibition', home: 'hot-springs', away: 'lakeside', program: 'boys', user: 'home', seed: 3, paused: true });
+    await settled();
+    t.equal((await t.state()).gfx.mode, '3d', 'the 3D gym is up (the tip sits under the board only there)');
     await t.game('step', 2);
     let g = await gap();
     t.expect(g.top >= g.bottom, 'with a crowd bar the tip top (' + g.top + ') is at or below the scoreboard bottom (' + Math.round(g.bottom) + '; the board is ' + Math.round(g.h) + ' high)');
     await t.game('newGame', { mode: 'challenge', challenge: '6a-trial', seed: 4, paused: true });
+    await settled();
     await t.game('step', 2);
     const g2 = await gap();
     t.expect(g2.top >= g2.bottom, 'with a challenge goal line too (' + g2.top + ' against ' + Math.round(g2.bottom) + '; the board is ' + Math.round(g2.h) + ' high)');

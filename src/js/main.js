@@ -460,6 +460,7 @@ function newExhibition(o = {}) {
 }
 
 function enterGame() {
+  hitTicks = 0; lastAct = '';
   state.paused = false; state.finalShown = false; state.showBox = false;
   state.mineShotAt = null; state.lastReplayAt = null; state.replayPending = null; REC.buf.length = 0; // match time restarts at 0: the last game's replay cooldown, queued replay and frames do not carry over
   state.factSeed = (state.match.seed || 1) + 3;
@@ -763,6 +764,7 @@ function stepOnce() {
   }
   const m = state.match;
   if (!m || sc !== 'game') return;
+  if (hitTicks > 0) { hitTicks--; return; }
   coachInput();
   drain(m.input);
   const vd = verticalDir(m);
@@ -771,6 +773,7 @@ function stepOnce() {
   tick(m);
   record(m);
   footwork(m, cut);
+  swipeTick(m);
   matchEvents(m);
   trackScore(m);
   coachTick(m);
@@ -942,6 +945,16 @@ function meterTick(m) {
     if (meterAcc >= 0.17 - 0.11 * v) { meterAcc = 0; play(meterQuality(p.meter, meterScale(m), p.stype === 'jumper' ? 'jumper' : 'layup').label === 'PERFECT' ? 'sweet' : 'meter', { p: v }); }
   } else meterAcc = 0.1;
 }
+// Hit-stop (S1-04): the simulation stands still for a few ticks on a PERFECT make, a dunk and a block, so the moment lands. Not with reduced motion.
+const HIT_STOP_TICKS = 4; // 67 ms
+let hitTicks = 0, hitStops = 0, lastAct = '';
+function hitStop() { if (reducedMotion() || state.replay) return; hitTicks = HIT_STOP_TICKS; hitStops++; }
+// Your own steal attempt gets a swipe whether or not it takes the ball.
+function swipeTick(m) {
+  const u = m.user, p = u.team >= 0 && u.ctrl >= 0 && !u.auto ? m.p[u.ctrl] : null, a = p ? p.act : '';
+  if (a === 'steal' && lastAct !== 'steal') play('swipe', { pan: panAt(m, p.x) });
+  lastAct = a;
+}
 // A shoe squeak when the player you steer cuts hard (S5-15): he is running and the stick turns him by more than about 100 degrees. One squeak a cut,
 // higher the faster he was going; steady running and gentle bends are silent.
 const CUT_SPEED = 8, CUT_DOT = -0.2, CUT_GAP = 0.4; // feet a second, the cosine of the turn (below it is a cut), and seconds of play before the next squeak
@@ -996,7 +1009,7 @@ function matchEvents(m) {
       case 'score': {
         const side = rimSide(rimFor(m.dir[e.t]));
         pop(`+${e.pts}`, COURT.rimX[side], 14.8, 25, '#FFF6E0', e.pts === 3); // above the backboard, never on the rim
-        if (e.pts === 3) { burst('steam', COURT.rimX[side], 10, 25, 10, ['#fff']); G3.refSignal = 1.4; }
+        if (e.pts === 3) { burst('steam', COURT.rimX[side], 10, 25, 10, ['#fff']); G3.refSignal = 1.4; shake(0.25); }
         { // your basket gets the full roar, theirs a polite murmur and a groan from your crowd; taking the lead brings the house down
           const mine = mineSide(m, e.t), pan = panAt(m, COURT.rimX[side]), diff = m.teams[0].score - m.teams[1].score, before = diff - (e.t === 0 ? e.pts : -e.pts);
           const rival = !!(m.venueInfo && m.venueInfo.rival) && mine;
@@ -1012,20 +1025,21 @@ function matchEvents(m) {
         announce(`${m.teams[e.t].short} scores ${e.pts}. ${m.teams[0].short} ${m.teams[0].score}, ${m.teams[1].short} ${m.teams[1].score}. ${paScore(m, e)}`.trim());
         break;
       }
-      case 'swish': netHit(rimSide(m.ball.x)); play('swish', { pan: panAt(m, m.ball.x) }); if (e.type === 'dunk') shake(0.6); state.lastMake = { dunk: e.type === 'dunk', buzzer: !!(m.ball.shot && m.ball.shot.buzzer), side: rimSide(m.ball.x) }; break;
+      case 'swish': netHit(rimSide(m.ball.x)); play('swish', { pan: panAt(m, m.ball.x) }); if (e.type === 'dunk') shake(0.6); if (e.type === 'dunk' || (state.mineGrade === 'PERFECT' && e.t === m.user.team)) hitStop(); state.mineGrade = ''; state.lastMake = { dunk: e.type === 'dunk', buzzer: !!(m.ball.shot && m.ball.shot.buzzer), side: rimSide(m.ball.x) }; break;
       case 'rim': if (state.mineShotAt != null && m.time - state.mineShotAt < 3) haptic('rim'); rimHit(rimSide(m.ball.x)); play('rim', { hard: e.hard, v: m.ball.z < COURT.rimZ - 0.2 ? 0 : m.ball.z > COURT.rimZ + 0.2 ? 1 : 2, pan: panAt(m, m.ball.x) }); if (state.lastShot && m.time - state.lastShot < 2.5) { play('ooh', { pan: panAt(m, m.ball.x) }); bump(0.2); } break;
       case 'bounce': play('bounce', { pan: panAt(m, m.ball.x), far: e.i == null || !isUserBall(m, e.i) }); break;
       case 'floor': play('floor', { pan: panAt(m, m.ball.x) }); break;
       case 'whistle': if (e.why === 'reach' || e.why === 'shoot') play('thud', { pan: panAt(m, m.ball.x) }); play('whistle'); duck(5, 700); if (WHY[e.why]) pop(WHY[e.why], m.ball.x, 8, m.ball.z, '#FFB4A8'); if (e.why === 'shotclock') announce('Shot-clock violation.'); break;
       case 'buzzer': play('buzzer'); haptic('buzzer'); duck(6, 1000); break;
       case 'steal': pop('STEAL!', m.p[e.i].x, 7, m.p[e.i].z, '#FFD84D'); play('steal', { pan: panAt(m, m.p[e.i].x) }); bump(0.15); break;
-      case 'block': pop('BLOCKED!', m.p[e.i].x, 9, m.p[e.i].z, '#FFD84D'); play('block', { pan: panAt(m, m.p[e.i].x) }); bump(0.3); shake(0.4); state.cheer = 0.6; state.cheerTeam = m.p[e.i].t; break;
+      case 'block': pop('BLOCKED!', m.p[e.i].x, 9, m.p[e.i].z, '#FFD84D'); play('block', { pan: panAt(m, m.p[e.i].x) }); bump(0.3); shake(0.4); hitStop(); state.cheer = 0.6; state.cheerTeam = m.p[e.i].t; break;
       case 'andone': pop('AND ONE!', m.p[e.i].x, 8, m.p[e.i].z, '#5FD38A', true); break;
       case 'fouledout': pop('FOULED OUT', m.ball.x, 8, m.ball.z, '#FFB4A8'); announce('A player has fouled out.'); break;
       case 'tip': play('squeak'); break;
       case 'airball': pop('AIRBALL', m.ball.x, 6, m.ball.z, '#FFB4A8'); play('sigh', { pan: panAt(m, m.ball.x) }); state.lastShot = 0; break;
       case 'gather': if (isUserBall(m, e.i)) { play('meter', { p: 0 }); meterAcc = 0; } break;
-      case 'shot': if (isUserBall(m, e.i)) { state.mineShotAt = m.time; haptic('release'); }
+      case 'shot': state.mineGrade = isUserBall(m, e.i) && !m.user.auto ? m.user.meterLabel : ''; // the grade of your own shot, for the basket it may make (S1-04)
+        if (isUserBall(m, e.i)) { state.mineShotAt = m.time; haptic('release'); }
         state.lastShot = e.three ? m.time : 0; play('release', { three: e.three, pan: panAt(m, m.p[e.i].x), far: !isUserBall(m, e.i) }); if (e.three) bump(0.25);
         if (isUserBall(m, e.i) && !m.user.auto) { const g = m.user.meterLabel; if (g === 'PERFECT') play('perfect'); else if (g === 'EARLY' || g === 'LATE') play('late'); } // the grade by ear (S5-14); GOOD is the plain release
         break;
@@ -1486,7 +1500,7 @@ function sumState() {
     view: R.v ? { W: R.v.W, H: R.v.H, s: +R.v.s.toFixed(2), camX: +R.v.camX.toFixed(2) } : null,
     steam: R.fx.parts.filter((p) => p.kind === 'steam').length, ventBoost: G3.vents ? G3.vents.boost : 0, shootCheer: G3.cheer,
     gfx: { mode: is3d() ? '3d' : '2d', gl: state.gl || null, ...info3d(), hq: hqInfo() },
-    hud: hudState(), pa: $('#pa') && !$('#pa').hidden ? { kicker: $('#pa-k').textContent, text: $('#pa-t').textContent } : null,
+    hitStops, shake: +R.fx.shake.toFixed(2), hud: hudState(), pa: $('#pa') && !$('#pa').hidden ? { kicker: $('#pa-k').textContent, text: $('#pa-t').textContent } : null,
     ui: { focus: document.activeElement ? (document.activeElement.dataset.act || document.activeElement.id || document.activeElement.tagName) : null },
   };
 }
@@ -1578,6 +1592,7 @@ const HOOKS = {
       case 'shootAt': { if (!m) return false; const h = m.ball.holder; if (h < 0) return false; return forceShot(m, h, a[0]); }
       case 'tire': { if (!m) return false; const p = m.p[a[0] * 5 + a[1]]; m.teams[p.t].roster[p.r].energy = a[2]; return true; } // test: set a player's energy
       case 'give': if (!m) return false; give(m, a[0] * 5 + a[1]); return true;
+      case 'time': return m ? m.time : null; // test: the match's own clock in seconds
       case 'push': { if (!m) return false; const p = m.p[a[0] * 5 + a[1]]; p.vx = a[2]; p.vz = a[3]; return true; } // test: give a placed player speed
       case 'place': { if (!m) return false; const p = m.p[a[0] * 5 + a[1]]; p.x = p.tx = a[2]; p.z = p.tz = a[3]; p.vx = p.vz = 0; return true; }
       case 'foul': if (!m) return false; commitFoul(m, a[0], a[1] || 'reach'); return true;

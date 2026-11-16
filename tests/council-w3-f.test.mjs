@@ -215,3 +215,69 @@ tests.push({
     t.equal(await count(t, 'whoosh'), w1, 'and the break card comes up with it, not with a whoosh');
   },
 });
+
+// ---------------------------------------------------------------- S1-04 feedback at the moment of input
+// One shot by the first-team player in slot 2 from (x, 25), the other nine out of the way, with the sim's forced timing grade q. Returns when the ball has left his hand and been
+// resolved, with what the in-page watcher saw: all of it inside one page call, so no frame can run between the ticks it looks at.
+const shootFrom = (t, x, q) => t.page.evaluate(async ([x0, q0]) => {
+  const g = window.__game;
+  g.act('give', 0, 2); g.act('place', 0, 2, x0, 25);
+  for (let k = 0; k < 5; k++) { g.act('place', 1, k, 47 + (k - 2) * 6, k % 2 ? 4 : 46); if (k !== 2) g.act('place', 0, k, 20, 4 + k * 10); }
+  g.step(1);
+  const h0 = g.getState().hitStops, sc0 = g.getState().match.score[0], out = { made: false, pts: 0, hit: false, shake: 0, froze: null, after: null };
+  g.act('shootAt', q0);
+  for (let i = 0; i < 400; i++) {
+    g.step(1);
+    const s = g.getState();
+    if (s.match.score[0] > sc0) {
+      out.made = true; out.pts = s.match.score[0] - sc0; out.shake = s.shake; out.hit = s.hitStops > h0;
+      const t0 = g.act('time'); g.step(4); out.froze = g.act('time') === t0; g.step(1); out.after = g.act('time') > t0;
+      return out;
+    }
+    if (['loose', 'held'].includes(s.match.ball.state) && i > 20) return out;
+  }
+  return out;
+}, [x, q]);
+const makeFrom = async (t, x, q) => {
+  for (let tries = 0; tries < 10; tries++) {
+    await stepUntil(t, (s) => !['shot', 'net'].includes(s.match.ball.state), 400, 10, 'the last shot to be over');
+    const r = await shootFrom(t, x, q);
+    if (r.made) return r;
+  }
+  t.fail(`no basket from ${x} in ten tries`);
+  return { made: false };
+};
+tests.push({
+  name: 'S1-04: a PERFECT make freezes play for four ticks, a GOOD one does not, a three shakes the screen and a two does not, and a steal attempt swipes',
+  viewports: ['desktop'],
+  async run(t) {
+    const sw = [];
+    for (const seed of [1, 2, 3, 4, 5]) sw.push((await render(t, 'cue:swipe', 1, { seed })).peak);
+    t.expect(median(sw) >= 0.2 && median(sw) <= 0.45, `the swipe peaks ${median(sw)} at the typical repeat (want 0.2 to 0.45)`);
+    await t.game('scene', 'title');
+    await gesture(t);
+    await exhibition(t, { seed: 17 });
+    // a jumper from 14 feet: PERFECT freezes (and the clock of the match stands still for the four ticks), GOOD does not
+    let r = await makeFrom(t, 88.75 - 14, 1);
+    t.expect(r.hit && r.froze && r.after, `a PERFECT make: hit-stop ${r.hit}, the match clock stood still for 4 ticks ${r.froze}, then ran ${r.after}`);
+    t.equal(r.shake, 0, 'a two-pointer does not shake the screen');
+    r = await makeFrom(t, 88.75 - 14, 0.75);
+    t.expect(!r.hit && !r.froze, `a GOOD make has no hit-stop (hit ${r.hit}, froze ${r.froze})`);
+    // a three
+    r = await makeFrom(t, 88.75 - 26, 0.75);
+    t.equal(r.pts, 3, 'from 26 feet it is a three');
+    t.expect(r.shake > 0 && r.shake <= 0.25, `a made three shakes the screen a little (${r.shake})`);
+    // a steal attempt on defence swipes, caught or not
+    await stepUntil(t, (s) => !['shot', 'net'].includes(s.match.ball.state), 400, 10, 'the last shot to be over');
+    await t.game('act', 'give', 1, 0);
+    await t.game('act', 'place', 1, 0, 60, 25);
+    await t.game('act', 'place', 0, 2, 56, 25);
+    for (let k = 1; k < 5; k++) await t.game('act', 'place', 1, k, 84, 4 + k * 10);
+    for (let k = 0; k < 5; k++) if (k !== 2) await t.game('act', 'place', 0, k, 20, 4 + k * 10);
+    await t.game('step', 6);
+    const w0 = await count(t, 'swipe');
+    await t.game('act', 'input', { pass: true });
+    await t.game('step', 3);
+    t.equal(await count(t, 'swipe'), w0 + 1, 'pressing the steal button swipes once');
+  },
+});

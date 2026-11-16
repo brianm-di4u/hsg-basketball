@@ -99,3 +99,50 @@ tests.push({
     t.equal(await count(t, 'win'), w0, 'and not the game-win cue');
   },
 });
+
+// ---------------------------------------------------------------- S5-14 the shot meter by ear
+tests.push({
+  name: 'S5-14: the meter ticks brighter inside the PERFECT window, and a release sounds PERFECT, plain (GOOD) or dull (EARLY, LATE)',
+  viewports: ['desktop'],
+  async run(t) {
+    // by measurement: the two grade sounds are gameplay cues, the sweet tick is a quiet interface tick that is brighter than the plain one
+    for (const c of ['perfect', 'late']) {
+      const peaks = [];
+      for (const seed of [1, 2, 3, 4, 5]) peaks.push((await render(t, 'cue:' + c, 1.5, { seed })).peak);
+      const med = median(peaks);
+      t.expect(med >= 0.2 && med <= 0.45, `${c}: the typical repeat peaks ${med} (want 0.2 to 0.45)`);
+    }
+    const plain = await render(t, 'cue:meter', 0.5, { seed: 3, cue: { p: 0.9 } }), sweet = await render(t, 'cue:sweet', 0.5, { seed: 3, cue: { p: 0.9 } });
+    t.expect(sweet.peak < 0.2 && sweet.peak > plain.peak * 1.3, `the sweet tick is quiet (${sweet.peak}) but stands out from the plain one (${plain.peak})`);
+    // in the game: the grade of the user's own release (the sim's forced quality stands in for the player's timing)
+    await t.game('scene', 'title');
+    await gesture(t);
+    await exhibition(t, { seed: 11 });
+    const lay = async () => {
+      await stepUntil(t, (x) => !['shot', 'net'].includes(x.match.ball.state), 300, 10, 'the last shot to be over');
+      await t.game('act', 'give', 0, 2);
+      await t.game('act', 'place', 0, 2, 84.6, 25);
+      for (let k = 0; k < 5; k++) await t.game('act', 'place', 1, k, 47 + (k - 2) * 6, k % 2 ? 4 : 46);
+      await t.game('step', 1);
+    };
+    const grade = async (q) => {
+      await lay();
+      const [p0, l0] = [await count(t, 'perfect'), await count(t, 'late')];
+      await t.game('act', 'shootAt', q);
+      await stepUntil(t, (x) => x.match.ball.state === 'shot' || x.match.ball.state === 'net' || x.match.ball.state === 'loose', 300, 5, 'the release');
+      return [(await count(t, 'perfect')) - p0, (await count(t, 'late')) - l0];
+    };
+    t.equal((await grade(1)).join(), '1,0', 'a PERFECT release rings');
+    t.equal((await grade(0.75)).join(), '0,0', 'a GOOD release is the plain one');
+    t.equal((await grade(0.3)).join(), '0,1', 'an EARLY or LATE release thuds');
+    // holding Shoot ticks the sweet tick when the fill is in the window and not before it
+    await lay();
+    const s0 = await count(t, 'sweet');
+    await t.page.keyboard.down('Space');
+    await t.game('step', 12);
+    t.equal(await count(t, 'sweet'), s0, 'the early part of the fill has only the plain tick');
+    await stepUntil(t, (x) => x.audio.count.sweet > s0, 80, 2, 'the fill to reach the window');
+    await t.page.keyboard.up('Space');
+    t.expect((await count(t, 'sweet')) > s0, 'and inside the window it is the bright one');
+  },
+});

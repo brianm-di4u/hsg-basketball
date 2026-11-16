@@ -924,13 +924,15 @@ function musicFor(sc, m) {
   if (sc === 'shootoutEnd') return state.so && state.so.newBest ? 'fanfare' : 'breakRoom';
   return 'pepBand';
 }
-// The meter ticks while the user holds a shot, faster and higher toward the top of the jump.
+// The meter's PERFECT window and the scale it is drawn and judged with for the shooter's own meter (difficulty, Meter assist, and a roaring home crowd), as the sim reads them.
+const meterScale = (m) => (DIFF[m.difficulty] || DIFF[1]).win * (m.assist ? 1.5 : 1) * (m.crowdTeam === m.user.team && m.crowd > 0.6 ? 1.3 : 1);
+// The meter ticks while the user holds a shot, faster and higher toward the top of the jump, and brighter while the fill is in the PERFECT window (S5-14).
 function meterTick(m) {
   const u = m.user, p = u.team >= 0 && u.ctrl >= 0 ? m.p[u.ctrl] : null;
   if (p && (p.act === 'shoot' || p.act === 'layup') && m.ball.holder === p.idx && !u.auto) {
     const v = Math.max(0, Math.min(1, p.meter / SWEET));
     meterAcc += DT;
-    if (meterAcc >= 0.17 - 0.11 * v) { meterAcc = 0; play('meter', { p: v }); }
+    if (meterAcc >= 0.17 - 0.11 * v) { meterAcc = 0; play(meterQuality(p.meter, meterScale(m), p.stype === 'jumper' ? 'jumper' : 'layup').label === 'PERFECT' ? 'sweet' : 'meter', { p: v }); }
   } else meterAcc = 0.1;
 }
 // Tension. The shot clock ticks in its last five seconds (once a second, higher as it runs down); in the last minute of the
@@ -1000,7 +1002,9 @@ function matchEvents(m) {
       case 'airball': pop('AIRBALL', m.ball.x, 6, m.ball.z, '#FFB4A8'); play('sigh', { pan: panAt(m, m.ball.x) }); state.lastShot = 0; break;
       case 'gather': if (isUserBall(m, e.i)) { play('meter', { p: 0 }); meterAcc = 0; } break;
       case 'shot': if (isUserBall(m, e.i)) { state.mineShotAt = m.time; haptic('release'); }
-        state.lastShot = e.three ? m.time : 0; play('release', { three: e.three, pan: panAt(m, m.p[e.i].x), far: !isUserBall(m, e.i) }); if (e.three) bump(0.25); break;
+        state.lastShot = e.three ? m.time : 0; play('release', { three: e.three, pan: panAt(m, m.p[e.i].x), far: !isUserBall(m, e.i) }); if (e.three) bump(0.25);
+        if (isUserBall(m, e.i) && !m.user.auto) { const g = m.user.meterLabel; if (g === 'PERFECT') play('perfect'); else if (g === 'EARLY' || g === 'LATE') play('late'); } // the grade by ear (S5-14); GOOD is the plain release
+        break;
       case 'pass': play('pass', { pan: panAt(m, m.p[e.i].x), far: m.p[e.i].t !== m.user.team }); break;
       case 'catch': play('catch', { pan: panAt(m, m.p[e.i].x), far: m.p[e.i].t !== m.user.team }); break;
       case 'pump': play('fake', { pan: panAt(m, m.p[e.i].x), far: !isUserBall(m, e.i) }); break;
@@ -1136,7 +1140,7 @@ function drawMatch(m, dt) {
       }
       const r = m.teams[c.t].roster[c.r];
       const shooting = (c.act === 'shoot' || c.act === 'layup') && m.ball.holder === c.idx;
-      const scale = (DIFF[m.difficulty] || DIFF[1]).win * (m.assist ? 1.5 : 1) * (m.crowdTeam === ut && m.crowd > 0.6 ? 1.3 : 1);
+      const scale = meterScale(m);
       if (shooting || m.user.meterLabelT > 0) meter = { x: c.x, z: c.z, y: c.y, h: r.height / 12, v: shooting ? c.meter : 0, win: 0.05 * scale * (c.stype === 'jumper' ? 1 : 1.6), label: m.user.meterLabelT > 0 ? m.user.meterLabel : null };
       offscreen = { x: c.x, z: c.z };
     }

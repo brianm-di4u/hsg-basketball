@@ -516,7 +516,7 @@ export function helpScreen(st, tab = 'controls') {
     <li>Mascot crests are original geometric drawings, not school logos. Gym names are shown only where the research confirmed them (Lakeside's is unconfirmed, so it shows as a home gym).</li>
     <li>The state final venue: ${esc(FINALS.name)}, ${esc(FINALS.address)}, hosted the 2026 AAA basketball state championships. The 3D arena follows its published seating chart (two tiers of royal-blue seats, one end with only a small lower section); everything else in the arena art is generic.</li>
     <li>Gyms are generic game art in each school's colors. Title-year pennants hang only for real state titles; the banners you win in your own seasons hang beside them, marked YOUR SEASON.</li>
-    <li>Out-of-county opponents (Cinderbrook, Quartz Hollow and others) are fictional towns.</li></ul>
+    <li>Out-of-county opponents (Fenwick Creek, Sawyer Ridge and others) are fictional towns.</li></ul>
     <h3>Fact cards</h3><ul class="plain facts">${FACTS_LIST.map((f) => `<li>${esc(f.text)} <span class="src">(${esc(f.source)})</span></li>`).join('')}</ul>
     <h3>Credits</h3><p>Spa City Hoops is part of the open-source Hot Springs Games collection (MIT license). Gyms, the arena and their lighting were built in Blender; the photo crowd, pep band and cheer squad cards (on the classic and lite views only), maple floor and block-wall images were painted for this game with AI image generation; everything else is drawn in code, and all sound is synthesized in the browser. The only network use is loading the game's own high-quality art from the same site after it starts: no ads, analytics or accounts.</p>
     <ul class="plain bullets fine">

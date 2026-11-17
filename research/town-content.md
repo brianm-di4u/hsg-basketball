@@ -118,9 +118,9 @@ no playable character.
 fictional towns. The game uses invented compound town names, each marked "fictional town" in the
 team card:
 
-Cinderbrook Foxes · Quartz Hollow Miners · Bluemist Herons · Ironleaf Owls · Hollowpine Hawks ·
-Redclay Bison · Kettle Ford Otters · Marrow Creek Badgers · Ambergrove Comets · Lanternfield Knights ·
-Copperbend Coyotes · Fernhaven Falcons · Saltlick Rangers · Thistledown Stags
+Fenwick Creek Foxes · Sawyer Ridge Miners · Tolliver Bluff Herons · Garrison Gap Owls · Lindsey Ford Hawks ·
+Dobbs Spur Bison · Marlow Springs Otters · Cobb Ridge Badgers · Weatherby Bluff Comets · Harlan Gap Knights ·
+Teague Creek Coyotes · Rutledge Spur Falcons · Ainsley Ford Rangers · Beckett Springs Stags
 
 Their colors and monogram crests are generated. They exist only to fill schedules and state brackets.
 

@@ -10,13 +10,13 @@ export const CHALLENGES = [
   {
     id: 'lady-trojans-five', title: 'Lady Trojans Five', who: 'Hot Springs Trojans · girls', school: 'hot-springs', program: 'girls',
     fact: 'Hot Springs girls won state titles in 1990, 1997, 1998, 2015 and 2018.', source: 'Wikipedia: Hot Springs High School',
-    setup: 'State final against fictional Ambergrove. Fourth quarter, 2:00 left, down 6.', goal: 'Come back and win.',
+    setup: 'State final against fictional Weatherby Bluff. Fourth quarter, 2:00 left, down 6.', goal: 'Come back and win.',
     steps: [{ program: 'girls', opp: 'ambergrove', start: { q: 4, t: 120, score: [34, 40], poss: 'user' } }], venue: 'arena', qLen: 120,
   },
   {
     id: 'bookend-banners', title: 'Bookend Banners', who: 'Lakeside Rams · boys or girls', school: 'lakeside', programs: ['boys', 'girls'],
     fact: 'Lakeside won basketball state titles in 1945 and 2000, 55 years apart. The source does not say whether boys or girls.', source: 'Wikipedia: Lakeside High School',
-    setup: 'Classic rules (no shot clock). State final against fictional Copperbend, tied with 1:30 left.', goal: 'Win the final.',
+    setup: 'Classic rules (no shot clock). State final against fictional Teague Creek, tied with 1:30 left.', goal: 'Win the final.',
     steps: [{ opp: 'copperbend', start: { q: 4, t: 90, score: [38, 38], poss: 'opp' } }], venue: 'arena', qLen: 120, shotClock: 0,
   },
   {
@@ -28,7 +28,7 @@ export const CHALLENGES = [
   {
     id: '6a-trial', title: '6A Trial Run', who: 'Lake Hamilton Wolves · boys', school: 'lake-hamilton', program: 'boys',
     fact: 'Arkansas adopted a 35-second shot clock by a 183-69 vote in 2020, effective 2022-23. Class 6A used it first, experimentally, in conference and state tournament games.', source: 'Delta Plex News; NWA Online (see research/town-content.md)',
-    setup: 'Fourth quarter against fictional Lanternfield with the 35-second clock. 2:00 left, up 2.', goal: 'Win, and allow 6 points or fewer from here.',
+    setup: 'Fourth quarter against fictional Harlan Gap with the 35-second clock. 2:00 left, up 2.', goal: 'Win, and allow 6 points or fewer from here.',
     steps: [{ program: 'boys', opp: 'lanternfield', start: { q: 4, t: 120, score: [30, 28], poss: 'opp' }, maxAllowed: 6 }], venue: 'home', qLen: 120, shotClock: 35,
   },
   {

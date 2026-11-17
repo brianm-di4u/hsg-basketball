@@ -1,0 +1,19 @@
+{
+ "about": "The owner’s final list of shown town names (hoops-town-names.json, final_14), copied so tests/council-w4-k.test.mjs can check the game without the _council folder.",
+ "final_14": [
+  "Fenwick Creek",
+  "Sawyer Ridge",
+  "Tolliver Bluff",
+  "Garrison Gap",
+  "Lindsey Ford",
+  "Dobbs Spur",
+  "Marlow Springs",
+  "Cobb Ridge",
+  "Weatherby Bluff",
+  "Harlan Gap",
+  "Teague Creek",
+  "Rutledge Spur",
+  "Ainsley Ford",
+  "Beckett Springs"
+ ]
+}

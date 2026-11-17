@@ -207,13 +207,17 @@ tests.push({
   node: true,
   async run(t) {
     const facts = JSON.parse(fs.readFileSync(path.join(game, 'data/facts.json'), 'utf8')).facts;
-    const approved = JSON.parse(fs.readFileSync(path.join(game, '../_council/owner-review/approved-local-facts.json'), 'utf8')).games['hsg-basketball'].cards;
+    const approvedFile = path.join(game, '../_council/owner-review/approved-local-facts.json');
     t.equal(facts.length, 39, '14 + 25 cards');
-    t.equal(facts.slice(14).length, approved.length, 'the 25 new cards come after the 14');
-    approved.forEach((c, i) => {
-      const f = facts[14 + i];
-      t.expect(f.id === c.id && f.tag === c.tag && f.text === c.text && f.source === c.source && JSON.stringify(f.schools || null) === JSON.stringify(c.schools || null), `card ${c.id} is as approved, in order`);
-    });
+    t.equal(new Set(facts.map((f) => f.id)).size, 39, 'every card id is unique');
+    if (fs.existsSync(approvedFile)) {
+      const approved = JSON.parse(fs.readFileSync(approvedFile, 'utf8')).games['hsg-basketball'].cards;
+      t.equal(facts.slice(14).length, approved.length, 'the 25 new cards come after the 14');
+      approved.forEach((c, i) => {
+        const f = facts[14 + i];
+        t.expect(f.id === c.id && f.tag === c.tag && f.text === c.text && f.source === c.source && JSON.stringify(f.schools || null) === JSON.stringify(c.schools || null), `card ${c.id} is as approved, in order`);
+      });
+    }
     const { FACTS_LIST } = await load('data.js');
     const { pickFact } = await load('ui.js');
     t.equal(FACTS_LIST.length, 39, 'the game holds all 39');

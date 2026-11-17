@@ -147,7 +147,7 @@ Hot Streak best. All of it is wrapped in try/catch, and the game works without s
   the box score and the top performer.
 - AC17. AI vs AI games always finish, with plausible scores and both teams scoring (balance tool, 50 games).
 - AC18. Steals, blocks, rebounds and out-of-bounds turnovers happen in play and are counted in stats.
-- AC19. Pause stops the clocks. Resume continues. Quit returns to the menu.
+- AC19. Pause stops the clocks. Resume continues. Quit returns to the menu; in a season game it also records the game as a loss.
 
 **Season**
 - AC20. Season setup picks a school, program and length. The hub lists the schedule (Nov–Mar, months only), record and next game.

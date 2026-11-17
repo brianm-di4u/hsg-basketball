@@ -197,8 +197,8 @@ export function pauseScreen(st, m, showBox) {
   return `<div class="panel">
     <h2>Paused</h2>${scoreLine(m)}
     <p class="goal"><b>Goal:</b> score more than the other team. Hold Shoot, and let go in the green.</p>
-    <nav class="menu">${btn('resume', 'Resume', { cls: 'primary' })}${btn('toggleBox', showBox ? 'Hide box score' : 'Box score')}${btn('help', 'How to play')}${btn('settings', 'Settings')}${btn('toggleSound', soundLabel(st))}${btn('quit', st.quitArmed ? 'Yes, quit and lose this game' : st.mode === 'season' ? 'Quit game (not recorded)' : 'Quit to menu')}</nav>
-    ${st.quitArmed ? `<p class="warn" role="status">${st.mode === 'season' ? 'This game will be lost and is not recorded. You can play it again from the season hub.' : 'This game will be lost. Press Quit again to leave, or Resume to keep playing.'}</p>` : ''}
+    <nav class="menu">${btn('resume', 'Resume', { cls: 'primary' })}${btn('toggleBox', showBox ? 'Hide box score' : 'Box score')}${btn('help', 'How to play')}${btn('settings', 'Settings')}${btn('toggleSound', soundLabel(st))}${btn('quit', st.quitArmed ? (st.mode === 'season' ? 'Yes, quit and take the loss' : 'Yes, quit and lose this game') : st.mode === 'season' ? 'Quit game (counts as a loss)' : 'Quit to menu')}</nav>
+    ${st.quitArmed ? `<p class="warn" role="status">${st.mode === 'season' ? `This game will be recorded as a loss${st.season && st.season.phase === 'bracket' ? ' and ends your playoff run' : ''}. Press Quit again to leave, or Resume to keep playing.` : 'This game will be lost. Press Quit again to leave, or Resume to keep playing.'}</p>` : ''}
     ${showBox ? teamTotals(m) + boxTable(m, m.user.team >= 0 ? m.user.team : 0) : ''}
   </div>`;
 }

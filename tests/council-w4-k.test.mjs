@@ -9,7 +9,7 @@ const load = async (f) => {
   return import(pathToFileURL(path.join(game, 'src/js', f)).href);
 };
 
-// Clean-up pass after wave 4 (council/wave-4b): K-01 to K-04 (each item adds its tests as it lands).
+// Clean-up pass after wave 4 (council/wave-4b): K-01 to K-04.
 
 export const tests = [];
 
@@ -106,3 +106,119 @@ tests.push({
   },
 });
 
+const seasonGame = async (t, o = {}) => {
+  await t.seed(o.seed ?? 5);
+  await t.game('newGame', { mode: 'season', school: 'hot-springs', program: 'boys', length: 'short', seed: o.seed ?? 5, play: true });
+  await t.game('step', 30);
+  if (o.score) { const ut = (await t.state()).match.user.team; await t.game('setState', { match: { score: ut === 0 ? o.score : [o.score[1], o.score[0]] } }); } // o.score is [the player, the opponent]
+  await t.game('scene', 'pause');
+};
+const quit = async (t) => { await t.page.click('[data-act="quit"]'); await t.page.click('[data-act="quit"]'); };
+const stored = (t) => t.page.evaluate((k) => JSON.parse(localStorage.getItem(k)), KEY);
+
+tests.push({
+  name: 'K-01: the season pause card says Quit counts as a loss, before the player confirms, and only in a season game',
+  async run(t) {
+    await seasonGame(t);
+    let card = await t.page.innerText('#screen');
+    t.expect(/Quit game \(counts as a loss\)/.test(card), 'the Quit button says it counts as a loss');
+    t.expect(!/not recorded/i.test(card), 'and no longer says "not recorded"');
+    await t.shot('K-01-pause-season');
+    await t.page.click('[data-act="quit"]');
+    card = await t.page.innerText('#screen');
+    t.expect(/recorded as a loss/.test(card) && /Resume/.test(card), 'the first press asks, and says it will be recorded as a loss');
+    t.equal((await t.state()).scene, 'pause', 'and the game is still there');
+    await t.checkLayout({ allowScrollY: true });
+    await t.shot('K-01-pause-season-asked');
+    await t.game('newGame', { mode: 'exhibition', home: 'hot-springs', away: 'lakeside', program: 'boys', user: 'home', seed: 6, paused: true });
+    await t.game('scene', 'pause');
+    card = await t.page.innerText('#screen');
+    t.expect(/Quit to menu/.test(card) && !/loss/i.test(card.replace(/Yes, quit and lose/, '')), 'an exhibition card is as it was: "Quit to menu"');
+    await t.page.click('[data-act="quit"]');
+    t.expect(/This game will be lost\./.test(await t.page.innerText('#screen')) && !/recorded/.test(await t.page.innerText('#screen')), 'and its warning does not mention the season');
+  },
+});
+
+tests.push({
+  name: 'K-01: quitting a season game while behind records the score as it stands as a loss',
+  viewports: ['desktop'],
+  async run(t) {
+    await seasonGame(t, { score: [31, 44] });
+    const before = await stored(t);
+    const g = (await t.state()).season.games[0];
+    t.equal(before.season.l, 0, 'nothing recorded yet');
+    await quit(t);
+    const s = await t.state();
+    t.equal(s.scene, 'hub', 'back on the hub');
+    t.equal(s.season.l, 1, 'one loss');
+    t.equal(s.season.w, 0, 'no win');
+    t.equal(s.season.idx, 1, 'the schedule moved on');
+    const r = s.season.games[0].result;
+    t.expect(r.us === 31 && r.them === 44, `the score as it stood is stored (${r.us}-${r.them})`);
+    const disk = await stored(t);
+    t.expect(disk.season.l === 1 && disk.season.games[0].result.us === r.us, 'and it is saved');
+    t.equal(g.opp, s.season.games[0].opp, 'against the same opponent');
+    t.equal(s.career.games, 0, 'it is not a career game, and no award is given');
+  },
+});
+
+tests.push({
+  name: 'K-01: quitting while ahead or tied is still a loss: the opponent is given one more point than the player',
+  viewports: ['desktop'],
+  async run(t) {
+    for (const [mine, theirs, wantThem] of [[40, 22, 41], [25, 25, 26], [0, 0, 1]]) {
+      await seasonGame(t, { score: [mine, theirs] });
+      await quit(t);
+      const s = await t.state(), r = s.season.games[0].result;
+      t.equal(s.season.l, 1, `${mine}-${theirs}: recorded as a loss`);
+      t.equal(s.season.w, 0, `${mine}-${theirs}: not a win`);
+      t.expect(r.us === mine && r.them === wantThem, `${mine}-${theirs}: stored as ${mine}-${wantThem} (${r.us}-${r.them})`);
+      await t.page.evaluate((k) => localStorage.removeItem(k), KEY);
+      await t.reload();
+    }
+  },
+});
+
+tests.push({
+  name: 'K-01: standings after a quit: the record, the next game and a replayed season all work',
+  viewports: ['desktop'],
+  async run(t) {
+    await seasonGame(t, { score: [10, 30] });
+    await quit(t);
+    let s = await t.state();
+    t.equal(`${s.season.w}-${s.season.l}`, '0-1', 'the record reads 0-1');
+    t.expect(/0-1/.test(await t.page.innerText('#screen')), 'and the hub shows it');
+    t.equal(s.season.next && s.season.next.opp, s.season.games[1].opp, 'the next game is the second on the schedule');
+    await t.game('act', 'seasonResult', 50, 40);
+    await t.game('act', 'seasonResult', 50, 40);
+    s = await t.state();
+    t.equal(s.season.phase, 'bracket', 'the bracket starts after the last game');
+    const rounds = s.season.bracket.rounds[0];
+    const seed = rounds.flatMap((g) => [[g.a, g.seedA], [g.b, g.seedB]]).find(([k]) => k === 'hot-springs')[1];
+    t.expect(seed >= 3, `a 2-1 record seeds below a 3-0 one (seed ${seed})`);
+    await t.reload();
+    s = await t.state();
+    t.equal(s.season.l, 1, 'a reload keeps the quit loss');
+  },
+});
+
+tests.push({
+  name: 'K-01: quitting a playoff game is a loss that ends the run, and the card says so',
+  viewports: ['desktop'],
+  async run(t) {
+    await t.game('newGame', { mode: 'season', school: 'hot-springs', program: 'boys', length: 'short', seed: 9 });
+    for (let k = 0; k < 3; k++) await t.game('act', 'seasonResult', 50, 40);
+    await t.page.click('[data-act="playSeason"]');
+    let s = await t.state();
+    t.equal(s.mode, 'season', 'a season game');
+    t.equal(s.season.phase, 'bracket', 'in the bracket');
+    await t.game('step', 20);
+    await t.game('scene', 'pause');
+    await t.page.click('[data-act="quit"]');
+    t.expect(/ends your playoff run/.test(await t.page.innerText('#screen')), 'the warning says the run ends');
+    await t.page.click('[data-act="quit"]');
+    s = await t.state();
+    t.equal(s.season.phase, 'done', 'the season is over');
+    t.equal(s.season.eliminated, 'Quarterfinal', 'out in the Quarterfinal');
+  },
+});

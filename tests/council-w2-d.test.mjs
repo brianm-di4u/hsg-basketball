@@ -53,7 +53,7 @@ export const tests = [
     },
   },
   {
-    name: 'S3-01: a lost game counts as a loss, a quit game is not recorded',
+    name: 'S3-01: a lost game counts as a loss, a quit exhibition is not recorded',
     viewports: ['desktop'],
     async run(t) {
       await wipe(t); await t.reload();

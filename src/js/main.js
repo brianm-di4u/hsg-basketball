@@ -509,6 +509,12 @@ function finishSeasonGame() {
   return wasFinal && !!state.season.champion;
 }
 
+// Quitting a season game in progress is a loss on the record (K-01): the score as it stands when the player is behind, and when tied or ahead the opponent is given one more point than the player, the smallest forfeit that stays a loss. Nothing else is written: no career game, no award.
+function quitSeasonGame() {
+  const m = state.match, ut = m.user.team, us = m.teams[ut].score, them = m.teams[1 - ut].score;
+  advanceSeason(() => recordResult(state.season, us, Math.max(them, us + 1), state.settings.qLen), null);
+}
+
 // ---------------------------------------------------------------- challenges
 function startChallenge(id, program, stepIdx = 0) {
   const c = challenge(id);
@@ -1383,7 +1389,7 @@ const ACT = {
   pause: () => pauseGame(),
   toggleBox: () => { state.showBox = !state.showBox; render(); },
   toggleSound: () => setSetting('sound', !state.settings.sound),
-  quit: () => { if (!state.quitArmed) { state.quitArmed = true; render(); return; } state.quitArmed = false; state.match = null; state.paused = false; if (state.mode === 'season') { state.stack = ['title']; go('hub', false); } else ACT.title(); },
+  quit: () => { if (!state.quitArmed) { state.quitArmed = true; render(); return; } state.quitArmed = false; if (state.mode === 'season') { quitSeasonGame(); state.match = null; state.paused = false; state.stack = ['title']; go('hub', false); } else { state.match = null; state.paused = false; ACT.title(); } },
   continueGame: () => { const m = state.match; startNextPeriod(m); state.paused = false; go('game', false); },
 };
 function setSetting(k, v) { state.settings[k] = v; persist({ settings: { [k]: v } }); applySettings(); render(); }

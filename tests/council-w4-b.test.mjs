@@ -208,8 +208,10 @@ tests.push({
   async run(t) {
     const facts = JSON.parse(fs.readFileSync(path.join(game, 'data/facts.json'), 'utf8')).facts;
     const approved = JSON.parse(fs.readFileSync(path.join(game, 'tests/fixtures/hoops-approved-cards.json'), 'utf8')).cards;
-    const source = path.join(game, '../_council/owner-review/approved-local-facts.json');
-    if (fs.existsSync(source)) t.equal(JSON.stringify(approved), JSON.stringify(JSON.parse(fs.readFileSync(source, 'utf8')).games['hsg-basketball'].cards), 'the fixture is the approved file, unchanged');
+    // The owner's original is outside this repo; compare against it only when HSG_WORKSPACE is set (opt-in).
+    const source = process.env.HSG_WORKSPACE ? path.join(process.env.HSG_WORKSPACE, '_council', 'owner-review', 'approved-local-facts.json') : '';
+    if (source && fs.existsSync(source)) t.equal(JSON.stringify(approved), JSON.stringify(JSON.parse(fs.readFileSync(source, 'utf8')).games['hsg-basketball'].cards), 'the fixture is the approved file, unchanged');
+    else t.log(`skipped the comparison with the owner's approved-local-facts.json: ${source ? source + ' is not there' : 'HSG_WORKSPACE is not set'}`);
     t.equal(facts.length, 39, '14 + 25 cards');
     t.equal(new Set(facts.map((f) => f.id)).size, 39, 'every card id is unique');
     t.equal(approved.length, 25, 'the fixture holds the 25 approved cards');

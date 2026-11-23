@@ -20,8 +20,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-// Benchmark screenshots (git-ignored): the workspace's shared reference/benchmarks/basketball/, else benchmarks/ here.
-const BENCH = [path.resolve(root, '..', '..', 'reference', 'benchmarks', 'basketball'), BENCH].find((d) => fs.existsSync(d)) || BENCH;
+// Shared workspace material (reference/, research/): $HSG_WORKSPACE, else this repo's grandparent (the workspace root when
+// the repo sits in <workspace>/repos/).
+const WORKSPACE = process.env.HSG_WORKSPACE || path.resolve(root, '..', '..');
+// Benchmark screenshots (git-ignored): <workspace>/reference/benchmarks/basketball/, else benchmarks/ here.
+const LOCAL_BENCH = path.join(root, 'benchmarks');
+const BENCH = [path.join(WORKSPACE, 'reference', 'benchmarks', 'basketball'), LOCAL_BENCH].find((d) => fs.existsSync(d)) || LOCAL_BENCH;
 const args = process.argv.slice(2);
 const ms = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--prev');
 const prev = args.includes('--prev') ? args[args.indexOf('--prev') + 1] : null;

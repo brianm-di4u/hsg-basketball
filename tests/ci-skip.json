@@ -1,0 +1,10 @@
+[
+  {
+    "test": "S4-07: the Hot Streak scoreboard calls the gauge STEAM",
+    "why": "waits a fixed time for the stands to lift; the animation lags on a shared runner"
+  },
+  {
+    "test": "S4-24: starting a 3D game, a rematch and the state arena draw",
+    "why": "the 3D scene settles slower than its wait in software WebGL on a shared runner"
+  }
+]

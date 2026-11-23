@@ -21,6 +21,17 @@ npm test        # runs tests/*.test.mjs; screenshots land in screenshots/
 
 Design docs: `PRD.md`, `MECHANICS.md`, `DEV-PLAN.md`, `REPORT.md`, `VISUAL-PLAN.md`, `VISUAL-REPORT.md`.
 
+## Paths outside this repo
+
+The game, its build and its tests use files inside this repo. The tools below can also use shared material from the Hot
+Springs Games workspace (`reference/`, `research/`, or a sibling checkout in `repos/`). They find the workspace through the
+`HSG_WORKSPACE` environment variable; when it is unset, the workspace is this repo's grandparent, which is right when the
+repo sits at `<workspace>/repos/<repo>`. When the workspace copy is not there, each tool falls back to a path in this repo or
+skips that step with a message.
+
+- `tools/review-pack.mjs`: benchmark screenshots from `reference/benchmarks/basketball/`, else `benchmarks/` here.
+- `tests/council-w4-b.test.mjs` (C4-04) compares its fixture with the owner's `_council/owner-review/approved-local-facts.json` only when `HSG_WORKSPACE` is set; otherwise it logs that it skipped the comparison.
+
 ## Vendored from the collection
 
 This repo was split out of the original Hot Springs Games monorepo (kept offline), which holds the full research
